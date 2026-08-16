@@ -25,6 +25,13 @@
   document.addEventListener('pointerdown', () => audioReady(), { passive: true });
   document.addEventListener('keydown', () => audioReady());
 
+  // PWA installability (manifest.json + an icon set already cover the rest) — sw.js is
+  // deliberately network-only, see its own comment for why (this project already hit a real
+  // stale-cache confusion bug once, no interest in reintroducing that risk).
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+
   const modeSelect = $('#modeSelect');
   const modeArenaBtn = $('#modeArenaBtn');
   const lobbyBackBtn = $('#lobbyBackBtn');
