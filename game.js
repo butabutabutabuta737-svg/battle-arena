@@ -719,6 +719,22 @@ const STORY_BOSSES = [
   { name: '戦場の覇者', line: 'よくぞここまで生き延びた…だがこの戦場に立つ資格があるのは、俺だけだ!', defeatLine: 'ば……馬鹿な……この俺が……戦場の狼に……敗れると……は……。', reactionMs: 100, aimJitter: 0.05, fireChance: 1.00, dodgeChance: 0.92, itemSeekChance: 0.95, preferredRange: 208, moveJitter: 0.06, atkMult: 1.0, swordMult: 1.0 },
 ];
 
+// Hidden EX boss — deliberately NOT part of STORY_BOSSES (keeps STORY_BOSSES.length === 5
+// everywhere it's already used as "how many main stages", no renumbering needed). Reachable
+// only via the new 'startExStage' message, sent from a dedicated button on the normal-ending
+// screen after clearing stage 5 — see room.exBossActive below, which every stage-lookup site
+// (updateCpuAI/cpuAttackMult/cpuSwordMult) checks *before* falling back to STORY_BOSSES. Every
+// stat here is pushed at or beyond stage 5's own already-maxed values, per explicit request
+// for "an absurdly strong one" — most notably atkMult/swordMult go past 1.0, which no main
+// boss ever does.
+const EX_BOSS = {
+  name: '戦神',
+  line: '……５つの影を退けたか。人間にしては、大したものだ。だが貴様が本当に挑むべき相手は、まだ姿を見せていない。この戦場そのものを生み出した力——それが、俺だ。ここで終わりにしてやろう。',
+  defeatLine: 'ば……馬鹿な……この戦場を生み出し、支配してきたこの俺が……ただの一介の戦士に……敗れるというのか……。……いいだろう。今この瞬間から、この戦場に刻まれる伝説は、貴様のものだ——真の「戦場の狼」よ。',
+  reactionMs: 40, aimJitter: 0.02, fireChance: 1.0, dodgeChance: 1.0, itemSeekChance: 1.0,
+  preferredRange: 200, moveJitter: 0.03, atkMult: 1.35, swordMult: 1.35,
+};
+
 function bossNameForStage(stage) {
   const s = Math.min(Math.max(1, stage || 1), STORY_BOSSES.length);
   return `${s}面ボス「${STORY_BOSSES[s - 1].name}」`;
@@ -728,6 +744,7 @@ function bossNameForStage(stage) {
 // when the attacker is the CPU — the single point every CPU-dealt-damage site reads from.
 function cpuAttackMult(room) {
   if (!room.isCpuMatch) return 1;
+  if (room.exBossActive) return EX_BOSS.atkMult;
   const s = Math.min(Math.max(1, room.storyStage || 1), STORY_BOSSES.length);
   return STORY_BOSSES[s - 1].atkMult;
 }
@@ -735,6 +752,7 @@ function cpuAttackMult(room) {
 // Same idea as cpuAttackMult but for the sword-specific bonus (stage 4's knife specialist).
 function cpuSwordMult(room) {
   if (!room.isCpuMatch) return 1;
+  if (room.exBossActive) return EX_BOSS.swordMult;
   const s = Math.min(Math.max(1, room.storyStage || 1), STORY_BOSSES.length);
   return STORY_BOSSES[s - 1].swordMult;
 }
@@ -796,7 +814,7 @@ function updateCpuAI(room, now) {
     return;
   }
 
-  const cfg = STORY_BOSSES[Math.min(Math.max(1, room.storyStage || 1), STORY_BOSSES.length) - 1];
+  const cfg = room.exBossActive ? EX_BOSS : STORY_BOSSES[Math.min(Math.max(1, room.storyStage || 1), STORY_BOSSES.length) - 1];
   if (!room.cpuState) {
     room.cpuState = {
       lastDecisionAt: 0,
@@ -976,6 +994,7 @@ function getRoom(id) {
       cpuToken: null,
       storyStage: 1,
       storyComplete: false,
+      exBossActive: false,
       pendingStoryIntro: false,
       cpuState: null,
       phase: 'waiting', // waiting | countdown | playing | finished
@@ -1519,6 +1538,7 @@ function broadcastState(room) {
     storyStage: room.storyStage,
     storyStageCount: STORY_BOSSES.length,
     storyComplete: room.storyComplete,
+    exBossActive: room.exBossActive,
   };
   const msg = JSON.stringify(state);
   for (const ws of room.players.keys()) {
@@ -1647,6 +1667,35 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette) {
         }
         room.winnerId = null;
         startCountdown(room);
+      }
+    } else if (data.type === 'startExStage') {
+      // Sent only from the normal-ending screen's "戦場の深部へ進む" button, i.e. right after
+      // clearing stage 5 — deliberately re-derives "did they actually just clear stage 5" from
+      // the same room fields the client's own finalStageClear check uses (matchOver/storyStage
+      // vs STORY_BOSSES.length) rather than trusting room.storyComplete, which in the normal
+      // flow never actually gets set server-side here (storyEndingOverlay shows without ever
+      // sending 'rematch' — see the client's finalStageClear comment for why). !room.exBossActive
+      // guards against a double-send re-triggering this mid-EX-fight.
+      if (room.phase === 'finished' && room.players.size === 2 && room.isCpuMatch && room.matchOver
+        && room.storyStage >= STORY_BOSSES.length && !room.exBossActive) {
+        const cpuPlayer = room.players.get(room.cpuToken);
+        const humanWon = cpuPlayer && room.matchWinnerId !== cpuPlayer.id;
+        if (humanWon) {
+          room.exBossActive = true;
+          if (cpuPlayer) {
+            cpuPlayer.name = EX_BOSS.name;
+            cpuPlayer.line = EX_BOSS.line;
+            cpuPlayer.defeatLine = EX_BOSS.defeatLine;
+          }
+          room.cpuState = null;
+          room.storyComplete = false;
+          room.matchWins = {};
+          room.matchOver = false;
+          room.matchWinnerId = null;
+          room.winnerId = null;
+          room.pendingStoryIntro = true; // next startCountdown() gets the long dramatic wait
+          startCountdown(room);
+        }
       }
     }
   });

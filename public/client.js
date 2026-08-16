@@ -67,6 +67,9 @@
   const storyStageLabel = $('#storyStageLabel');
   const storyEndingOverlay = $('#storyEndingOverlay');
   const storyEndingTitleBtn = $('#storyEndingTitleBtn');
+  const challengeExBtn = $('#challengeExBtn');
+  const trueEndingOverlay = $('#trueEndingOverlay');
+  const trueEndingTitleBtn = $('#trueEndingTitleBtn');
   const gameOverOverlay = $('#gameOverOverlay');
   const bossIntroOverlay = $('#bossIntroOverlay');
   const bossIntroStage = $('#bossIntroStage');
@@ -154,8 +157,11 @@
   // reloads/new sessions. Same feature pattern as this session's other project's vertical
   // shooter (流星よけ/MeteorDodge)'s "証明書" system: title-screen button → tiered card.
   const CERT_STORAGE_KEY = 'battle-arena-best-boss-defeated';
-  const CERT_TITLES = ['証明書なし', '1面 撃破証明書', '2面 撃破証明書', '3面 撃破証明書', '4面 撃破証明書', '全ボス撃破証明書'];
-  const CERT_HONORIFICS = ['', '見習い戦士', '歴戦の戦士', '精鋭の戦士', '血刃を制する者', '戦場の狼'];
+  // Index 6 is the hidden EX boss's tier — only ever displayed once exBossDefeated is true
+  // (see below), which itself requires bestBossDefeated===5, so there's no "index 6 with
+  // index<5" reachable state to worry about.
+  const CERT_TITLES = ['証明書なし', '1面 撃破証明書', '2面 撃破証明書', '3面 撃破証明書', '4面 撃破証明書', '全ボス撃破証明書', '真・撃破証明書'];
+  const CERT_HONORIFICS = ['', '見習い戦士', '歴戦の戦士', '精鋭の戦士', '血刃を制する者', '戦場の狼', '戦場を統べし者'];
   let bestBossDefeated = 0;
   try { bestBossDefeated = parseInt(localStorage.getItem(CERT_STORAGE_KEY), 10) || 0; } catch (e) { bestBossDefeated = 0; }
   function recordBossDefeated(stage) {
@@ -164,6 +170,33 @@
       try { localStorage.setItem(CERT_STORAGE_KEY, String(bestBossDefeated)); } catch (e) { /* localStorage unavailable (private mode etc.) — certificate just won't persist */ }
     }
   }
+
+  // Hidden EX boss's own defeat flag — separate key/variable from bestBossDefeated (which stays
+  // 0-5, unchanged semantics) since the EX boss isn't part of STORY_BOSSES/storyStageCount at all.
+  const EX_STORAGE_KEY = 'battle-arena-ex-boss-defeated';
+  let exBossDefeated = false;
+  try { exBossDefeated = localStorage.getItem(EX_STORAGE_KEY) === '1'; } catch (e) { exBossDefeated = false; }
+  function recordExBossDefeated() {
+    if (exBossDefeated) return;
+    exBossDefeated = true;
+    try { localStorage.setItem(EX_STORAGE_KEY, '1'); } catch (e) { /* localStorage unavailable — certificate just won't persist */ }
+  }
+
+  // Drawn placeholder for the EX boss's portrait slots (boss-intro/defeat cards, certificate)
+  // — there's no source photo for it (all 5 real photos are already claimed by the numbered
+  // bosses), so a radiant golden eye/sigil stands in, fitting a mysterious "god of the
+  // battlefield" reveal better than reusing an already-identified character's face anyway.
+  const EX_BOSS_SIGIL_SRC = 'data:image/svg+xml,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+    '<defs><radialGradient id="g" cx="50%" cy="50%" r="60%">' +
+    '<stop offset="0%" stop-color="#fff6d0"/><stop offset="35%" stop-color="#ffd35b"/><stop offset="100%" stop-color="#1a0800"/>' +
+    '</radialGradient></defs>' +
+    '<rect width="100" height="100" fill="#05030a"/>' +
+    '<circle cx="50" cy="50" r="42" fill="url(#g)"/>' +
+    '<ellipse cx="50" cy="50" rx="26" ry="12" fill="#0a0400"/>' +
+    '<circle cx="50" cy="50" r="7" fill="#ffefc2"/>' +
+    '</svg>'
+  );
 
   let ws = null;
   let myId = null;
@@ -320,6 +353,7 @@
     if (bossDefeatHideTimer) { clearTimeout(bossDefeatHideTimer); bossDefeatHideTimer = null; }
     bossDefeatOverlay.classList.add('hidden');
     storyEndingOverlay.classList.add('hidden');
+    trueEndingOverlay.classList.add('hidden');
     gameOverRetryReady = false;
     if (gameOverTimer) { clearTimeout(gameOverTimer); gameOverTimer = null; }
     gameOverOverlay.classList.add('hidden');
@@ -403,18 +437,29 @@
   const certSeal = $('#certSeal');
   const certBossIcon = $('#certBossIcon');
   const certTitleBadge = $('#certTitleBadge');
-  const certSilhouetteEls = Array.from($('#certSilhouetteRow').querySelectorAll('.cert-portrait'));
+  const certSilhouetteEls = Array.from($('#certSilhouetteRow').querySelectorAll('.cert-portrait:not(#certPortraitEx)'));
+  const certPortraitEx = $('#certPortraitEx');
+  certPortraitEx.src = EX_BOSS_SIGIL_SRC;
   function renderCertificate() {
-    certCard.className = 'certificate' + (bestBossDefeated > 0 ? ` cert-tier-${bestBossDefeated}` : '');
-    certLabel.textContent = CERT_TITLES[bestBossDefeated];
-    certSub.textContent = bestBossDefeated > 0 ? `あなたは${bestBossDefeated}面のボスまで撃破しました` : 'まずは1面のボスを倒そう';
+    // Display tier is 0-6: 0-5 mirror bestBossDefeated exactly, 6 only once the hidden EX
+    // boss has also fallen (which requires bestBossDefeated===5 already, so this can't be
+    // reached "early"). CERT_TITLES/HONORIFICS/certCard's tier class all use this, not
+    // bestBossDefeated directly, so the true-ending tier gets its own distinct card styling.
+    const tier = exBossDefeated ? 6 : bestBossDefeated;
+    certCard.className = 'certificate' + (tier > 0 ? ` cert-tier-${tier}` : '');
+    certLabel.textContent = CERT_TITLES[tier];
+    certSub.textContent = exBossDefeated ? 'すべてを統べる者を、討った。'
+      : bestBossDefeated > 0 ? `あなたは${bestBossDefeated}面のボスまで撃破しました` : 'まずは1面のボスを倒そう';
     certSeal.classList.toggle('visible', bestBossDefeated >= 5);
-    certBossIcon.textContent = bestBossDefeated > 0 ? BOSS_TIER_THEME[bestBossDefeated - 1].icon : '❔';
-    certTitleBadge.textContent = CERT_HONORIFICS[bestBossDefeated];
-    certTitleBadge.style.display = bestBossDefeated > 0 ? 'inline-block' : 'none';
+    certBossIcon.textContent = exBossDefeated ? '🌌' : bestBossDefeated > 0 ? BOSS_TIER_THEME[bestBossDefeated - 1].icon : '❔';
+    certTitleBadge.textContent = CERT_HONORIFICS[tier];
+    certTitleBadge.style.display = tier > 0 ? 'inline-block' : 'none';
     // certSilhouetteEls[0] is stage1's silhouette, so tier (i+1) is unlocked once that
     // many bosses have been defeated — same off-by-one convention as CERT_TITLES/HONORIFICS.
     certSilhouetteEls.forEach((el, i) => el.classList.toggle('locked', i + 1 > bestBossDefeated));
+    // The EX slot doesn't exist pre-unlock (no "locked" dim state like the other 5) — it's
+    // simply absent until earned, preserving the "hidden boss" surprise.
+    certPortraitEx.classList.toggle('hidden', !exBossDefeated);
   }
   certOpenBtn.addEventListener('click', () => { audioReady(); renderCertificate(); certOverlay.classList.remove('hidden'); });
   certCloseBtn.addEventListener('click', () => { audioReady(); certOverlay.classList.add('hidden'); });
@@ -434,13 +479,20 @@
   // server, see game.js's STORY_BOSSES; portrait from BOSS_TIER_THEME) tinted per stage,
   // then auto-hides itself — doesn't block or delay the actual countdown/round underneath,
   // purely a presentation overlay.
-  function showBossIntro(stage, boss) {
-    introShownForStage = stage;
-    const theme = BOSS_TIER_THEME[Math.min(Math.max(1, stage), BOSS_TIER_THEME.length) - 1];
-    bossIntroOverlay.style.setProperty('--boss-color', theme.uniform);
-    bossIntroStage.textContent = `第${stage}面`;
-    bossIntroPortrait.src = theme.image;
-    bossIntroPortrait.style.objectPosition = theme.facePos;
+  function showBossIntro(stage, boss, isEx) {
+    introShownForStage = isEx ? 'EX' : stage;
+    if (isEx) {
+      bossIntroOverlay.style.setProperty('--boss-color', '#ffe9a8');
+      bossIntroStage.textContent = 'EX';
+      bossIntroPortrait.src = EX_BOSS_SIGIL_SRC;
+      bossIntroPortrait.style.objectPosition = 'center';
+    } else {
+      const theme = BOSS_TIER_THEME[Math.min(Math.max(1, stage), BOSS_TIER_THEME.length) - 1];
+      bossIntroOverlay.style.setProperty('--boss-color', theme.uniform);
+      bossIntroStage.textContent = `第${stage}面`;
+      bossIntroPortrait.src = theme.image;
+      bossIntroPortrait.style.objectPosition = theme.facePos;
+    }
     bossIntroName.textContent = boss.name;
     bossIntroLine.textContent = boss.line ? `「${boss.line}」` : '';
     bossIntroOverlay.classList.remove('hidden');
@@ -493,6 +545,11 @@
   storyStartBtn.addEventListener('click', () => { audioReady(); startStoryMode(); });
   storyRetryBtn.addEventListener('click', () => { audioReady(); startStoryMode(); });
   storyEndingTitleBtn.addEventListener('click', () => { audioReady(); goToTitle(); });
+  challengeExBtn.addEventListener('click', () => {
+    audioReady();
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'startExStage' }));
+  });
+  trueEndingTitleBtn.addEventListener('click', () => { audioReady(); goToTitle(); });
 
   rematchBtn.addEventListener('click', () => {
     audioReady();
@@ -660,10 +717,13 @@
       // 'waiting'->'countdown' transition happens both for the very first connection and
       // for every subsequent rematch/stage-advance, so gating on storyStage having actually
       // changed since the last time we showed the card is what keeps this from re-popping
-      // on round 2/3 of the same boss's series.
-      if (state.phase === 'countdown' && state.storyStage && state.storyStage !== introShownForStage) {
+      // on round 2/3 of the same boss's series. The EX boss fight keeps storyStage frozen at
+      // its pre-EX value (5), so it needs its own guard key ('EX', a string — always !==
+      // whatever numeric stage was last shown) rather than reusing the plain stage number.
+      const introKey = state.exBossActive ? 'EX' : state.storyStage;
+      if (state.phase === 'countdown' && state.storyStage && introKey !== introShownForStage) {
         const boss = state.players.find((p) => p.id !== myId);
-        if (boss) showBossIntro(state.storyStage, boss);
+        if (boss) showBossIntro(state.storyStage, boss, state.exBossActive);
       }
     }
 
@@ -699,10 +759,15 @@
           recordBossDefeated(storyStage);
           // storyStage < storyStageCount here means there's a next stage to advance to —
           // storyStageCount reflects the freshly-received state, same as everywhere else.
+          // Never true for the EX fight (storyStage stays frozen at 5 === storyStageCount
+          // throughout it), so this naturally skips the "before advancing" defeat-line pause
+          // for the EX win — that ending gets its own dedicated overlay instead (see
+          // trueEndingClear in updateHud()), not a "next stage" pause with nothing to advance to.
           if (storyStage < storyStageCount) {
             const boss = state.players.find((p) => p.id !== myId);
             if (boss) showBossDefeat(storyStage, boss);
           }
+          if (state.exBossActive) recordExBossDefeated();
         }
         // Boss won the whole series — let the "GAME OVER" moment sit for a few seconds
         // before the retry button appears (see gameOverRetryReady), rather than offering
@@ -1782,11 +1847,17 @@
       // state.storyComplete, which the server doesn't set until that same click — using
       // it here would misjudge stage 5's win as "more stages available" for one frame.
       const bossWon = isCpuMatch && state.matchOver && state.matchWinnerId !== myId;
-      const finalStageClear = isCpuMatch && state.matchOver && state.matchWinnerId === myId && storyStage >= storyStageCount;
+      const exBossActive = !!state.exBossActive;
+      // Beating the EX boss also satisfies storyStage>=storyStageCount (storyStage stays
+      // frozen at 5 throughout that fight), so finalStageClear explicitly excludes it — the
+      // two endings are mutually exclusive, trueEndingClear takes priority.
+      const trueEndingClear = isCpuMatch && state.matchOver && state.matchWinnerId === myId && exBossActive;
+      const finalStageClear = isCpuMatch && state.matchOver && state.matchWinnerId === myId && storyStage >= storyStageCount && !exBossActive;
       const stageAdvance = isCpuMatch && state.matchOver && state.matchWinnerId === myId && storyStage < storyStageCount;
 
       rematchBtn.classList.add('hidden');
       storyEndingOverlay.classList.add('hidden');
+      trueEndingOverlay.classList.add('hidden');
       storyRetryBtn.classList.add('hidden');
       gameOverOverlay.classList.add('hidden');
       if (bossWon) {
@@ -1796,6 +1867,8 @@
         // re-runs on every ~33ms broadcast while sitting in 'finished', so it must keep
         // deferring to that flag rather than unhiding the button unconditionally every tick.
         if (gameOverRetryReady) storyRetryBtn.classList.remove('hidden');
+      } else if (trueEndingClear) {
+        trueEndingOverlay.classList.remove('hidden');
       } else if (finalStageClear) {
         storyEndingOverlay.classList.remove('hidden');
       } else {
@@ -1811,6 +1884,9 @@
       if (bossWon) {
         resultBanner.textContent = 'GAME OVER…';
         resultBanner.className = 'result-banner result-lose';
+      } else if (trueEndingClear) {
+        resultBanner.textContent = '🌌 真のエンディング到達！';
+        resultBanner.className = 'result-banner result-win';
       } else if (finalStageClear) {
         resultBanner.textContent = '🏆 ストーリークリア！';
         resultBanner.className = 'result-banner result-win';

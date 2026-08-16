@@ -125,6 +125,7 @@
         <img class="cert-portrait" src="images/bosses/boss3.png" alt="3面ボス" />
         <img class="cert-portrait" src="images/bosses/boss4.png" alt="4面ボス" />
         <img class="cert-portrait" src="images/bosses/boss5.png" alt="5面ボス" />
+        <img class="cert-portrait hidden" id="certPortraitEx" alt="EXボス" />
       </div>
     </div>
   </div>
@@ -247,7 +248,28 @@
           すべての戦場の敵は、倒した。<br />
           だが、戦いはまだ終わらない――。
         </div>
-        <button class="btn-primary" id="storyEndingTitleBtn">タイトルへ戻る</button>
+        <div class="btn-row">
+          <button class="btn-secondary" id="challengeExBtn">…戦場の深部へ進む</button>
+          <button class="btn-primary" id="storyEndingTitleBtn">タイトルへ戻る</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- True ending — shown only after the hidden EX boss falls. Deliberately a distinct
+         white/gold "radiant" palette (see .true-ending-overlay in style.css) from the normal
+         ending above, so this reads as going a step further, not a re-skin of it. -->
+    <div class="true-ending-overlay hidden" id="trueEndingOverlay">
+      <div class="true-ending-card">
+        <div class="true-ending-tag">TRUE ENDING</div>
+        <div class="true-ending-title">🐺 戦場の狼、その名は伝説となった</div>
+        <div class="true-ending-text">
+          戦場そのものを生み出し、支配していた「戦神」——その真の姿を打ち破った。<br /><br />
+          「ば……馬鹿な……この戦場を生み出し、支配してきたこの俺が……<br />
+          ただの一介の戦士に……敗れるというのか……」<br /><br />
+          これより、この戦場に刻まれる伝説は、ただ一人のものだ。<br />
+          ――真の「戦場の狼」、ここに誕生する。
+        </div>
+        <button class="btn-primary" id="trueEndingTitleBtn">タイトルへ戻る</button>
       </div>
     </div>
 
