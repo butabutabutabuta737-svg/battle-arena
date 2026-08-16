@@ -168,7 +168,11 @@
   // story-mode boss stage the player has ever defeated, in localStorage, so it survives page
   // reloads/new sessions. Same feature pattern as this session's other project's vertical
   // shooter (流星よけ/MeteorDodge)'s "証明書" system: title-screen button → tiered card.
-  const CERT_STORAGE_KEY = 'battle-arena-best-boss-defeated';
+  const CERT_STORAGE_KEY = 'battle-arena-best-boss-defeated'; // legacy key — still kept in sync
+    // (derived, see recomputeBestBossDefeated below) purely for back-compat/rollback safety;
+    // clearedSolo/clearedCoop below are now the actual source of truth.
+  const CERT_SOLO_KEY = 'battle-arena-cleared-solo';
+  const CERT_COOP_KEY = 'battle-arena-cleared-coop';
   // Index 6 is the hidden EX boss's tier — only ever displayed once exBossDefeated is true
   // (see below), which itself requires bestBossDefeated===5, so there's no "index 6 with
   // index<5" reachable state to worry about.
@@ -176,10 +180,38 @@
   const CERT_HONORIFICS = ['', '見習い戦士', '歴戦の戦士', '精鋭の戦士', '血刃を制する者', '戦場の狼', '戦場を統べし者'];
   let bestBossDefeated = 0;
   try { bestBossDefeated = parseInt(localStorage.getItem(CERT_STORAGE_KEY), 10) || 0; } catch (e) { bestBossDefeated = 0; }
-  function recordBossDefeated(stage) {
-    if (stage > bestBossDefeated) {
-      bestBossDefeated = stage;
-      try { localStorage.setItem(CERT_STORAGE_KEY, String(bestBossDefeated)); } catch (e) { /* localStorage unavailable (private mode etc.) — certificate just won't persist */ }
+
+  function loadClearedSet(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch (e) { return new Set(); }
+  }
+  function saveClearedSet(key, set) {
+    try { localStorage.setItem(key, JSON.stringify([...set])); } catch (e) { /* localStorage unavailable (private mode etc.) — certificate just won't persist */ }
+  }
+  let clearedSolo = loadClearedSet(CERT_SOLO_KEY);
+  let clearedCoop = loadClearedSet(CERT_COOP_KEY);
+  // 2P co-op didn't exist before this feature, so any pre-existing bestBossDefeated progress
+  // can only have come from solo play — back-fill clearedSolo from it once, rather than a
+  // returning player's existing progress silently vanishing from the certificate's new
+  // per-mode breakdown the first time they open it after this update.
+  if (clearedSolo.size === 0 && clearedCoop.size === 0 && bestBossDefeated > 0) {
+    for (let s = 1; s <= bestBossDefeated; s++) clearedSolo.add(s);
+    saveClearedSet(CERT_SOLO_KEY, clearedSolo);
+  }
+
+  function recomputeBestBossDefeated() {
+    bestBossDefeated = Math.max(0, ...clearedSolo, ...clearedCoop);
+    try { localStorage.setItem(CERT_STORAGE_KEY, String(bestBossDefeated)); } catch (e) { /* localStorage unavailable — legacy key just won't persist */ }
+  }
+
+  function recordBossDefeated(stage, isCoop) {
+    const set = isCoop ? clearedCoop : clearedSolo;
+    if (!set.has(stage)) {
+      set.add(stage);
+      saveClearedSet(isCoop ? CERT_COOP_KEY : CERT_SOLO_KEY, set);
+      recomputeBestBossDefeated();
     }
   }
 
@@ -469,6 +501,7 @@
   const certBossIcon = $('#certBossIcon');
   const certTitleBadge = $('#certTitleBadge');
   const certSilhouetteEls = Array.from($('#certSilhouetteRow').querySelectorAll('.cert-portrait:not(#certPortraitEx)'));
+  const certModeBadgeEls = Array.from($('#certSilhouetteRow').querySelectorAll('.cert-mode-badge'));
   const certPortraitEx = $('#certPortraitEx');
   certPortraitEx.src = EX_BOSS_SIGIL_SRC;
   function renderCertificate() {
@@ -488,6 +521,15 @@
     // certSilhouetteEls[0] is stage1's silhouette, so tier (i+1) is unlocked once that
     // many bosses have been defeated — same off-by-one convention as CERT_TITLES/HONORIFICS.
     certSilhouetteEls.forEach((el, i) => el.classList.toggle('locked', i + 1 > bestBossDefeated));
+    // Per-boss 👤(solo)/🤝(co-op) badges — independently lit per mode, so a boss cleared in
+    // both shows both icons active, one cleared in only one mode shows just that icon.
+    certModeBadgeEls.forEach((badge, i) => {
+      const stage = i + 1;
+      const soloIcon = badge.querySelector('[data-mode="solo"]');
+      const coopIcon = badge.querySelector('[data-mode="coop"]');
+      if (soloIcon) soloIcon.classList.toggle('achieved', clearedSolo.has(stage));
+      if (coopIcon) coopIcon.classList.toggle('achieved', clearedCoop.has(stage));
+    });
     // The EX slot doesn't exist pre-unlock (no "locked" dim state like the other 5) — it's
     // simply absent until earned, preserving the "hidden boss" surprise.
     certPortraitEx.classList.toggle('hidden', !exBossDefeated);
@@ -840,7 +882,7 @@
         // since this whole block only runs on the 'finished' phase-transition edge, not on
         // every repeated broadcast while sitting in that phase.
         if (isCpuMatch && state.matchOver && humanSideWon(state, state.matchWinnerId)) {
-          recordBossDefeated(storyStage);
+          recordBossDefeated(storyStage, !!state.storyCoop);
           // storyStage < storyStageCount here means there's a next stage to advance to —
           // storyStageCount reflects the freshly-received state, same as everywhere else.
           // Never true for the EX fight (storyStage stays frozen at 5 === storyStageCount

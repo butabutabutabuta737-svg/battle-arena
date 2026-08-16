@@ -159,15 +159,36 @@
       <p class="cert-sub" id="certSub">まずは1面のボスを倒そう</p>
 
       <!-- Mirrors the boss-portrait-row on #storyIntro at a smaller scale — locked (not
-           yet defeated) ones are dimmed to grayscale via JS toggling the .locked class. -->
+           yet defeated) ones are dimmed to grayscale via JS toggling the .locked class. Each
+           of the 5 main bosses also gets a small 👤/🤝 badge row below it, independently lit
+           up once that boss has been cleared solo (👤) and/or in 2P co-op (🤝) — see
+           clearedSolo/clearedCoop and renderCertificate() in client.js. -->
       <div class="cert-silhouette-row" id="certSilhouetteRow">
-        <img class="cert-portrait" src="images/bosses/boss1.jpg" alt="1面ボス" />
-        <img class="cert-portrait" src="images/bosses/boss2.jpg" style="object-position: center 22%;" alt="2面ボス" />
-        <img class="cert-portrait" src="images/bosses/boss3.jpg" alt="3面ボス" />
-        <img class="cert-portrait" src="images/bosses/boss4.jpg" alt="4面ボス" />
-        <img class="cert-portrait" src="images/bosses/boss5.jpg" alt="5面ボス" />
-        <img class="cert-portrait hidden" id="certPortraitEx" alt="EXボス" />
+        <div class="cert-portrait-wrap">
+          <img class="cert-portrait" src="images/bosses/boss1.jpg" alt="1面ボス" />
+          <div class="cert-mode-badge"><span class="cert-mode-icon" data-mode="solo">👤</span><span class="cert-mode-icon" data-mode="coop">🤝</span></div>
+        </div>
+        <div class="cert-portrait-wrap">
+          <img class="cert-portrait" src="images/bosses/boss2.jpg" style="object-position: center 22%;" alt="2面ボス" />
+          <div class="cert-mode-badge"><span class="cert-mode-icon" data-mode="solo">👤</span><span class="cert-mode-icon" data-mode="coop">🤝</span></div>
+        </div>
+        <div class="cert-portrait-wrap">
+          <img class="cert-portrait" src="images/bosses/boss3.jpg" alt="3面ボス" />
+          <div class="cert-mode-badge"><span class="cert-mode-icon" data-mode="solo">👤</span><span class="cert-mode-icon" data-mode="coop">🤝</span></div>
+        </div>
+        <div class="cert-portrait-wrap">
+          <img class="cert-portrait" src="images/bosses/boss4.jpg" alt="4面ボス" />
+          <div class="cert-mode-badge"><span class="cert-mode-icon" data-mode="solo">👤</span><span class="cert-mode-icon" data-mode="coop">🤝</span></div>
+        </div>
+        <div class="cert-portrait-wrap">
+          <img class="cert-portrait" src="images/bosses/boss5.jpg" alt="5面ボス" />
+          <div class="cert-mode-badge"><span class="cert-mode-icon" data-mode="solo">👤</span><span class="cert-mode-icon" data-mode="coop">🤝</span></div>
+        </div>
+        <div class="cert-portrait-wrap">
+          <img class="cert-portrait hidden" id="certPortraitEx" alt="EXボス" />
+        </div>
       </div>
+      <div class="cert-mode-legend">👤 1人プレイ　🤝 2人協力プレイ</div>
     </div>
   </div>
 </div>
