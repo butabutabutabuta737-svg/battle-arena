@@ -1,7 +1,7 @@
 // Procedural sound engine — everything is synthesized with Web Audio, no audio files needed.
 window.GameAudio = (() => {
   let ctx = null;
-  let master, sfxGain, bgmGain;
+  let master, sfxGain, bgmGain, titleGain;
   let muted = false;
   let bgmTimer = null;
   let bgmPlaying = false;
@@ -13,8 +13,7 @@ window.GameAudio = (() => {
   let titleStep = 0;
   let titleNextChordTime = 0;
   let titleNextHowlTime = 0;
-  let titleRhythmStep = 0;
-  let titleNextRhythmTime = 0;
+  let titleNextDrumTime = 0;
 
   const TEMPO = 128;
   const stepDur = () => 60 / TEMPO / 2; // 8th notes
@@ -33,6 +32,14 @@ window.GameAudio = (() => {
     bgmGain = ctx.createGain();
     bgmGain.gain.value = 0.32;
     bgmGain.connect(master);
+    // Dedicated bus for the title theme only, so stopTitleBgm() can silence it instantly —
+    // notes are scheduled up to ~3.5s ahead (see titleBgmScheduler's look-ahead window), so a
+    // chord/howl that was already scheduled when stop is called would otherwise keep ringing
+    // out its full envelope well after the match starts. Ramping this gain to 0 cuts off
+    // whatever's currently sounding immediately, regardless of when each note was scheduled.
+    titleGain = ctx.createGain();
+    titleGain.gain.value = 1;
+    titleGain.connect(bgmGain);
     return ctx;
   }
 
@@ -348,7 +355,7 @@ window.GameAudio = (() => {
     gain.gain.linearRampToValueAtTime(vol, t + dur * 0.4); // slow swell in, no attack click
     gain.gain.linearRampToValueAtTime(vol * 0.75, t + dur * 0.75);
     gain.gain.linearRampToValueAtTime(0, t + dur); // slow fade out, no release click
-    osc.connect(filter).connect(gain).connect(bgmGain);
+    osc.connect(filter).connect(gain).connect(titleGain);
     osc.start(t);
     osc.stop(t + dur + 0.05);
   }
@@ -369,7 +376,7 @@ window.GameAudio = (() => {
     gain.gain.setValueAtTime(0, t);
     gain.gain.linearRampToValueAtTime(0.1, t + 1.0);
     gain.gain.linearRampToValueAtTime(0, t + 3.2);
-    osc.connect(filter).connect(gain).connect(bgmGain);
+    osc.connect(filter).connect(gain).connect(titleGain);
     osc.start(t);
     osc.stop(t + 3.3);
   }
@@ -385,7 +392,7 @@ window.GameAudio = (() => {
     gain.gain.setValueAtTime(0.001, t);
     gain.gain.linearRampToValueAtTime(0.28, t + 0.03);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
-    osc.connect(gain).connect(bgmGain);
+    osc.connect(gain).connect(titleGain);
     osc.start(t);
     osc.stop(t + 0.65);
   }
@@ -417,6 +424,10 @@ window.GameAudio = (() => {
     titleNextChordTime = ctx.currentTime + 0.2;
     titleNextDrumTime = ctx.currentTime + 3 + Math.random() * 2;
     titleNextHowlTime = ctx.currentTime + 4 + Math.random() * 4;
+    // Un-mute the title bus in case a previous stopTitleBgm() ramped it to 0 — without this,
+    // restarting after a stop would schedule new notes into a still-silenced bus.
+    titleGain.gain.cancelScheduledValues(ctx.currentTime);
+    titleGain.gain.setValueAtTime(1, ctx.currentTime);
     titleBgmTimer = setInterval(titleBgmScheduler, 250);
   }
 
@@ -424,6 +435,17 @@ window.GameAudio = (() => {
     titleBgmPlaying = false;
     if (titleBgmTimer) clearInterval(titleBgmTimer);
     titleBgmTimer = null;
+    // Hard-cut whatever's currently sounding, not just future scheduling — chords/howls are
+    // scheduled up to ~3.5s ahead (see titleBgmScheduler's look-ahead window), so without this
+    // a note already in flight when the match starts would keep audibly ringing over the
+    // battle BGM for several seconds. Ramping this dedicated bus to 0 silences it immediately
+    // regardless of when each individual oscillator was scheduled to start/stop.
+    if (ctx && titleGain) {
+      const now = ctx.currentTime;
+      titleGain.gain.cancelScheduledValues(now);
+      titleGain.gain.setValueAtTime(titleGain.gain.value, now);
+      titleGain.gain.linearRampToValueAtTime(0, now + 0.08);
+    }
   }
 
   return {
