@@ -1,0 +1,13 @@
+{
+  "name": "battle-arena",
+  "version": "1.0.0",
+  "private": true,
+  "description": "同じWi-Fi内で2人がリアルタイム対戦できる弾よけバトルゲーム",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

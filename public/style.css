@@ -1,0 +1,1028 @@
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overscroll-behavior: none;
+  background: radial-gradient(circle at 50% 0%, #1b2140 0%, #0a0d1c 70%);
+  color: #eef1ff;
+  font-family: "Yu Gothic UI", "Hiragino Sans", "Meiryo", sans-serif;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.screen {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  background: rgba(20, 24, 48, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 28px 26px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.card h1 {
+  margin: 0 0 6px;
+  font-size: 24px;
+  letter-spacing: 0.02em;
+  background: linear-gradient(90deg, #8fb0ff, #ff9ac2 80%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 26px rgba(111, 91, 255, 0.35);
+}
+
+.card .subtitle {
+  margin: 0 0 22px;
+  color: #9aa3d1;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+label {
+  display: block;
+  font-size: 12px;
+  color: #9aa3d1;
+  margin: 14px 0 6px;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 15px;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+
+input[type="text"]:focus {
+  border-color: #5b8cff;
+}
+
+.roulette-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 6px;
+  font-size: 12px;
+  color: #9aa3d1;
+  cursor: pointer;
+}
+.roulette-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: #ffd35b;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 5, 12, 0.75);
+  backdrop-filter: blur(2px);
+  padding: 20px;
+}
+.modal-card {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  max-height: 84vh;
+  overflow-y: auto;
+  background: rgba(20, 24, 48, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 26px 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.modal-card h2 {
+  margin: 0 0 14px;
+  font-size: 20px;
+}
+.modal-card h3 {
+  margin: 20px 0 8px;
+  font-size: 14px;
+  color: #8fb0ff;
+}
+.modal-card h3:first-of-type {
+  margin-top: 4px;
+}
+.modal-card ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #d7dbff;
+}
+.modal-card li {
+  margin-bottom: 3px;
+}
+.modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: #eef1ff;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.btn-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+/* ---- title-screen mode selection: リアルタイム対戦アリーナ vs ストーリーモード ---- */
+.mode-select-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #eef1ff;
+}
+.mode-card:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+.mode-card-icon {
+  font-size: 22px;
+}
+.mode-card-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.mode-card-desc {
+  font-size: 12px;
+  color: #9aa3d1;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.lobby-back-btn {
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+/* ---- story-mode intro screen: 5 real boss portraits (user-supplied illustration, cropped
+   per-boss from two source images and saved under public/images/bosses/), all the same
+   size (a uniform "roster" look, per explicit request — an earlier revision escalated size
+   left-to-right, which suited the old abstract CSS-shape silhouettes but not real photos).
+   Previously built as pure-CSS silhouette shapes (div/clip-path) with no image assets at
+   all — replaced wholesale once the user provided actual artwork, rather than layering
+   images on top of the old shape system. ---- */
+.boss-silhouette-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  height: 128px;
+  margin: 18px 0 8px;
+}
+.boss-portrait {
+  width: 64px;
+  height: 120px; /* taller/more portrait-like than the previous 80px, to show more of each
+    illustration — width stays put since it's already at the ceiling this row's container
+    can fit 5-across (see flex-shrink note below), so height is the only lever available to
+    increase visible illustration area without re-triggering the overflow-shrink bug. */
+  flex-shrink: 0; /* without this, flex items' default min-width:auto derives an implicit
+    minimum from each <img>'s own *intrinsic* dimensions — since the row (5×120px+gaps, in
+    an earlier revision) didn't actually fit inside the .card (max-width:420px, ~368px of
+    usable content width after padding), the browser was silently shrinking each portrait by
+    a *different* amount depending on its own source aspect ratio, despite every one having
+    the identical explicit width:120px — the on-screen "different widths" bug the user saw
+    was real, just not caused by anything in this rule's own declared values. Sized to
+    actually fit 5-across within the card this time (5×64 + 4×8 = 352px, comfortably under
+    ~368px), with flex-shrink:0 kept as a safety net so any future overflow scrolls/clips
+    obviously instead of silently un-equalizing the widths again the same way. */
+  border-radius: 8px;
+  object-fit: cover;
+  object-position: center top; /* source crops are tall full-body shots — anchor to the
+    top so the face stays visible instead of "cover" centering on the torso/clothing */
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+/* Not yet defeated — same grayscale-dim treatment as .cert-portrait.locked below, per explicit
+   request to make this row look "like the certificate." (An earlier attempt tried a real
+   black silhouette cutout of each photo — bossN_locked.png in images/bosses/, still present
+   on disk but unused now — reverted in favor of this simpler, consistent-with-the-certificate
+   look.) */
+.boss-portrait.locked {
+  filter: grayscale(1) brightness(0.35);
+  opacity: 0.4;
+}
+
+/* ---- story-mode "撃破証明書" (kill certificate) — same pattern as this session's other
+   project's vertical shooter (流星よけ/MeteorDodge): a title-screen button opens a card
+   showing the highest boss defeated so far, escalating in visual flourish by tier, tracked
+   in localStorage so it persists across visits (this is the only persistent client-side
+   state anywhere in BattleArena — everything else is server-authoritative/in-memory only). ---- */
+.certificate {
+  position: relative;
+  margin: 10px 0 4px;
+  padding: 26px 18px 20px;
+  border-radius: 14px;
+  text-align: center;
+  border: 2px dashed rgba(244, 238, 252, 0.2);
+  background: rgba(244, 238, 252, 0.03);
+}
+.cert-boss-icon {
+  font-size: 46px;
+  margin: 0 auto 6px;
+  filter: drop-shadow(0 0 8px rgba(255, 211, 91, 0.3));
+}
+.cert-label {
+  margin: 2px 0 6px;
+  font-weight: 700;
+  font-size: 17px;
+  color: #eef1ff;
+}
+.cert-title-badge {
+  display: inline-block;
+  margin: 0 0 10px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 211, 91, 0.45);
+  background: rgba(255, 211, 91, 0.08);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #ffd35b;
+}
+.cert-sub {
+  margin: 0;
+  font-size: 12.5px;
+  color: #9aa3d1;
+}
+.cert-silhouette-row {
+  display: flex;
+  flex-wrap: wrap; /* on narrow viewports 5×60px+gaps doesn't fit .certificate's content
+    width (which shrinks along with .modal-card below ~520px) — wrapping to 2 rows keeps
+    every portrait fully visible instead of overflowing the card's frame. A fixed height
+    would clip a wrapped second row, so this is auto-height (row-gap reuses the same `gap`). */
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  margin: 16px 0 2px;
+}
+.cert-portrait {
+  width: 60px;
+  height: 75px;
+  flex-shrink: 0; /* same defensive fix as .boss-portrait — not currently overflowing its
+    row, but prevents the same non-uniform-shrink bug if sizes/modal width ever change */
+  border-radius: 6px;
+  object-fit: cover;
+  object-position: center top; /* keep the face in frame, same reasoning as .boss-portrait */
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+}
+/* .locked (not yet defeated, toggled in client.js from bestBossDefeated) dims a portrait to
+   grayscale so it reads clearly as "you haven't beaten this one yet" at a glance. */
+.cert-portrait.locked {
+  filter: grayscale(1) brightness(0.35);
+  opacity: 0.4;
+}
+.cert-seal {
+  display: none;
+  position: absolute;
+  top: -16px;
+  right: -10px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #4a2f00;
+  background: radial-gradient(circle at 35% 30%, #fff3c2, #ffd24a 60%, #d9a02a);
+  box-shadow: 0 0 14px rgba(255, 211, 91, 0.75);
+}
+.cert-seal.visible { display: flex; }
+
+.cert-tier-1 {
+  border: 3px solid #a9754a;
+  background: rgba(169, 117, 74, 0.08);
+  box-shadow: 0 0 10px rgba(169, 117, 74, 0.25);
+}
+.cert-tier-2 {
+  border: 3px solid #c3ccd6;
+  background: rgba(195, 204, 214, 0.08);
+  box-shadow: 0 0 12px rgba(195, 204, 214, 0.3);
+}
+.cert-tier-3 {
+  border: 3px solid #ffd24a;
+  background: rgba(255, 211, 91, 0.08);
+  box-shadow: 0 0 14px rgba(255, 211, 91, 0.35);
+}
+.cert-tier-4 {
+  border: 3px solid #ffd24a;
+  outline: 1px solid rgba(255, 211, 91, 0.5);
+  outline-offset: 4px;
+  background: rgba(255, 211, 91, 0.1);
+  box-shadow: 0 0 18px rgba(255, 211, 91, 0.45);
+}
+/* Tier 5 = all 5 bosses defeated, the true story-clear state — the strongest treatment,
+   matching the referenced project's "all clear" tier rather than its plain per-stage tiers. */
+.cert-tier-5 {
+  border: 4px solid transparent;
+  background: linear-gradient(#14182f, #14182f) padding-box, linear-gradient(120deg, #ffd24a, #ff8af0, #9fd8ff, #ffd24a) border-box;
+  background-size: 100% 100%, 260% 100%;
+  animation: certShine5 3s linear infinite, certGlow5 1.8s ease-in-out infinite;
+}
+@keyframes certShine5 {
+  0% { background-position: 0 0, 0% 0; }
+  100% { background-position: 0 0, 260% 0; }
+}
+@keyframes certGlow5 {
+  0%, 100% { box-shadow: 0 0 20px rgba(255, 211, 91, 0.5); }
+  50% { box-shadow: 0 0 38px rgba(255, 138, 240, 0.75); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cert-tier-5 { animation: none; box-shadow: 0 0 18px rgba(255, 211, 91, 0.5); }
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 22px 0;
+  color: #6b74a8;
+  font-size: 12px;
+}
+.divider::before, .divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  transition: transform 0.05s ease, filter 0.15s ease;
+}
+button:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
+  flex: 1;
+  background: linear-gradient(135deg, #5b8cff, #6f5bff);
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(91, 140, 255, 0.35);
+}
+.btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+.btn-secondary {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.08);
+  color: #eef1ff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.join-row {
+  display: flex;
+  gap: 8px;
+}
+.join-row input {
+  flex: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.lan-hint {
+  margin-top: 18px;
+  font-size: 12px;
+  color: #6b74a8;
+  line-height: 1.6;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+/* ---- game screen ---- */
+#game {
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  position: relative;
+  touch-action: none;
+}
+
+.hud {
+  width: 100%;
+  max-width: 800px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.hp-block {
+  flex: 1;
+  min-width: 0;
+}
+.hp-block .pname {
+  font-size: 13px;
+  margin-bottom: 4px;
+  color: #cdd3f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hp-bar-bg {
+  height: 11px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.hp-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.12s linear;
+}
+#hpMine { background: linear-gradient(90deg, #5b8cff, #7fa8ff); box-shadow: 0 0 10px rgba(91,140,255,0.7); }
+#hpTheirs { background: linear-gradient(90deg, #ff5b7a, #ff8a9e); box-shadow: 0 0 10px rgba(255,91,122,0.7); }
+.hp-bar-fill.house-healing {
+  animation: house-heal-glow 0.9s ease-in-out infinite;
+}
+@keyframes house-heal-glow {
+  0%, 100% { box-shadow: 0 0 10px rgba(125,255,160,0.7), 0 0 2px rgba(125,255,160,0.5) inset; filter: brightness(1); }
+  50% { box-shadow: 0 0 20px rgba(125,255,160,1), 0 0 8px rgba(125,255,160,0.9) inset; filter: brightness(1.35); }
+}
+
+.buff-row {
+  display: flex;
+  gap: 5px;
+  margin-top: 5px;
+  min-height: 20px;
+}
+.buff-row-right {
+  justify-content: flex-end;
+}
+.buff-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  animation: badge-in 0.2s ease;
+}
+@keyframes badge-in {
+  0% { transform: scale(0.6); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.buff-badge.speed { background: rgba(93, 227, 255, 0.16); color: #7fe9ff; box-shadow: 0 0 8px rgba(93,227,255,0.4); }
+.buff-badge.rapid { background: rgba(255, 176, 64, 0.16); color: #ffbb5c; box-shadow: 0 0 8px rgba(255,176,64,0.4); }
+.buff-badge.power { background: rgba(255, 91, 200, 0.16); color: #ff8adf; box-shadow: 0 0 8px rgba(255,91,200,0.4); }
+.buff-badge.big { background: rgba(178, 141, 255, 0.16); color: #b28dff; box-shadow: 0 0 8px rgba(178,141,255,0.4); }
+.buff-badge.laser { background: rgba(255, 91, 91, 0.16); color: #ff8080; box-shadow: 0 0 8px rgba(255,91,91,0.4); }
+.buff-badge.shield { background: rgba(109, 227, 255, 0.16); color: #6de3ff; box-shadow: 0 0 8px rgba(109,227,255,0.4); }
+.buff-badge.swordRange { background: rgba(200, 220, 255, 0.16); color: #c8dcff; box-shadow: 0 0 8px rgba(200,220,255,0.4); }
+.buff-badge.clone { background: rgba(255, 239, 138, 0.16); color: #ffef8a; box-shadow: 0 0 8px rgba(255,239,138,0.4); }
+
+.hud .room-tag {
+  font-size: 12px;
+  color: #6b74a8;
+  white-space: nowrap;
+}
+.hud .room-tag b {
+  color: #d7dbff;
+  letter-spacing: 0.1em;
+}
+
+.match-score {
+  margin-top: 4px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #eef1ff;
+  letter-spacing: 0.05em;
+}
+
+.story-stage {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffd35b;
+  letter-spacing: 0.03em;
+}
+
+.arena-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 800px;
+}
+
+#canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #0b1020;
+  border-radius: 14px;
+  border: 1px solid rgba(120, 140, 255, 0.18);
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.5), 0 0 40px rgba(91, 92, 255, 0.08) inset;
+  touch-action: none;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(6, 8, 20, 0.6);
+  backdrop-filter: blur(2px);
+  border-radius: 14px;
+  text-align: center;
+  padding: 20px;
+}
+
+.overlay .status-big {
+  font-size: 26px;
+  font-weight: 800;
+  text-shadow: 0 0 18px rgba(143, 176, 255, 0.6);
+}
+
+.overlay .result-banner {
+  font-size: 34px;
+  font-weight: 800;
+  animation: pop-in 0.35s cubic-bezier(.2,1.4,.4,1);
+}
+@keyframes pop-in {
+  0% { transform: scale(0.5); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.roulette-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.roulette-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffd35b;
+}
+.roulette-reel {
+  width: 84px;
+  height: 84px;
+  border-radius: 14px;
+  background: radial-gradient(circle at 35% 30%, #3a3014, #1c1808);
+  border: 2px solid rgba(255, 211, 91, 0.5);
+  box-shadow: 0 0 22px rgba(255, 211, 91, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+}
+.roulette-reel.spinning {
+  animation: roulette-shake 0.12s linear infinite;
+}
+@keyframes roulette-shake {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-3px) scale(1.04); }
+}
+.roulette-reel.settled {
+  animation: roulette-settle 0.4s cubic-bezier(.2,1.6,.4,1);
+}
+@keyframes roulette-settle {
+  0% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+.result-win { color: #6bffb0; text-shadow: 0 0 24px rgba(107,255,176,0.7); }
+.result-lose { color: #ff7f8f; text-shadow: 0 0 24px rgba(255,127,143,0.6); }
+
+/* ---- story-mode boss intro: a brief dramatic pause before each stage's fight, showing
+   the boss's icon/name/line, colored per the escalating BOSS_TIER_THEME in client.js ---- */
+.boss-intro-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 5, 14, 0.8);
+  backdrop-filter: blur(3px);
+  border-radius: 14px;
+  padding: 20px;
+  text-align: center;
+  animation: boss-intro-fade 0.3s ease;
+}
+.boss-intro-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  animation: boss-intro-pop 0.45s cubic-bezier(.2,1.4,.4,1);
+}
+.boss-intro-stage {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--boss-color, #ffd35b);
+}
+.boss-intro-portrait {
+  width: 140px;
+  height: 175px;
+  object-fit: cover;
+  object-position: center top; /* the pre-battle card is exactly what prompted this fix —
+    the tall source crops were showing clothing/torso instead of the face here */
+  border-radius: 10px;
+  box-shadow: 0 0 0 2px var(--boss-color, #ffd35b), 0 0 24px var(--boss-color, #ffd35b), 0 10px 24px rgba(0, 0, 0, 0.6);
+  animation: boss-intro-icon-pulse 1.4s ease-in-out infinite;
+}
+.boss-intro-name {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--boss-color, #ffd35b);
+  text-shadow: 0 0 20px var(--boss-color, #ffd35b);
+}
+.boss-intro-line {
+  max-width: 480px;
+  font-size: 15px;
+  color: #e7e9f5;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  padding: 12px 18px;
+  line-height: 1.5;
+}
+@keyframes boss-intro-fade {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes boss-intro-pop {
+  0% { transform: scale(0.7) translateY(10px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+@keyframes boss-intro-icon-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
+/* ---- boss-defeat card overrides: same layout as .boss-intro-card above, dulled to read as
+   "beaten" rather than "arriving" — no triumphant pulse, muted grey border instead of the
+   boss's glowing signature color, name text desaturated. */
+.boss-defeat-overlay .boss-intro-stage {
+  color: #ff8a8a;
+}
+.boss-defeat-overlay .boss-intro-portrait {
+  filter: grayscale(0.55) brightness(0.8);
+  animation: none;
+  box-shadow: 0 0 0 2px #8a8ea0, 0 0 16px rgba(255, 255, 255, 0.12), 0 10px 24px rgba(0, 0, 0, 0.6);
+}
+.boss-defeat-overlay .boss-intro-name {
+  color: #c9ccd8;
+  text-shadow: none;
+}
+
+/* ---- story-mode defeat: shown when the boss wins the series — a real "GAME OVER" moment
+   with battlefield-defeat atmosphere, distinct (dark red, not gold/green) from the victory
+   .story-ending-overlay below. The retry button is deliberately NOT part of the entry
+   animation — client.js reveals it only after a few seconds' dramatic pause (see
+   gameOverRetryReady), so the defeat has to visibly sit for a beat before the player can
+   act on it, rather than an instant "click to retry" undercutting the moment. ---- */
+.game-over-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 3, 3, 0.9);
+  backdrop-filter: blur(4px);
+  border-radius: 14px;
+  padding: 24px;
+  text-align: center;
+  animation: game-over-fade 0.6s ease;
+}
+.game-over-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  max-width: 460px;
+  animation: game-over-shake 0.5s ease;
+}
+.game-over-title {
+  font-size: 40px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  color: #ff5b5b;
+  text-shadow: 0 0 30px rgba(255, 60, 60, 0.7), 0 0 60px rgba(255, 20, 20, 0.4);
+}
+.game-over-text {
+  font-size: 14.5px;
+  line-height: 1.9;
+  color: #d7b4b4;
+}
+@keyframes game-over-fade {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes game-over-shake {
+  0% { transform: translateX(0); opacity: 0; }
+  20% { transform: translateX(-10px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(3px); }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+/* ---- story-mode ending: shown once, after clearing stage 5, on top of the plain
+   finished-round overlay underneath (z-index above .boss-intro-overlay's 30, so it can
+   never be occluded even if a stray intro timer somehow overlapped it) ---- */
+.story-ending-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(3, 4, 12, 0.88);
+  backdrop-filter: blur(4px);
+  border-radius: 14px;
+  padding: 24px;
+  text-align: center;
+  animation: boss-intro-fade 0.5s ease;
+}
+.story-ending-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 520px;
+  animation: boss-intro-pop 0.6s cubic-bezier(.2,1.4,.4,1);
+}
+.story-ending-tag {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: #ffd35b;
+}
+.story-ending-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #6bffb0;
+  text-shadow: 0 0 24px rgba(107, 255, 176, 0.55);
+}
+.story-ending-text {
+  font-size: 15px;
+  line-height: 1.9;
+  color: #e7e9f5;
+}
+
+/* ---- mute toggle ---- */
+.mute-btn {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  z-index: 20;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+  background: rgba(20, 24, 48, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #eef1ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-btn {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
+  z-index: 20;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+  background: rgba(20, 24, 48, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #eef1ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---- floating joystick: appears wherever the player first touches, instead of a
+   fixed-position pad — active anywhere on the game screen except on top of a button ---- */
+.floating-joystick {
+  position: fixed;
+  width: 120px;
+  height: 120px;
+  margin-left: -60px;
+  margin-top: -60px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+  border: 2px solid rgba(91, 140, 255, 0.4);
+  box-shadow: 0 0 24px rgba(91, 140, 255, 0.18);
+  pointer-events: none;
+  z-index: 15;
+}
+
+.floating-joystick-knob {
+  position: absolute;
+  width: 42%;
+  height: 42%;
+  border-radius: 50%;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  background: radial-gradient(circle at 35% 30%, #9dbaff, #5b8cff);
+  box-shadow: 0 0 16px rgba(91, 140, 255, 0.6);
+}
+
+/* ---- fire button ---- */
+.fire-btn {
+  position: fixed;
+  bottom: max(20px, env(safe-area-inset-bottom) + 14px);
+  right: max(18px, env(safe-area-inset-right) + 10px);
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  font-size: 24px;
+  padding: 0;
+  background: radial-gradient(circle at 35% 30%, #4a2030, #2a1420);
+  border: 2px solid rgba(255, 91, 91, 0.45);
+  box-shadow: 0 0 22px rgba(255, 91, 91, 0.2);
+  color: #eef1ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 15;
+}
+
+.sword-btn {
+  position: fixed;
+  /* stacked directly above the fire button (64px tall + 12px gap) so both stay reachable
+     with the same thumb without overlapping the centered bomb controls */
+  bottom: calc(max(20px, env(safe-area-inset-bottom) + 14px) + 76px);
+  right: max(18px, env(safe-area-inset-right) + 10px);
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  font-size: 24px;
+  padding: 0;
+  background: radial-gradient(circle at 35% 30%, #3a4258, #1a2030);
+  border: 2px solid rgba(200, 220, 255, 0.45);
+  box-shadow: 0 0 22px rgba(200, 220, 255, 0.2);
+  color: #eef1ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 15;
+  transition: filter 0.1s ease;
+}
+.sword-btn.active {
+  filter: brightness(1.4);
+}
+
+.hint {
+  max-width: 800px;
+  width: 100%;
+  font-size: 12px;
+  color: #6b74a8;
+  text-align: center;
+  line-height: 1.6;
+}
+
+@media (pointer: coarse) {
+  .hint {
+    padding-bottom: 96px;
+  }
+}
+
+/* ---- bomb controls ---- */
+.bomb-controls {
+  /* was permanently display:none (removed entirely) per an earlier request, but that
+     broke mobile bomb placement outright — now shown/hidden dynamically by client.js
+     instead: visible only while the player actually holds a bomb (bombs>0), invisible
+     the rest of the time so it's not clutter when there's nothing to place. Positioned
+     at the exact same spot as .detonate-near-sword per user request — place and detonate
+     are effectively never relevant at the same moment (you either haven't placed your
+     bomb yet, or you have), so sharing one screen slot instead of two is fine. */
+  position: fixed;
+  bottom: calc(max(20px, env(safe-area-inset-bottom) + 14px) + 76px);
+  right: calc(max(18px, env(safe-area-inset-right) + 10px) + 76px);
+  display: flex;
+  gap: 12px;
+  z-index: 15;
+}
+
+.bomb-btn {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  font-size: 22px;
+  padding: 0;
+  background: radial-gradient(circle at 35% 30%, #3a4270, #1c2140);
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  color: #eef1ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease, filter 0.15s ease;
+}
+.bomb-btn.detonate {
+  border-color: rgba(255, 122, 91, 0.4);
+  box-shadow: 0 0 18px rgba(255, 122, 91, 0.15);
+}
+.bomb-btn.empty {
+  opacity: 0.4;
+  filter: grayscale(0.6);
+}
+
+/* detonate sits right next to the sword button (same row, one slot to its left) instead
+   of paired with the place-bomb button, since it's conceptually another "attack" action
+   taken while already in melee range */
+.detonate-near-sword {
+  position: fixed;
+  bottom: calc(max(20px, env(safe-area-inset-bottom) + 14px) + 76px);
+  right: calc(max(18px, env(safe-area-inset-right) + 10px) + 76px);
+  z-index: 15;
+}
+
+/* status readout, not a control — intentionally not button-shaped (a plain rounded pill,
+   inline in the HUD next to your own hp bar) so it doesn't read as another button */
+.bomb-status {
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(255, 166, 77, 0.14);
+  border: 1px solid rgba(255, 166, 77, 0.35);
+  color: #ffd9ad;
+  font-size: 12px;
+  font-weight: 700;
+}
