@@ -149,11 +149,11 @@
     // shots with varying amounts of sky/background above each head, so "top" alone doesn't
     // land on the face for all of them (calibrated by rendering each at actual display size
     // and eyeballing it — boss2's crop has a raised flag over its head needing extra offset).
-    { uniform: '#8fae6b', icon: '🔰', image: 'images/bosses/boss1.png', facePos: 'center top' }, // stage1: rookie soldier, muted olive
-    { uniform: '#d98a3d', icon: '🗡️', image: 'images/bosses/boss2.png', facePos: 'center 22%' }, // stage2: veteran mercenary, bronze
-    { uniform: '#c0392b', icon: '🎖️', image: 'images/bosses/boss3.png', facePos: 'center top' }, // stage3: elite squad captain, deep red
-    { uniform: '#6b5b95', icon: '🔪', image: 'images/bosses/boss4.png', facePos: 'center top' }, // stage4: knife specialist, stealthy purple
-    { uniform: '#ffd35b', icon: '👑', image: 'images/bosses/boss5.png', facePos: 'center top' }, // stage5: battlefield champion, gold
+    { uniform: '#8fae6b', icon: '🔰', image: 'images/bosses/boss1.jpg', facePos: 'center top' }, // stage1: rookie soldier, muted olive
+    { uniform: '#d98a3d', icon: '🗡️', image: 'images/bosses/boss2.jpg', facePos: 'center 22%' }, // stage2: veteran mercenary, bronze
+    { uniform: '#c0392b', icon: '🎖️', image: 'images/bosses/boss3.jpg', facePos: 'center top' }, // stage3: elite squad captain, deep red
+    { uniform: '#6b5b95', icon: '🔪', image: 'images/bosses/boss4.jpg', facePos: 'center top' }, // stage4: knife specialist, stealthy purple
+    { uniform: '#ffd35b', icon: '👑', image: 'images/bosses/boss5.jpg', facePos: 'center top' }, // stage5: battlefield champion, gold
   ];
   function shadeColor(hex, factor) {
     const n = parseInt(hex.slice(1), 16);
