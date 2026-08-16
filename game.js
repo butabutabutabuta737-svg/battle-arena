@@ -138,7 +138,7 @@ function applyDamage(room, targetWs, p, amount, now) {
 // place instead of being duplicated.
 function applyItemEffect(room, ws, p, itemType, now) {
   if (itemType === 'heal') {
-    p.hp = Math.min(MAX_HP, p.hp + HEAL_AMOUNT);
+    p.hp = Math.min(p.maxHp || MAX_HP, p.hp + HEAL_AMOUNT);
   } else if (itemType === 'bomb') {
     p.bombs = Math.min(MAX_BOMBS_HELD, p.bombs + 1);
   } else if (itemType === 'shield') {
@@ -225,6 +225,24 @@ function makePiece() {
   return { destructible: false, rects: Math.random() < 0.45 ? makeLPiece() : makeBarPiece() };
 }
 
+// Two spawn points (arena vs 1P-story vs EX) or three (the new 2-human co-op story mode —
+// both allies clustered on the left, the boss alone on the right, so idx 0/1/2 in Map
+// insertion order — ally1/ally2/boss, since the CPU is always added last in that flow —
+// lines up directly with this array with no isBoss special-casing needed anywhere it's used).
+function getSpawnPoints(room) {
+  if (room && room.storyCoop) {
+    return [
+      { x: 120, y: ARENA_H / 2 - 100 },
+      { x: 120, y: ARENA_H / 2 + 100 },
+      { x: ARENA_W - 120, y: ARENA_H / 2 },
+    ];
+  }
+  return [
+    { x: 120, y: ARENA_H / 2 },
+    { x: ARENA_W - 120, y: ARENA_H / 2 },
+  ];
+}
+
 // Generates a fresh, symmetric layout of permanent walls (bars/L-shapes) and destructible
 // blocks (roughly 1 wall : 2 blocks) — left-half pieces are mirrored to the right half so
 // neither spawn side gets an advantage. Sometimes returns no obstacles at all. Blocks and
@@ -232,13 +250,10 @@ function makePiece() {
 // since they need to avoid each other regardless of type, but are returned as two
 // separate lists: permanent `walls` (immutable this round) and destructible `blocks`
 // (each carries its own `hp`, mutated/removed as it takes damage during play).
-function generateWallsAndBlocks() {
+function generateWallsAndBlocks(room) {
   if (Math.random() < 0.03) return { walls: [], blocks: [] };
 
-  const spawnPoints = [
-    { x: 120, y: ARENA_H / 2 },
-    { x: ARENA_W - 120, y: ARENA_H / 2 },
-  ];
+  const spawnPoints = getSpawnPoints(room);
   const spawnBuffer = 95;
 
   const pieceCount = 6 + Math.floor(Math.random() * 4); // 6-9 mirrored pieces total (walls+blocks)
@@ -298,11 +313,8 @@ function generateWallsAndBlocks() {
 // Client renders canopies on top of everything else; there is no server-side collision or
 // line-of-sight system involved — a tree hides something from the human eye on screen,
 // not from the other player's game state, which is broadcast in full either way.
-function generateTrees(walls, blocks) {
-  const spawnPoints = [
-    { x: 120, y: ARENA_H / 2 },
-    { x: ARENA_W - 120, y: ARENA_H / 2 },
-  ];
+function generateTrees(walls, blocks, room) {
+  const spawnPoints = getSpawnPoints(room);
   const count = 3 + Math.floor(Math.random() * 3); // 3-5 trees
   const trees = [];
   let attempts = 0;
@@ -354,12 +366,9 @@ function makeHouseWallRects(x, y, size, thickness, opening) {
 
 // Mutates `walls` in place (appending each house's 3 wall segments) and returns the
 // house metadata list. At most HOUSE_MAX_COUNT (0, 1, or 2, uniformly) per round.
-function generateHouses(walls, trees, blocks) {
+function generateHouses(walls, trees, blocks, room) {
   const count = Math.floor(Math.random() * (HOUSE_MAX_COUNT + 1));
-  const spawnPoints = [
-    { x: 120, y: ARENA_H / 2 },
-    { x: ARENA_W - 120, y: ARENA_H / 2 },
-  ];
+  const spawnPoints = getSpawnPoints(room);
   const houses = [];
   let attempts = 0;
 
@@ -468,6 +477,7 @@ function fireLaser(room, shooterWs, shooter, now, originX, originY) {
 
   for (const [ows, op] of room.players) {
     if (ows === shooterWs || !op.alive) continue;
+    if (room.storyCoop && !!shooter.isBoss === !!op.isBoss) continue; // co-op: never friendly fire
     const toX = op.x - originX;
     const toY = op.y - originY;
     const t = toX * dirX + toY * dirY;
@@ -543,6 +553,9 @@ function attemptFire(room, ws, p, now) {
       room.bullets.push({
         id: room.bulletId++,
         ownerId: p.id,
+        ownerIsBoss: !!p.isBoss, // embedded at creation, not looked up per-tick — see the
+          // bullet-vs-player collision loop in tick() for why (bullets outlive the shooter's
+          // own live player-object lookup by many ticks, but this is a plain snapshot).
         x: origin.x + Math.cos(p.angle) * PLAYER_RADIUS,
         y: origin.y + Math.sin(p.angle) * PLAYER_RADIUS,
         vx: Math.cos(p.angle) * BULLET_SPEED,
@@ -577,6 +590,7 @@ function attemptSword(room, ws, p, now) {
     let hitTargetWs = null;
     for (const [ows, op] of room.players) {
       if (ows === ws || !op.alive) continue;
+      if (room.storyCoop && !!p.isBoss === !!op.isBoss) continue; // co-op: never friendly fire
       const dx = op.x - origin.x;
       const dy = op.y - origin.y;
       const d = Math.hypot(dx, dy);
@@ -651,6 +665,13 @@ function explodeBomb(room, bomb, now) {
   const isCpuBomb = cpuPlayer && bomb.ownerId === cpuPlayer.id;
   for (const [pws, pl] of room.players) {
     if (!pl.alive) continue;
+    const isSelf = pl.id === bomb.ownerId;
+    // Co-op: a human's own bomb never hurts their ally — but self-damage (isSelf) and the
+    // boss's own bomb hitting a human are both untouched, same "deliberate risk/reward for
+    // the owner" as always. Only reachable when room.storyCoop, so 1P/arena bomb behavior
+    // (where !isCpuBomb just means "a human's bomb" and there's no ally to protect) is
+    // completely unaffected.
+    if (room.storyCoop && !isSelf && !isCpuBomb && !pl.isBoss) continue;
     const d = Math.hypot(pl.x - bomb.x, pl.y - bomb.y);
     if (d < BOMB_RADIUS + PLAYER_RADIUS) {
       // Only the boss's outgoing blast against the human is scaled — a boss caught in its
@@ -735,6 +756,26 @@ const EX_BOSS = {
   preferredRange: 200, moveJitter: 0.03, atkMult: 1.35, swordMult: 1.35,
 };
 
+// ---- 2-player co-op story mode ----
+// Same 5 named bosses/story text as 1P (name/line/defeatLine reused verbatim from
+// STORY_BOSSES so the certificate/narrative stay unified — this is the same campaign, not a
+// different one), but with freshly-designed AI behavior for facing 2 humans at once instead
+// of 1: a per-stage HP multiplier (a boss with only MAX_HP would fall in seconds against
+// double the firepower, so it needs a genuinely bigger health pool, not just tougher AI) plus
+// somewhat sharper reflexes/evasion than the 1P curve at the same stage number, reflecting
+// "juggling two attackers demands it." atkMult/swordMult are deliberately NOT overridden here
+// (inherited as-is from STORY_BOSSES via the spread below) — per-hit damage against any one
+// ally doesn't need to go up just because there's a second ally elsewhere; HP/evasion are the
+// right levers for "harder because there are two of you," not raw hit damage.
+const STORY_BOSSES_2P_TUNING = [
+  { hpMult: 1.7, reactionMs: 520, aimJitter: 0.58, fireChance: 0.45, dodgeChance: 0.18, itemSeekChance: 0.25, preferredRange: 280, moveJitter: 0.55 },
+  { hpMult: 1.9, reactionMs: 380, aimJitter: 0.40, fireChance: 0.65, dodgeChance: 0.38, itemSeekChance: 0.42, preferredRange: 260, moveJitter: 0.38 },
+  { hpMult: 2.1, reactionMs: 260, aimJitter: 0.26, fireChance: 0.82, dodgeChance: 0.58, itemSeekChance: 0.60, preferredRange: 240, moveJitter: 0.25 },
+  { hpMult: 2.3, reactionMs: 170, aimJitter: 0.14, fireChance: 0.92, dodgeChance: 0.76, itemSeekChance: 0.78, preferredRange: 226, moveJitter: 0.14 },
+  { hpMult: 2.6, reactionMs: 85, aimJitter: 0.04, fireChance: 1.00, dodgeChance: 0.95, itemSeekChance: 0.95, preferredRange: 214, moveJitter: 0.05 },
+];
+const STORY_BOSSES_2P = STORY_BOSSES.map((b, i) => ({ ...b, ...STORY_BOSSES_2P_TUNING[i] }));
+
 function bossNameForStage(stage) {
   const s = Math.min(Math.max(1, stage || 1), STORY_BOSSES.length);
   return `${s}面ボス「${STORY_BOSSES[s - 1].name}」`;
@@ -771,15 +812,22 @@ function addCpuPlayer(room, stage) {
   const s = Math.min(Math.max(1, stage || 1), STORY_BOSSES.length);
   const cpuToken = { cpu: true };
   const idx = room.players.size;
+  const sp = getSpawnPoints(room)[idx] || { x: ARENA_W - 120, y: ARENA_H / 2 };
+  // Co-op boss gets a bigger health pool (see STORY_BOSSES_2P_TUNING's comment for why) —
+  // maxHp is tracked per-player (not just the flat MAX_HP constant) so resetPositions()/the
+  // heal item/house-heal caps all respect it instead of clamping a boosted-HP boss back down.
+  const maxHp = room.storyCoop ? Math.round(MAX_HP * STORY_BOSSES_2P_TUNING[s - 1].hpMult) : MAX_HP;
   const player = {
     id: 'cpu-' + Math.random().toString(36).slice(2, 8),
     name: bossNameForStage(s),
     line: bossLineForStage(s),
     defeatLine: bossDefeatLineForStage(s),
-    x: idx === 0 ? 120 : ARENA_W - 120,
-    y: ARENA_H / 2,
+    x: sp.x,
+    y: sp.y,
     angle: 0,
-    hp: MAX_HP,
+    hp: maxHp,
+    maxHp,
+    isBoss: true,
     alive: true,
     bombs: 0,
     shieldAmount: 0,
@@ -795,6 +843,11 @@ function addCpuPlayer(room, stage) {
 }
 
 function updateCpuAI(room, now) {
+  // The 2-human co-op story mode needs genuinely different targeting (pick between two
+  // allies) and gets its own dedicated function below rather than being folded into this
+  // one — keeps every line below completely untouched for the existing 1P/EX-boss path.
+  if (room.storyCoop) return updateCpuAICoop(room, now);
+
   const cpuToken = room.cpuToken;
   const cpu = room.players.get(cpuToken);
   const inp = room.inputs.get(cpuToken);
@@ -959,6 +1012,176 @@ function updateCpuAI(room, now) {
   }
 }
 
+// Co-op AI: same overall shape as updateCpuAI above (decision-interval movement/aim/fire,
+// per-tick dodge, stage 2+ bomb opportunism, stage 3+ house-chase against whichever ally is
+// camping), but must pick a target between two living allies instead of assuming there's
+// exactly one human. Target selection: mostly whoever's nearest (keeps the boss engaging
+// whoever's actually in its face) with a chance each decision tick to instead focus whichever
+// ally has the lower HP (a bit of "smart, finishes off the weak one" pressure without full
+// omniscience). The locked-on ally persists between decision ticks — re-rolled only on each
+// decision (or immediately if it died) — so the boss doesn't visibly flicker its aim between
+// two targets every reactionMs.
+function updateCpuAICoop(room, now) {
+  const cpuToken = room.cpuToken;
+  const cpu = room.players.get(cpuToken);
+  const inp = room.inputs.get(cpuToken);
+  if (!cpu || !inp) return;
+  if (!cpu.alive) {
+    inp.up = inp.down = inp.left = inp.right = false;
+    inp.shooting = false;
+    inp.swording = false;
+    return;
+  }
+
+  const allies = [...room.players.values()].filter((p) => !p.isBoss && p.alive);
+  if (allies.length === 0) {
+    inp.up = inp.down = inp.left = inp.right = false;
+    inp.shooting = false;
+    inp.swording = false;
+    return;
+  }
+
+  const cfg = STORY_BOSSES_2P[Math.min(Math.max(1, room.storyStage || 1), STORY_BOSSES_2P.length) - 1];
+  if (!room.cpuState) {
+    room.cpuState = {
+      lastDecisionAt: 0,
+      targetDx: 0,
+      targetDy: 0,
+      aimJitterVal: 0,
+      firing: false,
+      strafeSign: Math.random() < 0.5 ? 1 : -1,
+      lastPos: { x: cpu.x, y: cpu.y },
+      targetAllyId: null,
+    };
+  }
+  const st = room.cpuState;
+  let human = allies.find((p) => p.id === st.targetAllyId);
+
+  if (now - st.lastDecisionAt >= cfg.reactionMs) {
+    st.lastDecisionAt = now;
+
+    if (!human || Math.random() < 0.35) {
+      const lowHp = [...allies].sort((a, b) => a.hp - b.hp)[0];
+      const nearest = [...allies].sort((a, b) => Math.hypot(a.x - cpu.x, a.y - cpu.y) - Math.hypot(b.x - cpu.x, b.y - cpu.y))[0];
+      human = Math.random() < 0.35 ? lowHp : nearest;
+    }
+    st.targetAllyId = human.id;
+
+    st.aimJitterVal = (Math.random() * 2 - 1) * cfg.aimJitter;
+    st.firing = Math.random() < cfg.fireChance;
+
+    const movedSince = Math.hypot(cpu.x - st.lastPos.x, cpu.y - st.lastPos.y);
+    st.lastPos = { x: cpu.x, y: cpu.y };
+    const stuck = movedSince < 4;
+
+    if (Math.random() < 0.3) st.strafeSign *= -1;
+
+    const toHumanX = human.x - cpu.x;
+    const toHumanY = human.y - cpu.y;
+    const dist = Math.hypot(toHumanX, toHumanY) || 1;
+    const dirX = toHumanX / dist;
+    const dirY = toHumanY / dist;
+
+    let target = null;
+    const wantsHeal = cpu.hp < (cpu.maxHp || MAX_HP) * 0.45;
+
+    if (room.storyStage >= 3) {
+      const humanHouse = houseContainingPoint(room.houses, human.x, human.y);
+      if (humanHouse && houseContainingPoint(room.houses, cpu.x, cpu.y) !== humanHouse) {
+        target = houseEntrancePoint(humanHouse);
+      }
+    }
+
+    if (!target) {
+      const item = room.items[0];
+      if (item && (wantsHeal ? item.type === 'heal' || Math.random() < 0.5 : Math.random() < cfg.itemSeekChance)) {
+        target = item;
+      }
+    }
+
+    let tx, ty;
+    if (target) {
+      tx = target.x - cpu.x;
+      ty = target.y - cpu.y;
+    } else if (dist > cfg.preferredRange + 40) {
+      tx = dirX;
+      ty = dirY;
+    } else if (dist < cfg.preferredRange - 40) {
+      tx = -dirX;
+      ty = -dirY;
+    } else {
+      tx = -dirY * st.strafeSign;
+      ty = dirX * st.strafeSign;
+    }
+
+    if (stuck || Math.random() < cfg.moveJitter) {
+      const a = Math.random() * Math.PI * 2;
+      const jitterStrength = stuck ? 1 : cfg.moveJitter;
+      tx += Math.cos(a) * jitterStrength;
+      ty += Math.sin(a) * jitterStrength;
+    }
+
+    st.targetDx = tx;
+    st.targetDy = ty;
+  }
+
+  if (!human) human = allies[0]; // locked-on ally died between decision ticks — fall back to
+  // whichever other ally is left rather than freezing until the next decision interval
+
+  let dodgeX = 0;
+  let dodgeY = 0;
+  let dodging = false;
+  for (const b of room.bullets) {
+    if (b.ownerId === cpu.id) continue;
+    const bx = b.x - cpu.x;
+    const by = b.y - cpu.y;
+    const distNow = Math.hypot(bx, by);
+    if (distNow > 140) continue;
+    const speed = Math.hypot(b.vx, b.vy) || 1;
+    const bvx = b.vx / speed;
+    const bvy = b.vy / speed;
+    const approach = -(bx * bvx + by * bvy);
+    if (approach <= 0) continue;
+    const cross = bx * bvy - by * bvx;
+    const perpDist = Math.abs(cross);
+    if (perpDist < PLAYER_RADIUS + (b.radius || BULLET_RADIUS) + 18 && Math.random() < cfg.dodgeChance) {
+      const side = cross >= 0 ? 1 : -1;
+      dodgeX += bvy * side;
+      dodgeY += -bvx * side;
+      dodging = true;
+    }
+  }
+
+  const moveX = dodging ? dodgeX : st.targetDx;
+  const moveY = dodging ? dodgeY : st.targetDy;
+  if (Math.hypot(moveX, moveY) > 0.15) {
+    inp.left = moveX < -0.25;
+    inp.right = moveX > 0.25;
+    inp.up = moveY < -0.25;
+    inp.down = moveY > 0.25;
+  } else {
+    inp.left = inp.right = inp.up = inp.down = false;
+  }
+
+  inp.angle = Math.atan2(human.y - cpu.y, human.x - cpu.x) + st.aimJitterVal;
+  const distToHumanNow = Math.hypot(human.y - cpu.y, human.x - cpu.x);
+  inp.swording = distToHumanNow <= SWORD_RANGE + PLAYER_RADIUS;
+  inp.shooting = st.firing && !inp.swording;
+
+  if (room.storyStage >= 2) {
+    const distToHuman = Math.hypot(human.x - cpu.x, human.y - cpu.y);
+    const myPlacedBombs = room.bombs.filter((b) => b.ownerId === cpu.id);
+    if (myPlacedBombs.length > 0) {
+      const humanInRange = myPlacedBombs.some((b) => Math.hypot(human.x - b.x, human.y - b.y) < BOMB_RADIUS);
+      if (humanInRange && Math.random() < 0.15) {
+        detonateBombsFor(room, cpu);
+      }
+    } else if (cpu.bombs > 0 && distToHuman < BOMB_RADIUS * 0.7 && Math.random() < 0.05) {
+      placeBombFor(room, cpu);
+    }
+  }
+}
+
 const rooms = new Map();
 let nextPid = 1;
 
@@ -995,6 +1218,9 @@ function getRoom(id) {
       storyStage: 1,
       storyComplete: false,
       exBossActive: false,
+      storyCoop: false, // true only for the new 2-human co-op story room type — set once,
+        // by the very first joiner, in joinRoom() below. Every other CPU-match code path
+        // (1P story, the EX boss) leaves this false and is completely unaffected by it.
       pendingStoryIntro: false,
       cpuState: null,
       phase: 'waiting', // waiting | countdown | playing | finished
@@ -1015,10 +1241,12 @@ function getRoom(id) {
 
 function resetPositions(room) {
   const arr = [...room.players.values()];
+  const spawnPoints = getSpawnPoints(room);
   arr.forEach((p, idx) => {
-    p.x = idx === 0 ? 120 : ARENA_W - 120;
-    p.y = ARENA_H / 2;
-    p.hp = MAX_HP;
+    const sp = spawnPoints[idx] || spawnPoints[spawnPoints.length - 1];
+    p.x = sp.x;
+    p.y = sp.y;
+    p.hp = p.maxHp || MAX_HP;
     p.alive = true;
     p.bombs = 0;
     p.shieldAmount = 0;
@@ -1026,11 +1254,11 @@ function resetPositions(room) {
   room.bullets = [];
   room.items = [];
   room.nextItemSpawnAt = Date.now() + 3000;
-  const generated = generateWallsAndBlocks();
+  const generated = generateWallsAndBlocks(room);
   room.walls = generated.walls;
   room.blocks = generated.blocks;
-  room.trees = generateTrees(room.walls, room.blocks);
-  room.houses = generateHouses(room.walls, room.trees, room.blocks); // mutates room.walls in place, appending each house's 3 wall segments
+  room.trees = generateTrees(room.walls, room.blocks, room);
+  room.houses = generateHouses(room.walls, room.trees, room.blocks, room); // mutates room.walls in place, appending each house's 3 wall segments
   for (const house of room.houses) {
     if (Math.random() < HOUSE_ITEM_CHANCE) {
       room.items.push({
@@ -1179,10 +1407,7 @@ function spawnMonster(room) {
   const gold = !chicken && Math.random() < GOLD_MONSTER_CHANCE;
   const radius = chicken ? GOLDEN_CHICKEN_RADIUS : gold ? GOLD_MONSTER_RADIUS : MONSTER_RADIUS;
   const hp = gold ? MONSTER_MAX_HP * GOLD_MONSTER_HP_MULT : MONSTER_MAX_HP; // chicken uses the plain MONSTER_MAX_HP too — "HPはモンスターと同じ"
-  const spawnPoints = [
-    { x: 120, y: ARENA_H / 2 },
-    { x: ARENA_W - 120, y: ARENA_H / 2 },
-  ];
+  const spawnPoints = getSpawnPoints(room);
   let x, y, tries = 0;
   do {
     ({ x, y } = pickEdgeSpawnPosition(radius));
@@ -1244,7 +1469,7 @@ function tick(room) {
       // given walls already keep the player from overlapping the 3 solid sides
       for (const house of room.houses) {
         if (p.x >= house.x && p.x <= house.x + house.size && p.y >= house.y && p.y <= house.y + house.size) {
-          p.hp = Math.min(MAX_HP, p.hp + HOUSE_HEAL_PER_SEC * dt);
+          p.hp = Math.min(p.maxHp || MAX_HP, p.hp + HOUSE_HEAL_PER_SEC * dt);
           break;
         }
       }
@@ -1384,6 +1609,7 @@ function tick(room) {
       }
       for (const [pws, p] of room.players) {
         if (p.id === b.ownerId || !p.alive) continue;
+        if (room.storyCoop && !!b.ownerIsBoss === !!p.isBoss) continue; // co-op: never friendly fire
         const d = Math.hypot(p.x - b.x, p.y - b.y);
         if (d < PLAYER_RADIUS + bRadius) {
           applyDamage(room, pws, p, b.damage || BASE_BULLET_DAMAGE, now);
@@ -1443,24 +1669,56 @@ function tick(room) {
       return true;
     });
 
-    const alive = [...room.players.values()];
-    if (alive.length === 2 && alive.some((p) => !p.alive)) {
-      room.phase = 'finished';
-      const winner = alive.find((p) => p.alive);
-      room.winnerId = winner ? winner.id : null;
-      if (winner) {
-        room.matchWins[winner.id] = (room.matchWins[winner.id] || 0) + 1;
-        if (room.matchWins[winner.id] >= MATCH_WIN_TARGET) {
-          room.matchOver = true;
-          room.matchWinnerId = winner.id;
+    if (room.storyCoop) {
+      // 3-player win condition: the round ends when either the whole boss side or the
+      // whole ally side is wiped out — "the other 2 total players, one of them dead" no
+      // longer uniquely identifies a winner once there are 3 players in the room, so this
+      // is a genuinely separate check from the else branch below, not a tweak to it.
+      const allPlayers = [...room.players.values()];
+      const boss = allPlayers.find((pl) => pl.isBoss);
+      const allies = allPlayers.filter((pl) => !pl.isBoss);
+      const bossDead = boss && !boss.alive;
+      const alliesDead = allies.length > 0 && allies.every((pl) => !pl.alive);
+      if (bossDead || alliesDead) {
+        room.phase = 'finished';
+        // Always allies[0] (stable Map-insertion-order id, i.e. the first ally who joined
+        // the room) when allies win — NOT "whichever ally happens to be alive right now",
+        // since that could differ round to round and would fragment room.matchWins across
+        // two different keys instead of accumulating toward MATCH_WIN_TARGET on one.
+        const winnerId = bossDead ? (allies[0] ? allies[0].id : null) : (boss ? boss.id : null);
+        room.winnerId = winnerId;
+        if (winnerId) {
+          room.matchWins[winnerId] = (room.matchWins[winnerId] || 0) + 1;
+          if (room.matchWins[winnerId] >= MATCH_WIN_TARGET) {
+            room.matchOver = true;
+            room.matchWinnerId = winnerId;
+          }
+          if (room.rouletteEnabled) {
+            const hit = Math.random() < 0.5; // 50% miss, per spec
+            room.rouletteResult = { winnerId, hit, itemType: hit ? pickWeightedItemType() : null };
+          }
         }
-        if (room.rouletteEnabled) {
-          const hit = Math.random() < 0.5; // 50% miss, per spec
-          room.rouletteResult = {
-            winnerId: winner.id,
-            hit,
-            itemType: hit ? pickWeightedItemType() : null,
-          };
+      }
+    } else {
+      const alive = [...room.players.values()];
+      if (alive.length === 2 && alive.some((p) => !p.alive)) {
+        room.phase = 'finished';
+        const winner = alive.find((p) => p.alive);
+        room.winnerId = winner ? winner.id : null;
+        if (winner) {
+          room.matchWins[winner.id] = (room.matchWins[winner.id] || 0) + 1;
+          if (room.matchWins[winner.id] >= MATCH_WIN_TARGET) {
+            room.matchOver = true;
+            room.matchWinnerId = winner.id;
+          }
+          if (room.rouletteEnabled) {
+            const hit = Math.random() < 0.5; // 50% miss, per spec
+            room.rouletteResult = {
+              winnerId: winner.id,
+              hit,
+              itemType: hit ? pickWeightedItemType() : null,
+            };
+          }
         }
       }
     }
@@ -1539,6 +1797,7 @@ function broadcastState(room) {
     storyStageCount: STORY_BOSSES.length,
     storyComplete: room.storyComplete,
     exBossActive: room.exBossActive,
+    storyCoop: room.storyCoop,
   };
   const msg = JSON.stringify(state);
   for (const ws of room.players.keys()) {
@@ -1546,9 +1805,16 @@ function broadcastState(room) {
   }
 }
 
-function joinRoom(roomId, ws, name, wantsStoryCpu, roulette) {
+function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
   const room = getRoom(roomId);
-  if (room.players.size >= 2) {
+  // Decided once, by the very first joiner, same pattern as rouletteEnabled below — must
+  // happen before the capacity check right after it, since that check needs to already know
+  // whether this room targets 2 players (arena/1P story) or 3 (2-human co-op story).
+  if (room.players.size === 0 && wantsStoryCpu && wantsCoop) {
+    room.storyCoop = true;
+  }
+  const maxPlayers = room.storyCoop ? 3 : 2;
+  if (room.players.size >= maxPlayers) {
     ws.send(JSON.stringify({ type: 'full' }));
     ws.close();
     return;
@@ -1556,13 +1822,15 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette) {
 
   const pid = 'p' + nextPid++;
   const idx = room.players.size;
+  const sp = getSpawnPoints(room)[idx] || { x: ARENA_W - 120, y: ARENA_H / 2 };
   const player = {
     id: pid,
     name: (name || 'プレイヤー').slice(0, 12),
-    x: idx === 0 ? 120 : ARENA_W - 120,
-    y: ARENA_H / 2,
+    x: sp.x,
+    y: sp.y,
     angle: 0,
     hp: MAX_HP,
+    maxHp: MAX_HP,
     alive: true,
     bombs: 0,
     shieldAmount: 0,
@@ -1574,13 +1842,17 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette) {
   // Only the room's first joiner (the creator) sets this — a rule chosen once for the
   // room, same as how CPU difficulty is only ever specified by that first connection.
   // Must run BEFORE addCpuPlayer() below — that call also inserts into room.players,
-  // which would bump room.players.size to 2 first and make this check (size===1) false
+  // which would bump room.players.size up first and make a naive size-based check false
   // for every CPU match, silently leaving rouletteEnabled stuck at its default false
   // regardless of the checkbox. (This was a real bug, not a hypothetical.)
   if (room.players.size === 1) {
     room.rouletteEnabled = !!roulette;
   }
-  if (wantsStoryCpu && room.players.size === 1) {
+  // Non-coop story: the boss is added as soon as the single human joins (unchanged from
+  // before). Co-op story: the boss waits until BOTH humans are present, so a room never ends
+  // up with just one ally and an already-active boss.
+  const humanTargetForCpu = room.storyCoop ? 2 : 1;
+  if (wantsStoryCpu && room.players.size === humanTargetForCpu) {
     addCpuPlayer(room, 1); // story mode always starts at stage 1
   }
 
@@ -1590,12 +1862,13 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette) {
     isCpuMatch: room.isCpuMatch,
     storyStage: room.storyStage,
     storyStageCount: STORY_BOSSES.length,
+    storyCoop: room.storyCoop,
     rouletteEnabled: room.rouletteEnabled,
     arena: { w: ARENA_W, h: ARENA_H, walls: room.walls, trees: room.trees, houses: room.houses },
   }));
   broadcastState(room);
 
-  if (room.players.size === 2 && room.phase === 'waiting') startCountdown(room);
+  if (room.players.size === maxPlayers && room.phase === 'waiting') startCountdown(room);
   ensureLoop(room);
 
   ws.on('message', (raw) => {
@@ -1625,7 +1898,7 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette) {
       const p = room.players.get(ws);
       if (p && room.phase === 'playing') detonateBombsFor(room, p);
     } else if (data.type === 'rematch') {
-      if (room.phase === 'finished' && room.players.size === 2) {
+      if (room.phase === 'finished' && room.players.size === (room.storyCoop ? 3 : 2)) {
         // A finished match (someone already reached MATCH_WIN_TARGET) starts a brand new
         // best-of series on the next round; otherwise this is just the next round within
         // the current series, so the tally carries forward.
@@ -1676,7 +1949,7 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette) {
       // flow never actually gets set server-side here (storyEndingOverlay shows without ever
       // sending 'rematch' — see the client's finalStageClear comment for why). !room.exBossActive
       // guards against a double-send re-triggering this mid-EX-fight.
-      if (room.phase === 'finished' && room.players.size === 2 && room.isCpuMatch && room.matchOver
+      if (room.phase === 'finished' && room.players.size === (room.storyCoop ? 3 : 2) && room.isCpuMatch && room.matchOver
         && room.storyStage >= STORY_BOSSES.length && !room.exBossActive) {
         const cpuPlayer = room.players.get(room.cpuToken);
         const humanWon = cpuPlayer && room.matchWinnerId !== cpuPlayer.id;

@@ -53,7 +53,8 @@ wss.on('connection', (ws, req) => {
   const name = url.searchParams.get('name') || 'プレイヤー';
   const cpu = url.searchParams.get('cpu');
   const roulette = url.searchParams.get('roulette') === '1';
-  joinRoom(roomId, ws, name, cpu, roulette);
+  const coop = url.searchParams.get('coop') === '1';
+  joinRoom(roomId, ws, name, cpu, roulette, coop);
 });
 
 server.listen(PORT, '0.0.0.0', () => {

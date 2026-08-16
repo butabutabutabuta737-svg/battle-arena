@@ -63,7 +63,15 @@
   const storyIntroBackBtn = $('#storyIntroBackBtn');
   const storyNameInput = $('#storyNameInput');
   const storyRouletteToggle = $('#storyRouletteToggle');
-  const storyStartBtn = $('#storyStartBtn');
+  const story1pBtn = $('#story1pBtn');
+  const story2pBtn = $('#story2pBtn');
+  const story2pLobby = $('#story2pLobby');
+  const story2pBackBtn = $('#story2pBackBtn');
+  const story2pNameInput = $('#story2pNameInput');
+  const story2pRouletteToggle = $('#story2pRouletteToggle');
+  const story2pCreateBtn = $('#story2pCreateBtn');
+  const story2pRoomInput = $('#story2pRoomInput');
+  const story2pJoinBtn = $('#story2pJoinBtn');
   const storyStageLabel = $('#storyStageLabel');
   const storyEndingOverlay = $('#storyEndingOverlay');
   const storyEndingTitleBtn = $('#storyEndingTitleBtn');
@@ -86,6 +94,10 @@
   const swordBtn = $('#swordBtn');
   const buffMine = $('#buffMine');
   const buffTheirs = $('#buffTheirs');
+  const allyHpBlock = $('#allyHpBlock');
+  const nameAlly = $('#nameAlly');
+  const hpAlly = $('#hpAlly');
+  const buffAlly = $('#buffAlly');
   const bombControls = $('.bomb-controls');
   const placeBombBtn = $('#placeBombBtn');
   const detonateBombBtn = $('#detonateBombBtn');
@@ -251,6 +263,22 @@
     }
   }
 
+  // 3-way particle/trail/tint color helper (me / ally / boss-enemy) — every one of these
+  // color decisions used to be a plain binary "is this me" check, which reads an ally's
+  // bullets/trail/bomb as enemy-colored in the new 2-player co-op mode. `p` may be null/
+  // undefined (e.g. a bullet whose owner already left the room) — falls back to the enemy
+  // color in that case, matching each call site's original binary-else behavior. Only
+  // splits into ally/enemy when actually in a co-op room (checked via the module-level
+  // latestState, not a param, since every call site already has it in scope implicitly) —
+  // outside co-op, `p.isBoss` is undefined on every player (arena mode has no boss concept
+  // at all), so without this guard a plain arena opponent would wrongly read as "ally".
+  function sideColor(p, meColor, allyColor, enemyColor) {
+    if (!p) return enemyColor;
+    if (p.id === myId) return meColor;
+    const coop = !!(latestState && latestState.storyCoop);
+    return coop && !p.isBoss ? allyColor : enemyColor;
+  }
+
   function audioReady() {
     if (!window.GameAudio) return;
     window.GameAudio.resume();
@@ -259,7 +287,7 @@
     // repeatedly since startTitleBgm() is a no-op while already playing, and this check
     // correctly stays false once gameScreen is showing, so in-game button clicks (fire/
     // sword/bomb, which also call audioReady()) never re-trigger it mid-match.
-    const onTitleScreen = !modeSelect.classList.contains('hidden') || !lobby.classList.contains('hidden') || !storyIntro.classList.contains('hidden');
+    const onTitleScreen = !modeSelect.classList.contains('hidden') || !lobby.classList.contains('hidden') || !storyIntro.classList.contains('hidden') || !story2pLobby.classList.contains('hidden');
     if (onTitleScreen) window.GameAudio.startTitleBgm();
   }
 
@@ -277,12 +305,13 @@
     return s;
   }
 
-  function connect(room, name, wantsStoryCpu, roulette) {
+  function connect(room, name, wantsStoryCpu, roulette, wantsCoop) {
     audioReady();
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const cpuParam = wantsStoryCpu ? '&cpu=story' : '';
     const rouletteParam = roulette ? '&roulette=1' : '';
-    const url = `${proto}://${location.host}/?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}${cpuParam}${rouletteParam}`;
+    const coopParam = wantsCoop ? '&coop=1' : '';
+    const url = `${proto}://${location.host}/?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}${cpuParam}${rouletteParam}${coopParam}`;
     ws = new WebSocket(url);
 
     leavingIntentionally = false;
@@ -291,6 +320,7 @@
       modeSelect.classList.add('hidden');
       lobby.classList.add('hidden');
       storyIntro.classList.add('hidden');
+      story2pLobby.classList.add('hidden');
       gameScreen.classList.remove('hidden');
       homeBtn.classList.remove('hidden');
       roomLabel.textContent = room;
@@ -371,6 +401,7 @@
     homeBtn.classList.add('hidden');
     lobby.classList.add('hidden');
     storyIntro.classList.add('hidden');
+    story2pLobby.classList.add('hidden');
     modeSelect.classList.remove('hidden');
     if (window.GameAudio) window.GameAudio.startTitleBgm();
   }
@@ -542,9 +573,50 @@
     resetClientState();
     connect(room, name, true, storyRouletteToggle.checked);
   }
-  storyStartBtn.addEventListener('click', () => { audioReady(); startStoryMode(); });
+  story1pBtn.addEventListener('click', () => { audioReady(); startStoryMode(); });
   storyRetryBtn.addEventListener('click', () => { audioReady(); startStoryMode(); });
   storyEndingTitleBtn.addEventListener('click', () => { audioReady(); goToTitle(); });
+
+  // ---- story mode, 2-player co-op: same overall connect flow as startStoryMode(), just
+  // room-code-based (create-or-join, like the plain arena lobby) since it needs exactly 2
+  // real humans to rendezvous in the same room rather than starting solo instantly. The
+  // server only actually spawns the boss once both have joined — see joinRoom()'s
+  // humanTargetForCpu in game.js.
+  function connectStory2p(room, name, roulette) {
+    if (ws) {
+      leavingIntentionally = true;
+      ws.close();
+      ws = null;
+    }
+    resetClientState();
+    connect(room, name, true, roulette, true);
+  }
+  story2pBtn.addEventListener('click', () => {
+    audioReady();
+    storyIntro.classList.add('hidden');
+    story2pLobby.classList.remove('hidden');
+  });
+  story2pBackBtn.addEventListener('click', () => {
+    audioReady();
+    story2pLobby.classList.add('hidden');
+    storyIntro.classList.remove('hidden');
+  });
+  story2pCreateBtn.addEventListener('click', () => {
+    audioReady();
+    const room = randomRoomCode();
+    const name = story2pNameInput.value.trim() || 'プレイヤー';
+    connectStory2p(room, name, story2pRouletteToggle.checked);
+  });
+  story2pJoinBtn.addEventListener('click', () => {
+    audioReady();
+    const room = story2pRoomInput.value.trim().toUpperCase();
+    if (!room) {
+      alert('部屋コードを入力してください');
+      return;
+    }
+    const name = story2pNameInput.value.trim() || 'プレイヤー';
+    connectStory2p(room, name, story2pRouletteToggle.checked);
+  });
   challengeExBtn.addEventListener('click', () => {
     audioReady();
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'startExStage' }));
@@ -706,6 +778,18 @@
     }
   }, 1000 / 30);
 
+  // Was "my side" (me, or in co-op my ally) the winner of this round/match? Needed because
+  // in co-op mode state.winnerId/matchWinnerId is always a stable *representative ally* id
+  // (see game.js's win-condition comment) — could be my teammate's id even when my own team
+  // won, so a plain `resultId === myId` comparison would wrongly read as a loss for whichever
+  // ally isn't that representative. For every non-coop mode this is exactly the original
+  // `resultId === myId` comparison, unchanged.
+  function humanSideWon(state, resultId) {
+    if (!state.storyCoop) return resultId === myId;
+    const winner = state.players.find((p) => p.id === resultId);
+    return !!winner && !winner.isBoss;
+  }
+
   // ---- state handling: diff against previous state to trigger sfx/fx ----
   function handleState(state) {
     const audio = window.GameAudio;
@@ -722,7 +806,7 @@
       // whatever numeric stage was last shown) rather than reusing the plain stage number.
       const introKey = state.exBossActive ? 'EX' : state.storyStage;
       if (state.phase === 'countdown' && state.storyStage && introKey !== introShownForStage) {
-        const boss = state.players.find((p) => p.id !== myId);
+        const boss = state.players.find((p) => p.isBoss);
         if (boss) showBossIntro(state.storyStage, boss, state.exBossActive);
       }
     }
@@ -743,7 +827,7 @@
       }
       if (state.phase === 'finished') {
         if (audio) {
-          if (state.winnerId === myId) audio.playWin(); else audio.playLose();
+          if (humanSideWon(state, state.winnerId)) audio.playWin(); else audio.playLose();
         }
         if (state.rouletteEnabled && state.rouletteResult) {
           runRoulette(state.rouletteResult, state);
@@ -755,7 +839,7 @@
         // finalStageClear logic already relies on) — fires exactly once per real boss kill
         // since this whole block only runs on the 'finished' phase-transition edge, not on
         // every repeated broadcast while sitting in that phase.
-        if (isCpuMatch && state.matchOver && state.matchWinnerId === myId) {
+        if (isCpuMatch && state.matchOver && humanSideWon(state, state.matchWinnerId)) {
           recordBossDefeated(storyStage);
           // storyStage < storyStageCount here means there's a next stage to advance to —
           // storyStageCount reflects the freshly-received state, same as everywhere else.
@@ -764,7 +848,7 @@
           // for the EX win — that ending gets its own dedicated overlay instead (see
           // trueEndingClear in updateHud()), not a "next stage" pause with nothing to advance to.
           if (storyStage < storyStageCount) {
-            const boss = state.players.find((p) => p.id !== myId);
+            const boss = state.players.find((p) => p.isBoss);
             if (boss) showBossDefeat(storyStage, boss);
           }
           if (state.exBossActive) recordExBossDefeated();
@@ -772,7 +856,7 @@
         // Boss won the whole series — let the "GAME OVER" moment sit for a few seconds
         // before the retry button appears (see gameOverRetryReady), rather than offering
         // an instant one-click retry that would undercut the defeat.
-        if (isCpuMatch && state.matchOver && state.matchWinnerId !== myId) {
+        if (isCpuMatch && state.matchOver && !humanSideWon(state, state.matchWinnerId)) {
           gameOverRetryReady = false;
           if (gameOverTimer) clearTimeout(gameOverTimer);
           gameOverTimer = setTimeout(() => {
@@ -801,7 +885,7 @@
         seenBulletIds.add(b.id);
         if (audio) audio.playShoot();
         const owner = state.players.find((p) => p.id === b.ownerId);
-        const color = owner && owner.id === myId ? '#9dbaff' : '#ffd35b';
+        const color = sideColor(owner, '#9dbaff', '#7dffb0', '#ffd35b');
         spawnParticles(b.x, b.y, 5, color, 90, 0.22, 4);
       }
     }
@@ -824,7 +908,8 @@
     // laser shots are instantaneous (hitscan) — render/play them the moment they arrive
     for (const laser of state.lasers || []) {
       if (audio) audio.playLaser();
-      const color = laser.ownerId === myId ? '#9dbaff' : '#ff8080';
+      const laserOwner = state.players.find((p) => p.id === laser.ownerId);
+      const color = sideColor(laserOwner, '#9dbaff', '#7dffb0', '#ff8080');
       laserBeams.push({ x1: laser.x1, y1: laser.y1, x2: laser.x2, y2: laser.y2, life: 0.18, maxLife: 0.18, color });
       if (laser.hit) spawnParticles(laser.x2, laser.y2, 8, ITEM_META.laser.color, 120, 0.3, 4);
     }
@@ -928,7 +1013,7 @@
           }
         }
         if (prev && prev.alive && !p.alive) {
-          spawnParticles(p.x, p.y, 26, p.id === myId ? '#9dbaff' : '#ffd0da', 200, 0.6, 6);
+          spawnParticles(p.x, p.y, 26, sideColor(p, '#9dbaff', '#a8ffcf', '#ffd0da'), 200, 0.6, 6);
         }
         if (prev && p.shieldAmount < prev.shieldAmount) {
           if (audio) audio.playShieldHit();
@@ -988,7 +1073,7 @@
         particles.push({
           x: p.x, y: p.y, vx: 0, vy: 0,
           life: 0.3, maxLife: 0.3,
-          color: p.id === myId ? 'rgba(91,140,255,0.5)' : 'rgba(255,91,122,0.5)',
+          color: sideColor(p, 'rgba(91,140,255,0.5)', 'rgba(125,255,176,0.5)', 'rgba(255,91,122,0.5)'),
           size: 6,
         });
         trailLast.set(p.id, { x: p.x, y: p.y });
@@ -1260,10 +1345,14 @@
   function drawBomb(b, t) {
     // Once placed, a bomb is tinted to match its owner's ship color (same blue/red split
     // as drawShip's uniform colors) so it's clear at a glance whose bomb is whose.
+    const bombOwner = latestState && latestState.players.find((p) => p.id === b.ownerId);
     const isMine = b.ownerId === myId;
-    const glow = isMine ? '#4d78d9' : '#c9524a';
-    const fill = isMine ? '#1c2a40' : '#401c20';
-    const ringR = isMine ? '77,120,217' : '201,82,74';
+    // Only classify as "ally" in an actual co-op room — otherwise a plain arena-mode
+    // opponent (isBoss also undefined there) would wrongly render in the ally color.
+    const isAlly = !isMine && latestState && latestState.storyCoop && bombOwner && !bombOwner.isBoss;
+    const glow = isMine ? '#4d78d9' : isAlly ? '#3fb36e' : '#c9524a';
+    const fill = isMine ? '#1c2a40' : isAlly ? '#1c3324' : '#401c20';
+    const ringR = isMine ? '77,120,217' : isAlly ? '63,179,110' : '201,82,74';
     const pulse = 0.7 + 0.3 * Math.sin(t / 140);
     ctx.save();
     ctx.translate(b.x, b.y);
@@ -1383,11 +1472,17 @@
     // In story mode, the opponent is always the current stage's boss — escalate its look
     // (color/scale/glow/aura rings) by BOSS_TIER_THEME so a returning player can feel each
     // stage getting visibly tougher, not just read it from harder AI numbers.
-    const tier = !isMe && isCpuMatch ? Math.min(Math.max(1, storyStage), BOSS_TIER_THEME.length) : 0;
+    // isBoss (not just "!isMe && isCpuMatch") specifically identifies the boss — in the new
+    // 2-player co-op mode, a non-me, non-boss player in a CPU match is my ally, who must NOT
+    // get the boss's escalating tier look. isAlly can't misfire in 1P story (there the one
+    // non-me player always IS the boss) or in arena mode (isCpuMatch is false there).
+    const isBoss = !!p.isBoss;
+    const isAlly = !isMe && !isBoss && isCpuMatch;
+    const tier = isBoss && isCpuMatch ? Math.min(Math.max(1, storyStage), BOSS_TIER_THEME.length) : 0;
     const theme = tier > 0 ? BOSS_TIER_THEME[tier - 1] : null;
-    const uniform = theme ? theme.uniform : isMe ? '#4d78d9' : '#c9524a';
-    const uniformDark = theme ? shadeColor(theme.uniform, 0.45) : isMe ? '#2b4a94' : '#8a2e2a';
-    const helmet = theme ? shadeColor(theme.uniform, 0.28) : isMe ? '#25396b' : '#5c211e';
+    const uniform = theme ? theme.uniform : isMe ? '#4d78d9' : isAlly ? '#3fb36e' : '#c9524a';
+    const uniformDark = theme ? shadeColor(theme.uniform, 0.45) : isMe ? '#2b4a94' : isAlly ? '#1f6b40' : '#8a2e2a';
+    const helmet = theme ? shadeColor(theme.uniform, 0.28) : isMe ? '#25396b' : isAlly ? '#164f2f' : '#5c211e';
     const scale = theme ? [1, 1.06, 1.12, 1.18, 1.26][tier - 1] : 1;
     const glowBlur = theme ? [14, 17, 20, 24, 30][tier - 1] : 14;
 
@@ -1781,19 +1876,30 @@
     return (arena.houses || []).some((h) => x >= h.x && x <= h.x + h.size && y >= h.y && y <= h.y + h.size);
   }
 
+  function hpPct(p) {
+    return (p.hp / (p.maxHp || 100)) * 100;
+  }
+
   function updateHud(state) {
     const me = state.players.find((p) => p.id === myId);
-    const opp = state.players.find((p) => p.id !== myId);
+    // "Theirs" always means the boss specifically (found via isBoss, not "not me") — in
+    // co-op mode "not me" would be ambiguous between the boss and my ally. Non-coop modes
+    // never have an isBoss player at all outside a CPU match, so this correctly falls back
+    // to "the other human" there via the isBoss-less arena-mode player objects (isBoss is
+    // simply undefined on them, and .find(p=>p.isBoss) only ever matches the CPU token).
+    const isCoop = !!state.storyCoop;
+    const opp = isCoop ? state.players.find((p) => p.isBoss) : state.players.find((p) => p.id !== myId);
+    const ally = isCoop ? state.players.find((p) => p.id !== myId && !p.isBoss) : null;
 
     if (me) {
       nameMine.textContent = me.name;
-      hpMine.style.width = `${me.hp}%`;
-      hpMine.classList.toggle('house-healing', me.hp < 100 && isInsideAnyHouse(me.x, me.y));
+      hpMine.style.width = `${hpPct(me)}%`;
+      hpMine.classList.toggle('house-healing', me.hp < (me.maxHp || 100) && isInsideAnyHouse(me.x, me.y));
     }
     if (opp) {
       nameTheirs.textContent = opp.name;
-      hpTheirs.style.width = `${opp.hp}%`;
-      hpTheirs.classList.toggle('house-healing', opp.hp < 100 && isInsideAnyHouse(opp.x, opp.y));
+      hpTheirs.style.width = `${hpPct(opp)}%`;
+      hpTheirs.classList.toggle('house-healing', opp.hp < (opp.maxHp || 100) && isInsideAnyHouse(opp.x, opp.y));
     } else {
       nameTheirs.textContent = '相手を待っています…';
       hpTheirs.style.width = '100%';
@@ -1801,8 +1907,27 @@
     renderBuffBadges(buffMine, me);
     renderBuffBadges(buffTheirs, opp);
 
+    allyHpBlock.classList.toggle('hidden', !isCoop);
+    if (isCoop) {
+      if (ally) {
+        nameAlly.textContent = ally.name;
+        hpAlly.style.width = `${hpPct(ally)}%`;
+        hpAlly.classList.toggle('house-healing', ally.hp < (ally.maxHp || 100) && isInsideAnyHouse(ally.x, ally.y));
+      } else {
+        nameAlly.textContent = '仲間を待っています…';
+        hpAlly.style.width = '100%';
+      }
+      renderBuffBadges(buffAlly, ally);
+    }
+
     const wins = state.matchWins || {};
-    const myWins = me ? wins[me.id] || 0 : 0;
+    // Co-op: room.matchWins is keyed by a single stable representative id per side (see
+    // game.js's win-condition comment) — could be either ally's id, so sum across both
+    // rather than reading myId/opp.id directly (only one of the two ever holds a nonzero
+    // value, so summing is safe and doesn't need to know which one it is).
+    const myWins = isCoop
+      ? state.players.filter((p) => !p.isBoss).reduce((sum, p) => sum + (wins[p.id] || 0), 0)
+      : me ? wins[me.id] || 0 : 0;
     const oppWins = opp ? wins[opp.id] || 0 : 0;
     matchScoreEl.textContent = `${myWins} - ${oppWins}`;
     if (isCpuMatch) {
@@ -1846,14 +1971,15 @@
       // the server only bumps storyStage once a 'rematch' is actually sent) rather than
       // state.storyComplete, which the server doesn't set until that same click — using
       // it here would misjudge stage 5's win as "more stages available" for one frame.
-      const bossWon = isCpuMatch && state.matchOver && state.matchWinnerId !== myId;
+      const humanWonMatch = isCpuMatch && state.matchOver && humanSideWon(state, state.matchWinnerId);
+      const bossWon = isCpuMatch && state.matchOver && !humanSideWon(state, state.matchWinnerId);
       const exBossActive = !!state.exBossActive;
       // Beating the EX boss also satisfies storyStage>=storyStageCount (storyStage stays
       // frozen at 5 throughout that fight), so finalStageClear explicitly excludes it — the
       // two endings are mutually exclusive, trueEndingClear takes priority.
-      const trueEndingClear = isCpuMatch && state.matchOver && state.matchWinnerId === myId && exBossActive;
-      const finalStageClear = isCpuMatch && state.matchOver && state.matchWinnerId === myId && storyStage >= storyStageCount && !exBossActive;
-      const stageAdvance = isCpuMatch && state.matchOver && state.matchWinnerId === myId && storyStage < storyStageCount;
+      const trueEndingClear = humanWonMatch && exBossActive;
+      const finalStageClear = humanWonMatch && storyStage >= storyStageCount && !exBossActive;
+      const stageAdvance = humanWonMatch && storyStage < storyStageCount;
 
       rematchBtn.classList.add('hidden');
       storyEndingOverlay.classList.add('hidden');
@@ -1894,14 +2020,14 @@
         resultBanner.textContent = `ボス撃破！ 第${storyStage}面クリア！`;
         resultBanner.className = 'result-banner result-win';
       } else if (state.matchOver) {
-        if (state.matchWinnerId === myId) {
+        if (humanSideWon(state, state.matchWinnerId)) {
           resultBanner.textContent = `${MATCH_WIN_TARGET}本先取！マッチ勝利！ 🏆`;
           resultBanner.className = 'result-banner result-win';
         } else {
           resultBanner.textContent = `${MATCH_WIN_TARGET}本先取されました…`;
           resultBanner.className = 'result-banner result-lose';
         }
-      } else if (state.winnerId === myId) {
+      } else if (state.winnerId && humanSideWon(state, state.winnerId)) {
         resultBanner.textContent = 'あなたの勝ち! 🎉';
         resultBanner.className = 'result-banner result-win';
       } else if (state.winnerId) {

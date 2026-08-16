@@ -488,6 +488,12 @@ button:active {
   gap: 16px;
 }
 
+.ally-hp-block {
+  width: 100%;
+  max-width: 320px;
+  margin: 6px auto 0;
+}
+
 .hp-block {
   flex: 1;
   min-width: 0;
@@ -514,6 +520,9 @@ button:active {
 }
 #hpMine { background: linear-gradient(90deg, #5b8cff, #7fa8ff); box-shadow: 0 0 10px rgba(91,140,255,0.7); }
 #hpTheirs { background: linear-gradient(90deg, #ff5b7a, #ff8a9e); box-shadow: 0 0 10px rgba(255,91,122,0.7); }
+/* Ally (2-player co-op story mode only) — deliberately a 3rd distinct color, neither "me"
+   blue nor "enemy" red, so the three HP bars/particles/trails all read unambiguously. */
+#hpAlly { background: linear-gradient(90deg, #4de08a, #7dffb0); box-shadow: 0 0 10px rgba(77,224,138,0.7); }
 .hp-bar-fill.house-healing {
   animation: house-heal-glow 0.9s ease-in-out infinite;
 }

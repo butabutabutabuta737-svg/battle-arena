@@ -100,8 +100,49 @@
       🎰 ルーレットあり(ラウンド勝利で50%の確率でアイテム抽選)
     </label>
 
+    <div class="mode-select-row">
+      <button class="mode-card" id="story1pBtn">
+        <div class="mode-card-icon">⚔️</div>
+        <div class="mode-card-title">1P</div>
+        <div class="mode-card-desc">一人で5人のボスに挑む、いつも通りのストーリー。</div>
+      </button>
+      <button class="mode-card" id="story2pBtn">
+        <div class="mode-card-icon">🤝</div>
+        <div class="mode-card-title">2P 協力プレイ</div>
+        <div class="mode-card-desc">友達ともう一人で、同じボスに一緒に挑む。ボスは2人用に強化される。</div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="story2pLobby" class="screen hidden">
+  <div class="card">
+    <button class="btn-secondary lobby-back-btn" id="story2pBackBtn">← ストーリーモードへ戻る</button>
+    <h1>🤝 ストーリー 2P協力プレイ</h1>
+    <p class="subtitle">同じ部屋コードで2人がこの画面から入ると、2人で同じボスに挑めます。ボスは2人用に強化されています。</p>
+
+    <label for="story2pNameInput">プレイヤー名</label>
+    <input type="text" id="story2pNameInput" maxlength="12" placeholder="なまえ" />
+
+    <label class="roulette-toggle">
+      <input type="checkbox" id="story2pRouletteToggle" checked />
+      🎰 ルーレットあり(ラウンド勝利で50%の確率でアイテム抽選)
+    </label>
+
     <div class="btn-row">
-      <button class="btn-primary" id="storyStartBtn">⚔️ 戦場へ向かう</button>
+      <button class="btn-primary" id="story2pCreateBtn">部屋を作る</button>
+    </div>
+
+    <div class="divider">または</div>
+
+    <label for="story2pRoomInput">部屋コードで参加</label>
+    <div class="join-row">
+      <input type="text" id="story2pRoomInput" maxlength="8" placeholder="例: AB12" />
+      <button class="btn-secondary" id="story2pJoinBtn">参加する</button>
+    </div>
+
+    <div class="lan-hint">
+      1人目が「部屋を作る」で部屋コードを発行し、2人目がそのコードで「参加する」を押すと2人とも同じボスに挑めます。
     </div>
   </div>
 </div>
@@ -209,6 +250,15 @@
       <div class="hp-bar-bg"><div class="hp-bar-fill" id="hpTheirs" style="width:100%"></div></div>
       <div class="buff-row buff-row-right" id="buffTheirs"></div>
     </div>
+  </div>
+
+  <!-- Only shown in the 2-player co-op story mode — a 3rd bar for the ally's HP, since the
+       existing .hud above is a fixed mine/them 2-column layout that would need a full
+       redesign to fit a 3rd column cleanly. Kept as its own row instead. -->
+  <div class="hp-block ally-hp-block hidden" id="allyHpBlock">
+    <div class="pname" id="nameAlly">仲間</div>
+    <div class="hp-bar-bg"><div class="hp-bar-fill ally" id="hpAlly" style="width:100%"></div></div>
+    <div class="buff-row" id="buffAlly"></div>
   </div>
 
   <div class="arena-wrap">
