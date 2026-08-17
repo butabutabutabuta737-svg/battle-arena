@@ -1426,7 +1426,18 @@ function startCountdown(room) {
 function ensureLoop(room) {
   if (room.loop) return;
   room.lastTick = Date.now();
-  room.loop = setInterval(() => tick(room), TICK_MS);
+  // An uncaught exception thrown inside a setInterval callback crashes the entire Node
+  // process by default — not just this one room — taking down every connected player's game
+  // until someone notices and manually restarts the server. Catching here means a bug in one
+  // room's tick can, at worst, freeze that single room (its own loop keeps calling this catch
+  // block every TICK_MS, so it doesn't even stop retrying) instead of the whole server.
+  room.loop = setInterval(() => {
+    try {
+      tick(room);
+    } catch (err) {
+      console.error(`[room ${room.id}] tick() error:`, err);
+    }
+  }, TICK_MS);
 }
 
 function pickWeightedItemType() {
@@ -2078,6 +2089,11 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
     } catch {
       return;
     }
+    // Everything below dispatches on data.type — wrapped so a bug in any one branch (input,
+    // rematch, etc.) can't throw uncaught and crash the whole Node process (which would drop
+    // every connected player's game, not just this room's). Not re-indented to keep this a
+    // minimal, low-risk diff over the existing dispatch logic.
+    try {
     if (data.type === 'input') {
       const inp = room.inputs.get(ws);
       if (!inp) return;
@@ -2203,6 +2219,9 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
           startCountdown(room);
         }
       }
+    }
+    } catch (err) {
+      console.error(`[room ${room.id}] message dispatch error (type=${data && data.type}):`, err);
     }
   });
 

@@ -404,6 +404,11 @@
     });
 
     ws.addEventListener('message', (ev) => {
+      // Wrapped so a bug anywhere in here (JSON.parse on a malformed payload, or any of the
+      // branches below) can't throw uncaught and silently stop this listener from ever firing
+      // again for the rest of the session — which, since draw()/updateHud() render purely off
+      // state this listener updates, would look exactly like the game freezing.
+      try {
       const data = JSON.parse(ev.data);
       if (data.type === 'welcome') {
         myId = data.id;
@@ -430,6 +435,9 @@
         if (window.GameAudio) window.GameAudio.startTitleBgm();
       } else if (data.type === 'state') {
         handleState(data);
+      }
+      } catch (err) {
+        console.error('message handler error:', err);
       }
     });
 
@@ -934,8 +942,24 @@
 
   // ---- state handling: diff against previous state to trigger sfx/fx ----
   function handleState(state) {
+    // Assigned first, before any of the diff/sfx logic below — draw()/updateHud() render
+    // purely off latestState, so if a bug anywhere later in this function throws, the visible
+    // game still gets this frame's fresh position/hp/etc. instead of silently freezing on the
+    // last frame that happened to fully succeed (which would look exactly like a hung game,
+    // with the WebSocket still receiving data underneath). prevState (used for diffing against
+    // the previous frame) is intentionally set separately, at the very end of this function —
+    // moving it here too would make every diff check below compare state against itself.
+    latestState = state;
     const audio = window.GameAudio;
 
+    // Resync the module-level isCpuMatch on every broadcast, not just the one-time 'welcome'
+    // message — in 2P co-op specifically, the room's FIRST joiner's 'welcome' is sent before
+    // the boss/CPU is added (addCpuPlayer only runs once both humans have joined, see
+    // joinRoom's humanTargetForCpu), so their welcome payload's isCpuMatch is still false at
+    // that point and would otherwise stay stuck false for their whole session — silently
+    // breaking drawShip()'s isAlly calc (isAlly requires isCpuMatch) and making their ally
+    // render in the enemy color instead of green for that player only.
+    isCpuMatch = !!state.isCpuMatch;
     if (state.isCpuMatch) {
       storyStage = state.storyStage || storyStage;
       storyStageCount = state.storyStageCount || storyStageCount;
@@ -1207,7 +1231,6 @@
     }
 
     prevState = state;
-    latestState = state;
   }
 
   // ---- rendering (independent rAF loop for smooth particle/shake motion) ----
@@ -2161,6 +2184,11 @@
       : me ? wins[me.id] || 0 : 0;
     const oppWins = boss ? wins[boss.id] || 0 : 0;
     matchScoreEl.textContent = `${myWins} - ${oppWins}`;
+    // The mob-wave mini-game isn't part of the best-of-MATCH_WIN_TARGET series at all (see
+    // game.js's mobWaveActive win-check, which deliberately never touches room.matchWins) —
+    // showing a "N - N" score during it would misleadingly suggest the wave counts toward
+    // that tally, so hide the badge for the duration instead.
+    matchScoreEl.classList.toggle('hidden', !!state.mobWaveActive);
     if (isCpuMatch) {
       storyStageLabel.textContent = `第${storyStage}面 / 全${storyStageCount}面`;
       storyStageLabel.classList.remove('hidden');

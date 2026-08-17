@@ -858,12 +858,20 @@ button:active {
   padding: 20px;
   text-align: center;
   animation: boss-intro-fade 0.3s ease;
+  /* This box's height is pinned to the rendered canvas's height (an absolutely-positioned
+     inset:0 child never grows its .arena-wrap parent) — on a short phone viewport that can be
+     shorter than a long narration paragraph needs. overflow-y:auto lets it scroll instead of
+     silently clipping; margin:auto on the card (below) is the standard fix for the flexbox
+     centering+overflow gotcha where align-items:center alone clips the START of overflowing
+     content instead of making it reachable by scrolling to it. */
+  overflow-y: auto;
 }
 .boss-intro-card {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  margin: auto;
   animation: boss-intro-pop 0.45s cubic-bezier(.2,1.4,.4,1);
 }
 .boss-intro-stage {
@@ -890,7 +898,7 @@ button:active {
 }
 .boss-intro-line {
   max-width: 480px;
-  font-size: 15px;
+  font-size: clamp(12px, 3.6vw, 15px);
   color: #e7e9f5;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.16);

@@ -8,6 +8,18 @@ const { joinRoom } = require('./game');
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
+// Last-resort safety net: game.js already wraps its own tick loop and WS message dispatch in
+// try/catch, but anything outside those (e.g. a bug in the plain HTTP request handler below)
+// would otherwise crash the whole process by default, dropping every connected player's game
+// until someone notices and manually restarts it. Logging and continuing is strictly better
+// than that for a small always-on game server like this one.
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('[unhandledRejection]', err);
+});
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
