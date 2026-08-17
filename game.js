@@ -127,20 +127,40 @@ function pickMobWaveColorTier(waveIndex) {
   return 'blue';
 }
 // Story-mode leveling (story mode only — never touches arena/PvP rooms): every wave-mob or
-// boss kill counts once toward room.storyKillCount, and the level derived from it only ever
-// grants a max-HP bonus — nothing else about the player changes. STORY_LEVEL_KILLS_PER_LEVEL=5
-// means a flawless full 1P clear (4 waves x 10 mobs = 40, + 5 boss kills = 45 total kills)
-// lands almost exactly on the level cap (9 level-ups x 5 = 45) by the last boss, matching the
-// "最終面でレベル10くらい" pacing target.
+// boss kill grants XP toward room.storyXp, and the level derived from it only ever grants a
+// max-HP bonus — nothing else about the player changes. Two balance knobs, per explicit
+// request ("レベルは徐々に上がりにくくなり強い敵ほどキルが高いように"):
+//   1. Tougher kills are worth more XP — MOB_WAVE_COLOR_XP scales 1(white)->5(gold) with the
+//      same color tier that already drives a wave mob's speed/damage, and bossKillXp(stage)
+//      scales 10->30 across the 5 story bosses — so a late-stage gold mob or the final boss
+//      is worth noticeably more than an early white grunt, not a flat "1 kill = 1 kill".
+//   2. Each level costs progressively more XP than the last (STORY_LEVEL_THRESHOLDS, a +4-per-
+//      step arithmetic ramp: 8, 12, 16, ... 40 XP to clear each successive level) rather than
+//      a flat kills-per-level, so leveling visibly slows down over a run instead of ticking by
+//      at a constant rate.
+// The two together were tuned so a flawless full 1P clear (10 mobs/wave across the expected
+// color-weight mix per wave, +5 scaled boss kills) still lands almost exactly on the level cap
+// by the last boss — same "最終面でレベル10くらい" pacing as before, just via a curve that
+// actually slows down and rewards harder kills more, instead of a flat linear count.
 const STORY_LEVEL_CAP = 10;
-const STORY_LEVEL_KILLS_PER_LEVEL = 5;
+const STORY_LEVEL_THRESHOLDS = [0, 8, 20, 36, 56, 80, 108, 140, 176, 216]; // cumulative XP to REACH level i+1 (index0 = level1's free 0-XP threshold)
+const MOB_WAVE_COLOR_XP = { white: 1, blue: 2, green: 3, red: 4, gold: 5 };
+function bossKillXp(stage) {
+  const s = Math.min(Math.max(1, stage || 1), STORY_BOSSES.length);
+  return 10 + (s - 1) * 5; // stage1=10 ... stage5=30
+}
 function storyLevelHpMult(level) {
   const l = Math.min(Math.max(1, level), STORY_LEVEL_CAP);
   return 1 + (l - 1) / (STORY_LEVEL_CAP - 1); // level1 -> 1x, level10 -> 2x, linear between
 }
-function addStoryKill(room) {
-  room.storyKillCount++;
-  room.storyLevel = Math.min(STORY_LEVEL_CAP, 1 + Math.floor(room.storyKillCount / STORY_LEVEL_KILLS_PER_LEVEL));
+function addStoryXp(room, amount) {
+  room.storyXp += amount;
+  let level = 1;
+  for (let i = 1; i < STORY_LEVEL_THRESHOLDS.length; i++) {
+    if (room.storyXp >= STORY_LEVEL_THRESHOLDS[i]) level = i + 1;
+    else break;
+  }
+  room.storyLevel = Math.min(STORY_LEVEL_CAP, level);
 }
 // Clone: a purely visual, non-collidable decoy offset to the player's side (mirrors the
 // existing trees/houses "visual-only, no server-side hitbox" pattern) — it's untargetable
@@ -1296,7 +1316,7 @@ function getRoom(id) {
       mobWaveNextSpawnAt: 0,
       pendingMobWaveIntro: false, // mirrors pendingStoryIntro's extended-countdown-wait trick
       storyLevel: 1, // story-mode-only player level (1-10), see STORY_LEVEL_CAP/storyLevelHpMult
-      storyKillCount: 0, // every wave-mob or boss kill counts once; level = 1 + floor(kills / STORY_LEVEL_KILLS_PER_LEVEL)
+      storyXp: 0, // cumulative XP from wave-mob/boss kills (weighted by strength) — see STORY_LEVEL_THRESHOLDS
       cpuState: null,
       phase: 'waiting', // waiting | countdown | playing | finished
       countdownEndsAt: 0,
@@ -1777,7 +1797,7 @@ function tick(room) {
       if (m.hp <= 0) {
         if (m.wave) {
           room.mobWaveKilled++;
-          addStoryKill(room);
+          addStoryXp(room, MOB_WAVE_COLOR_XP[m.waveColor] || MOB_WAVE_COLOR_XP.blue);
         }
         if (m.chicken) {
           // "周囲にアイテムが3種類獲得" — scattered around the death point, not stacked
@@ -1976,6 +1996,7 @@ function broadcastState(room) {
     mobWaveSpawned: room.mobWaveSpawned,
     mobWaveKilled: room.mobWaveKilled,
     storyLevel: room.storyLevel,
+    storyXp: room.storyXp,
     storyLevelCap: STORY_LEVEL_CAP,
   };
   const msg = JSON.stringify(state);
@@ -2102,7 +2123,7 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
               } else {
                 room.storyStage = 1;
                 room.storyLevel = 1;
-                room.storyKillCount = 0;
+                room.storyXp = 0;
                 if (cpuPlayer) {
                   cpuPlayer.name = bossNameForStage(1);
                   cpuPlayer.line = bossLineForStage(1);
@@ -2113,7 +2134,7 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
                 room.pendingStoryIntro = true;
               }
             } else if (humanWon) {
-              addStoryKill(room); // the boss that was just defeated counts as one kill
+              addStoryXp(room, bossKillXp(room.storyStage)); // storyStage still holds the just-cleared stage here
               if (room.storyStage < STORY_BOSSES.length) {
                 // Just cleared a boss and more stages remain — insert the grunt wave
                 // mini-game before the next boss ("ボス→ミニゲーム→ボス…") instead of
@@ -2135,7 +2156,7 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
               // in-room rematch gracefully too rather than leaving story state stuck.
               room.storyStage = 1;
               room.storyLevel = 1;
-              room.storyKillCount = 0;
+              room.storyXp = 0;
               if (cpuPlayer) {
                 cpuPlayer.name = bossNameForStage(1);
                 cpuPlayer.line = bossLineForStage(1);
