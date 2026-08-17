@@ -54,7 +54,7 @@ html, body {
    the top of the title art instead of overlapping it — balances the screen now that the
    on-screen <h1> is gone (the image supplies the title on its own). */
 .title-screen-card {
-  margin-top: 12vh;
+  margin-top: 20vh;
 }
 /* Card stays as a visible "glass" panel (not fully transparent) so the title/button text has
    enough contrast to read against the busy artwork — a frosted dark panel plus blur, rather
