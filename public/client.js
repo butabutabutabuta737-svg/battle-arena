@@ -1116,7 +1116,12 @@
     // fresh-every-tick pattern as lasers, render/play them the moment they arrive
     for (const swing of state.swordSwings || []) {
       if (audio) audio.playSword(swing.hit);
-      swordSlashes.push({ x: swing.x, y: swing.y, angle: swing.angle, hit: swing.hit, range: swing.range, life: 0.24, maxLife: 0.24 });
+      // Tinted to match the swinging player's own ship color (same 3-way me/ally/enemy split
+      // and exact hex values as drawShip's uniform/drawBomb's ring), computed once here at
+      // creation time rather than re-looked-up every frame in drawSwordSlashes.
+      const swingOwner = state.players.find((p) => p.id === swing.ownerId);
+      const color = sideColor(swingOwner, '77,120,217', '63,179,110', '201,82,74');
+      swordSlashes.push({ x: swing.x, y: swing.y, angle: swing.angle, hit: swing.hit, range: swing.range, life: 0.24, maxLife: 0.24, color });
       if (swing.hit) {
         const reach = swing.range || SWORD_RANGE_VISUAL;
         const hx = swing.x + Math.cos(swing.angle) * reach;
@@ -1499,8 +1504,11 @@
 
       const startAngle = s.angle - halfArc;
       const endAngle = startAngle + halfArc * 2 * sweep;
-      const rgb = s.hit ? '255,211,91' : '157,186,255';
-      const bladeColor = s.hit ? '#fff6d8' : '#e4ecff';
+      // Base hue always follows the owner's own color (see the swordSwings loop above); a
+      // hit still reads as more impactful via a brighter/hotter blade-edge tint, it just no
+      // longer overrides the fan/glow color to a generic gold regardless of who swung.
+      const rgb = s.color || '157,186,255';
+      const bladeColor = s.hit ? '#fff6d8' : '#ffffff';
 
       ctx.save();
       ctx.globalAlpha = fade;
