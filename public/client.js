@@ -165,15 +165,28 @@
     { uniform: '#ffd35b', icon: '👑', image: 'images/bosses/boss5.jpg', facePos: 'center top' }, // stage5: battlefield champion, gold
   ];
   // Flavor text for the between-boss grunt-wave mini-game, indexed by mobWaveIndex-1 (1-4,
-  // matching game.js's MOB_WAVE_TUNING) — ties each wave to the boss just defeated and hints
-  // at the escalating threat of the next one. Purely client-side display text (the server has
-  // no reason to know or broadcast it — see mobWaveIndex's comment in game.js's broadcastState).
+  // matching game.js's MOB_WAVE_COLOR_WEIGHTS) — ties each wave to the boss just defeated and
+  // hints at the escalating threat of the next one. Purely client-side display text (the
+  // server has no reason to know or broadcast it — see mobWaveIndex's comment in game.js's
+  // broadcastState).
   const MOB_WAVE_NARRATION = [
     '見習い兵士を退けた——しかし戦場はまだ静まらない。散った雑兵たちが怒りにまかせて群がってくる。次なる強敵「歴戦の傭兵」にたどり着くには、まずこの群れを突破せねばならない。',
     '歴戦の傭兵を討ち果たした。だが奥にはさらに統率の取れた部隊が控えている——その先鋒たちが殺気を纏って押し寄せる。「精鋭部隊長」のもとへ進むには、この群れを蹴散らせ。',
     '精鋭部隊長を倒した。しかし静寂の奥から、闇に紛れた気配が次々と現れる。「血刃の暗殺者」が放った刺客たちだ。一体でも見逃せば、闇に沈められる。',
     '血刃の暗殺者を破った。だが最後の壁——「戦場の覇者」を守る精鋭たちが、総力を挙げて立ちはだかる。ここが正念場だ。すべてを薙ぎ払い、頂点への道を切り開け。',
   ];
+
+  // Per-mob wave-color-tier theme (see game.js's MOB_WAVE_COLOR_STATS for the matching
+  // speed/damage multipliers) — white(weakest) -> blue -> green -> red -> gold(strongest),
+  // read straight off each wave monster's server-assigned `waveColor` field so strength is
+  // visible at a glance during the swarm.
+  const WAVE_COLOR_THEME = {
+    white: { glow: '#f5f5f5', fill: '#3d3d45', ring: '245,245,245' },
+    blue: { glow: '#5b9dff', fill: '#1c2a4a', ring: '91,157,255' },
+    green: { glow: '#6bff8f', fill: '#1c3a24', ring: '107,255,143' },
+    red: { glow: '#ff5b5b', fill: '#3a1c1c', ring: '255,91,91' },
+    gold: { glow: '#ffd35b', fill: '#3a2c14', ring: '255,211,91' },
+  };
 
   function shadeColor(hex, factor) {
     const n = parseInt(hex.slice(1), 16);
@@ -1501,22 +1514,26 @@
   function drawMonster(m, t) {
     const gold = !!m.gold;
     const chicken = !!m.chicken;
+    // Wave-mob color tier (white/blue/green/red/gold, see game.js's MOB_WAVE_COLOR_STATS) —
+    // a visual readout of that mob's rolled speed/damage strength, distinct from the
+    // ambient-monster gold/chicken variants above (which only ever occur outside a wave).
+    const waveTheme = m.wave ? (WAVE_COLOR_THEME[m.waveColor] || WAVE_COLOR_THEME.blue) : null;
     const radius = chicken ? GOLDEN_CHICKEN_RADIUS_VISUAL : gold ? GOLD_MONSTER_RADIUS_VISUAL : MONSTER_RADIUS_VISUAL;
-    const glow = chicken ? '#fff59d' : gold ? '#ffd35b' : '#9dff6b';
-    const fill = chicken ? '#4a3c10' : gold ? '#3a2c14' : '#241c34';
-    const ring = chicken ? '255,245,157' : '255,211,91'; // only gold/chicken get a ring at all
+    const glow = waveTheme ? waveTheme.glow : chicken ? '#fff59d' : gold ? '#ffd35b' : '#9dff6b';
+    const fill = waveTheme ? waveTheme.fill : chicken ? '#4a3c10' : gold ? '#3a2c14' : '#241c34';
+    const ring = waveTheme ? waveTheme.ring : chicken ? '255,245,157' : '255,211,91'; // only gold/chicken/wave get a ring at all
     const pulse = 0.8 + 0.2 * Math.sin(t / (chicken ? 90 : gold ? 130 : 220)); // chicken pulses fastest — reads as skittish
     ctx.save();
     ctx.translate(m.x, m.y);
     ctx.shadowColor = glow;
-    ctx.shadowBlur = (chicken ? 18 : gold ? 20 : 14) * pulse;
+    ctx.shadowBlur = (chicken ? 18 : gold ? 20 : waveTheme ? 16 : 14) * pulse;
     ctx.fillStyle = fill;
     ctx.beginPath();
     ctx.arc(0, 0, radius, 0, Math.PI * 2);
     ctx.fill();
-    if (gold || chicken) {
-      // the base monster's ring border was removed per user request; gold/chicken keep
-      // theirs since it wasn't the one called out ("緑の囲い" = specifically the green one)
+    if (gold || chicken || waveTheme) {
+      // the base monster's ring border was removed per user request; gold/chicken/wave-tier
+      // keep theirs since it wasn't the one called out ("緑の囲い" = specifically the green one)
       ctx.strokeStyle = `rgba(${ring},${0.5 + 0.3 * pulse})`;
       ctx.lineWidth = 3.5;
       ctx.stroke();

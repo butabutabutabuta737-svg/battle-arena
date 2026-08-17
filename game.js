@@ -93,16 +93,39 @@ const GOLDEN_CHICKEN_SPEED = 160; // faster than the base monster, deliberately 
 const GOLDEN_CHICKEN_RADIUS = 18;
 const GOLDEN_CHICKEN_ITEM_COUNT = 3;
 // Mob wave: a mini-game inserted between story-mode boss fights ("ボス→ミニゲーム→ボス…").
-// 10 grunt monsters must be wiped out; per-wave tuning scales their speed/damage upward so
-// each wave (fought after clearing that stage's boss, before the next boss) feels harder.
+// 10 grunt monsters must be wiped out. Each individual mob rolls a color tier — 白(white,
+// weakest) → 青(blue) → 緑(green) → 赤(red) → 金(gold, strongest) — that sets its own
+// speed/damage multiplier, so a single wave has real variety rather than every mob being
+// identical. The escalation across waves comes from shifting *which tiers are likely*
+// (MOB_WAVE_COLOR_WEIGHTS below), not a flat per-wave multiplier — a low-numbered wave can
+// still rarely roll a gold mob, but it's mostly white/blue, and vice versa for a late wave.
 const MOB_WAVE_COUNT = 10;
 const MOB_WAVE_SPAWN_INTERVAL_MS = 550; // staggered arrival, not all 10 at once
-const MOB_WAVE_TUNING = [
-  { speedMult: 1.0, damageMult: 1.0 },
-  { speedMult: 1.15, damageMult: 1.15 },
-  { speedMult: 1.3, damageMult: 1.3 },
-  { speedMult: 1.45, damageMult: 1.5 },
+const MOB_WAVE_COLOR_STATS = {
+  white: { speedMult: 0.85, damageMult: 0.75 },
+  blue: { speedMult: 1.0, damageMult: 1.0 },
+  green: { speedMult: 1.15, damageMult: 1.2 },
+  red: { speedMult: 1.35, damageMult: 1.45 },
+  gold: { speedMult: 1.6, damageMult: 1.75 },
+};
+// Index 0 = wave 1 (right after stage1's boss, easiest) through index 3 = wave 4 (right
+// after stage4's boss, hardest) — "低いステージほど弱いザコモンスターが出るように".
+const MOB_WAVE_COLOR_WEIGHTS = [
+  { white: 45, blue: 35, green: 14, red: 5, gold: 1 },
+  { white: 22, blue: 32, green: 26, red: 15, gold: 5 },
+  { white: 8, blue: 20, green: 30, red: 28, gold: 14 },
+  { white: 3, blue: 10, green: 22, red: 35, gold: 30 },
 ];
+function pickMobWaveColorTier(waveIndex) {
+  const weights = MOB_WAVE_COLOR_WEIGHTS[Math.min(Math.max(1, waveIndex), MOB_WAVE_COLOR_WEIGHTS.length) - 1];
+  const total = Object.values(weights).reduce((sum, w) => sum + w, 0);
+  let r = Math.random() * total;
+  for (const [tier, w] of Object.entries(weights)) {
+    if (r < w) return tier;
+    r -= w;
+  }
+  return 'blue';
+}
 // Clone: a purely visual, non-collidable decoy offset to the player's side (mirrors the
 // existing trees/houses "visual-only, no server-side hitbox" pattern) — it's untargetable
 // by construction since bullets/laser/sword/bombs only ever check room.players, never a
@@ -1251,7 +1274,7 @@ function getRoom(id) {
         // (1P story, the EX boss) leaves this false and is completely unaffected by it.
       pendingStoryIntro: false,
       mobWaveActive: false, // true while fighting the between-boss grunt wave mini-game
-      mobWaveIndex: 0, // 1-based: which wave (maps into MOB_WAVE_TUNING)
+      mobWaveIndex: 0, // 1-based: which wave (maps into MOB_WAVE_COLOR_WEIGHTS)
       mobWaveSpawned: 0,
       mobWaveKilled: 0,
       mobWaveNextSpawnAt: 0,
@@ -1483,10 +1506,11 @@ function spawnMonster(room) {
 }
 
 // A single grunt for the between-boss wave mini-game — a plain monster with no gold/chicken
-// rolls, tagged `wave` so tick()'s movement loop applies that wave's speed/damage tuning and
-// so the death-cleanup loop can count it toward mobWaveKilled.
+// rolls, tagged `wave` so tick()'s movement loop applies its rolled color tier's speed/damage
+// multiplier and so the death-cleanup loop can count it toward mobWaveKilled.
 function spawnWaveMob(room) {
-  const tuning = MOB_WAVE_TUNING[Math.min(Math.max(1, room.mobWaveIndex), MOB_WAVE_TUNING.length) - 1];
+  const tier = pickMobWaveColorTier(room.mobWaveIndex);
+  const stats = MOB_WAVE_COLOR_STATS[tier];
   const radius = MONSTER_RADIUS;
   const spawnPoints = getSpawnPoints(room);
   let x, y, tries = 0;
@@ -1506,8 +1530,9 @@ function spawnWaveMob(room) {
     gold: false,
     chicken: false,
     wave: true,
-    waveSpeedMult: tuning.speedMult,
-    waveDamageMult: tuning.damageMult,
+    waveColor: tier,
+    waveSpeedMult: stats.speedMult,
+    waveDamageMult: stats.damageMult,
     lastHit: {},
     lastAttackAt: 0,
   });
