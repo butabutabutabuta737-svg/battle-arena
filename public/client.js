@@ -98,6 +98,9 @@
   const nameAlly = $('#nameAlly');
   const hpAlly = $('#hpAlly');
   const buffAlly = $('#buffAlly');
+  const downedMine = $('#downedMine');
+  const downedTheirs = $('#downedTheirs');
+  const downedBanner = $('#downedBanner');
   const bombControls = $('.bomb-controls');
   const placeBombBtn = $('#placeBombBtn');
   const detonateBombBtn = $('#detonateBombBtn');
@@ -419,6 +422,9 @@
     gameOverRetryReady = false;
     if (gameOverTimer) { clearTimeout(gameOverTimer); gameOverTimer = null; }
     gameOverOverlay.classList.add('hidden');
+    downedMine.classList.add('hidden');
+    downedTheirs.classList.add('hidden');
+    downedBanner.classList.add('hidden');
   }
 
   function goToTitle() {
@@ -1519,12 +1525,20 @@
     // get the boss's escalating tier look. isAlly can't misfire in 1P story (there the one
     // non-me player always IS the boss) or in arena mode (isCpuMatch is false there).
     const isBoss = !!p.isBoss;
+    const isCoop = !!(latestState && latestState.storyCoop);
     const isAlly = !isMe && !isBoss && isCpuMatch;
     const tier = isBoss && isCpuMatch ? Math.min(Math.max(1, storyStage), BOSS_TIER_THEME.length) : 0;
     const theme = tier > 0 ? BOSS_TIER_THEME[tier - 1] : null;
-    const uniform = theme ? theme.uniform : isMe ? '#4d78d9' : isAlly ? '#3fb36e' : '#c9524a';
-    const uniformDark = theme ? shadeColor(theme.uniform, 0.45) : isMe ? '#2b4a94' : isAlly ? '#1f6b40' : '#8a2e2a';
-    const helmet = theme ? shadeColor(theme.uniform, 0.28) : isMe ? '#25396b' : isAlly ? '#164f2f' : '#5c211e';
+    // In 2P co-op specifically, the boss is forced to a fixed enemy-red instead of its
+    // per-stage BOSS_TIER_THEME color — some stages' tier colors (stage1's muted olive in
+    // particular) read too close to the ally's green, undermining the clean 3-way me/ally/
+    // boss split this mode needs. 1P story keeps the per-stage tier color as before (no
+    // ally to be confused with there). Scale/glow escalation still always comes from the
+    // theme regardless — only the color itself is overridden.
+    const themeColor = isBoss && isCoop ? '#c9524a' : (theme ? theme.uniform : null);
+    const uniform = themeColor || (isMe ? '#4d78d9' : isAlly ? '#3fb36e' : '#c9524a');
+    const uniformDark = themeColor ? shadeColor(themeColor, 0.45) : (isMe ? '#2b4a94' : isAlly ? '#1f6b40' : '#8a2e2a');
+    const helmet = themeColor ? shadeColor(themeColor, 0.28) : (isMe ? '#25396b' : isAlly ? '#164f2f' : '#5c211e');
     const scale = theme ? [1, 1.06, 1.12, 1.18, 1.26][tier - 1] : 1;
     const glowBlur = theme ? [14, 17, 20, 24, 30][tier - 1] : 14;
 
@@ -1924,53 +1938,68 @@
 
   function updateHud(state) {
     const me = state.players.find((p) => p.id === myId);
-    // "Theirs" always means the boss specifically (found via isBoss, not "not me") — in
-    // co-op mode "not me" would be ambiguous between the boss and my ally. Non-coop modes
-    // never have an isBoss player at all outside a CPU match, so this correctly falls back
-    // to "the other human" there via the isBoss-less arena-mode player objects (isBoss is
-    // simply undefined on them, and .find(p=>p.isBoss) only ever matches the CPU token).
+    // "boss" always means the boss specifically (found via isBoss, not "not me") — in co-op
+    // mode "not me" would be ambiguous between the boss and my ally. Non-coop modes never
+    // have an isBoss player at all outside a CPU match, so this correctly falls back to "the
+    // other human" there via the isBoss-less arena-mode player objects (isBoss is simply
+    // undefined on them, and .find(p=>p.isBoss) only ever matches the CPU token).
     const isCoop = !!state.storyCoop;
-    const opp = isCoop ? state.players.find((p) => p.isBoss) : state.players.find((p) => p.id !== myId);
+    const boss = isCoop ? state.players.find((p) => p.isBoss) : state.players.find((p) => p.id !== myId);
     const ally = isCoop ? state.players.find((p) => p.id !== myId && !p.isBoss) : null;
+    // Top row is reserved for the two human players in co-op (per explicit request) — the
+    // top-right slot shows the ally there instead of the boss, and the boss's bar moves to
+    // the bottom row (allyHpBlock, repurposed — see index.html's comment on it).
+    const topRight = isCoop ? ally : boss;
 
     if (me) {
       nameMine.textContent = me.name;
       hpMine.style.width = `${hpPct(me)}%`;
       hpMine.classList.toggle('house-healing', me.hp < (me.maxHp || 100) && isInsideAnyHouse(me.x, me.y));
+      // Downed-but-match-still-going only happens in 2P co-op (every other mode ends the
+      // round the instant either side has a casualty, so this state can't occur there).
+      const meDowned = isCoop && !me.alive && state.phase === 'playing';
+      downedMine.classList.toggle('hidden', !meDowned);
+      downedBanner.classList.toggle('hidden', !meDowned);
     }
-    if (opp) {
-      nameTheirs.textContent = opp.name;
-      hpTheirs.style.width = `${hpPct(opp)}%`;
-      hpTheirs.classList.toggle('house-healing', opp.hp < (opp.maxHp || 100) && isInsideAnyHouse(opp.x, opp.y));
+    hpTheirs.classList.toggle('color-boss', !isCoop);
+    hpTheirs.classList.toggle('color-ally', isCoop);
+    if (topRight) {
+      nameTheirs.textContent = topRight.name;
+      hpTheirs.style.width = `${hpPct(topRight)}%`;
+      hpTheirs.classList.toggle('house-healing', topRight.hp < (topRight.maxHp || 100) && isInsideAnyHouse(topRight.x, topRight.y));
+      // Only ever relevant for the ally slot (co-op) — the boss "downed" is just the round
+      // ending, no ambiguous mid-round state to flag here the way a fallen ally has.
+      downedTheirs.classList.toggle('hidden', !(isCoop && !topRight.alive && state.phase === 'playing'));
     } else {
-      nameTheirs.textContent = '相手を待っています…';
+      nameTheirs.textContent = isCoop ? '仲間を待っています…' : '相手を待っています…';
       hpTheirs.style.width = '100%';
+      downedTheirs.classList.add('hidden');
     }
     renderBuffBadges(buffMine, me);
-    renderBuffBadges(buffTheirs, opp);
+    renderBuffBadges(buffTheirs, topRight);
 
     allyHpBlock.classList.toggle('hidden', !isCoop);
     if (isCoop) {
-      if (ally) {
-        nameAlly.textContent = ally.name;
-        hpAlly.style.width = `${hpPct(ally)}%`;
-        hpAlly.classList.toggle('house-healing', ally.hp < (ally.maxHp || 100) && isInsideAnyHouse(ally.x, ally.y));
+      if (boss) {
+        nameAlly.textContent = boss.name;
+        hpAlly.style.width = `${hpPct(boss)}%`;
+        hpAlly.classList.toggle('house-healing', boss.hp < (boss.maxHp || 100) && isInsideAnyHouse(boss.x, boss.y));
       } else {
-        nameAlly.textContent = '仲間を待っています…';
+        nameAlly.textContent = '敵を待っています…';
         hpAlly.style.width = '100%';
       }
-      renderBuffBadges(buffAlly, ally);
+      renderBuffBadges(buffAlly, boss);
     }
 
     const wins = state.matchWins || {};
     // Co-op: room.matchWins is keyed by a single stable representative id per side (see
     // game.js's win-condition comment) — could be either ally's id, so sum across both
-    // rather than reading myId/opp.id directly (only one of the two ever holds a nonzero
+    // rather than reading myId/boss.id directly (only one of the two ever holds a nonzero
     // value, so summing is safe and doesn't need to know which one it is).
     const myWins = isCoop
       ? state.players.filter((p) => !p.isBoss).reduce((sum, p) => sum + (wins[p.id] || 0), 0)
       : me ? wins[me.id] || 0 : 0;
-    const oppWins = opp ? wins[opp.id] || 0 : 0;
+    const oppWins = boss ? wins[boss.id] || 0 : 0;
     matchScoreEl.textContent = `${myWins} - ${oppWins}`;
     if (isCpuMatch) {
       storyStageLabel.textContent = `第${storyStage}面 / 全${storyStageCount}面`;

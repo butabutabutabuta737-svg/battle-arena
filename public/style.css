@@ -535,6 +535,39 @@ button:active {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* 2P co-op only — shown next to a player's name (mine or the ally's, in the top-right slot)
+   the moment they're downed but the round is still going (the other ally + boss keep
+   fighting), so a fallen player's state is legible at a glance near the top HP bars rather
+   than only inferable from a static/empty HP bar. */
+.downed-badge {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ff8a8a;
+}
+/* Shown full-screen-width but non-blocking (doesn't cover the arena) to the specific player
+   who was downed first, telling them the match isn't over — their ally is still fighting. */
+.downed-banner {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: rgba(255, 60, 60, 0.16);
+  border: 1px solid rgba(255, 120, 120, 0.4);
+  color: #ffb3b3;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+  animation: downed-banner-in 0.3s ease;
+}
+@keyframes downed-banner-in {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
 .hp-bar-bg {
   height: 11px;
   border-radius: 6px;
@@ -547,11 +580,13 @@ button:active {
   border-radius: 6px;
   transition: width 0.12s linear;
 }
-#hpMine { background: linear-gradient(90deg, #5b8cff, #7fa8ff); box-shadow: 0 0 10px rgba(91,140,255,0.7); }
-#hpTheirs { background: linear-gradient(90deg, #ff5b7a, #ff8a9e); box-shadow: 0 0 10px rgba(255,91,122,0.7); }
-/* Ally (2-player co-op story mode only) — deliberately a 3rd distinct color, neither "me"
-   blue nor "enemy" red, so the three HP bars/particles/trails all read unambiguously. */
-#hpAlly { background: linear-gradient(90deg, #4de08a, #7dffb0); box-shadow: 0 0 10px rgba(77,224,138,0.7); }
+/* Color is a class, not a fixed per-id rule — which color a given HP bar slot needs depends
+   on the mode (the top-right slot shows the boss normally but the ally in 2P co-op, see
+   updateHud() in client.js), so JS toggles these rather than the id alone deciding it. Same
+   3-color split as the in-match particle/trail colors (sideColor() in client.js). */
+.hp-bar-fill.color-me { background: linear-gradient(90deg, #5b8cff, #7fa8ff); box-shadow: 0 0 10px rgba(91,140,255,0.7); }
+.hp-bar-fill.color-boss { background: linear-gradient(90deg, #ff5b7a, #ff8a9e); box-shadow: 0 0 10px rgba(255,91,122,0.7); }
+.hp-bar-fill.color-ally { background: linear-gradient(90deg, #4de08a, #7dffb0); box-shadow: 0 0 10px rgba(77,224,138,0.7); }
 .hp-bar-fill.house-healing {
   animation: house-heal-glow 0.9s ease-in-out infinite;
 }

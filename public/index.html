@@ -256,8 +256,8 @@
 <div id="game" class="screen hidden">
   <div class="hud">
     <div class="hp-block">
-      <div class="pname" id="nameMine">あなた</div>
-      <div class="hp-bar-bg"><div class="hp-bar-fill" id="hpMine" style="width:100%"></div></div>
+      <div class="pname"><span id="nameMine">あなた</span><span class="downed-badge hidden" id="downedMine">💀戦闘不能</span></div>
+      <div class="hp-bar-bg"><div class="hp-bar-fill color-me" id="hpMine" style="width:100%"></div></div>
       <div class="buff-row" id="buffMine"></div>
       <div class="bomb-status hidden" id="bombStatus">💣 所持数 <span id="bombStatusCount">0</span></div>
     </div>
@@ -266,19 +266,29 @@
       <div class="story-stage hidden" id="storyStageLabel"></div>
       <div class="match-score" id="matchScore">0 - 0</div>
     </div>
+    <!-- Top-right slot: the boss in every mode except 2P co-op — there it shows the ally
+         instead, so both human players' HP sit together on the top row (per explicit
+         request); the boss's own bar moves to the bottom row below. Color class is set in
+         JS (color-boss / color-ally) since which one this slot represents varies by mode. -->
     <div class="hp-block" style="text-align:right">
-      <div class="pname" id="nameTheirs">相手</div>
+      <div class="pname"><span id="nameTheirs">相手</span><span class="downed-badge hidden" id="downedTheirs">💀戦闘不能</span></div>
       <div class="hp-bar-bg"><div class="hp-bar-fill" id="hpTheirs" style="width:100%"></div></div>
       <div class="buff-row buff-row-right" id="buffTheirs"></div>
     </div>
   </div>
 
-  <!-- Only shown in the 2-player co-op story mode — a 3rd bar for the ally's HP, since the
-       existing .hud above is a fixed mine/them 2-column layout that would need a full
-       redesign to fit a 3rd column cleanly. Kept as its own row instead. -->
+  <!-- Dead-but-match-still-going banner (2P co-op only — dying in every other mode ends the
+       round immediately, so this state can't otherwise occur) — tells the fallen player
+       their ally is still fighting, without covering the view of the ongoing battle. -->
+  <div class="downed-banner hidden" id="downedBanner">💀 やられた… 仲間の奮闘を見守ろう</div>
+
+  <!-- Bottom row, 2P co-op only — the boss's HP (moved out of the top-right slot above, per
+       explicit request that the top row be reserved for the two human players). Element ids
+       here predate this reshuffle (originally built for the ally) but the ids don't need to
+       match their current on-screen meaning, only client.js's DOM references need to. -->
   <div class="hp-block ally-hp-block hidden" id="allyHpBlock">
-    <div class="pname" id="nameAlly">仲間</div>
-    <div class="hp-bar-bg"><div class="hp-bar-fill ally" id="hpAlly" style="width:100%"></div></div>
+    <div class="pname" id="nameAlly">ボス</div>
+    <div class="hp-bar-bg"><div class="hp-bar-fill color-boss" id="hpAlly" style="width:100%"></div></div>
     <div class="buff-row" id="buffAlly"></div>
   </div>
 
