@@ -1292,7 +1292,9 @@ function resetPositions(room) {
   room.walls = generated.walls;
   room.blocks = generated.blocks;
   room.trees = generateTrees(room.walls, room.blocks, room);
-  room.houses = generateHouses(room.walls, room.trees, room.blocks, room); // mutates room.walls in place, appending each house's 3 wall segments
+  // No healing buildings during the grunt-wave mini-game, per explicit request — keeps that
+  // event a pure "clear the horde" arena rather than one with hiding/healing spots in it.
+  room.houses = room.mobWaveActive ? [] : generateHouses(room.walls, room.trees, room.blocks, room); // mutates room.walls in place, appending each house's 3 wall segments
   for (const house of room.houses) {
     if (Math.random() < HOUSE_ITEM_CHANCE) {
       room.items.push({

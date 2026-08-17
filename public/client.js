@@ -2203,7 +2203,7 @@
           resultBanner.className = 'result-banner result-lose';
         }
       } else if (state.winnerId && humanSideWon(state, state.winnerId)) {
-        resultBanner.textContent = 'あなたの勝ち! 🎉';
+        resultBanner.textContent = 'あなたの勝ち! ⚔️';
         resultBanner.className = 'result-banner result-win';
       } else if (state.winnerId) {
         resultBanner.textContent = 'あなたの負け…';
