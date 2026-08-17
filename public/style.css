@@ -826,6 +826,37 @@ button:active {
   text-shadow: none;
 }
 
+/* Brief "勝利！！" flash the instant a story boss falls, before the boss's own defeat-quote
+   card or the story/true-ending overlays — deliberately loud/celebratory (radiant gold
+   pulse, big bouncy text), the opposite mood from .boss-defeat-overlay's dulled palette. */
+.boss-victory-overlay {
+  background: rgba(20, 14, 0, 0.55);
+  animation: boss-victory-bg-pulse 0.8s ease-in-out infinite;
+}
+.boss-victory-card {
+  animation: boss-intro-pop 0.4s cubic-bezier(.2, 1.6, .4, 1);
+}
+.boss-victory-text {
+  font-size: clamp(40px, 12vw, 72px);
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: #ffe9a8;
+  text-shadow: 0 0 30px rgba(255, 211, 91, 0.9), 0 0 60px rgba(255, 180, 60, 0.6);
+  animation: boss-victory-text-bounce 0.6s ease-in-out infinite;
+}
+@keyframes boss-victory-bg-pulse {
+  0%, 100% { background: rgba(20, 14, 0, 0.5); }
+  50% { background: rgba(60, 40, 0, 0.65); }
+}
+@keyframes boss-victory-text-bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .boss-victory-overlay { animation: none; }
+  .boss-victory-text { animation: none; }
+}
+
 /* ---- story-mode defeat: shown when the boss wins the series — a real "GAME OVER" moment
    with battlefield-defeat atmosphere, distinct (dark red, not gold/green) from the victory
    .story-ending-overlay below. The retry button is deliberately NOT part of the entry

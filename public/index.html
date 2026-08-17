@@ -363,6 +363,17 @@
       </div>
     </div>
 
+    <!-- Shown the instant a story boss's HP hits 0, before anything else (the boss's own
+         defeat-quote card below, or the story/true-ending overlays) — a brief, purely
+         triumphant "勝利！！" beat with its own fanfare sfx (see showBossVictory() /
+         playBossVictory() in client.js/audio.js), reusing .boss-intro-overlay's backdrop
+         but with its own card (no portrait — this moment is about the player, not the boss). -->
+    <div class="boss-intro-overlay boss-victory-overlay hidden" id="bossVictoryOverlay">
+      <div class="boss-intro-card boss-victory-card">
+        <div class="boss-victory-text">🎉 勝利！！</div>
+      </div>
+    </div>
+
     <!-- Shown right after a story boss is defeated, before advancing to the next stage —
          the boss gets a defiant 捨てセリフ (parting line) for dramatic weight, reusing the
          boss-intro card's layout/classes but dulled (see .boss-defeat-overlay in style.css)

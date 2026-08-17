@@ -88,6 +88,7 @@
   const bossDefeatPortrait = $('#bossDefeatPortrait');
   const bossDefeatName = $('#bossDefeatName');
   const bossDefeatLine = $('#bossDefeatLine');
+  const bossVictoryOverlay = $('#bossVictoryOverlay');
   const floatJoystick = $('#floatJoystick');
   const floatJoystickKnob = $('#floatJoystickKnob');
   const fireBtn = $('#fireBtn');
@@ -253,6 +254,7 @@
   let introShownForStage = 0; // last storyStage the boss-intro card was shown for, so it fires once per stage, not once per round
   let bossIntroHideTimer = null;
   let bossDefeatHideTimer = null;
+  let bossVictoryHideTimer = null;
   let gameOverRetryReady = false; // flips true only after gameOverTimer elapses — keeps the
     // retry button hidden for a dramatic beat instead of appearing the instant the boss wins
   let gameOverTimer = null;
@@ -417,6 +419,8 @@
     bossIntroOverlay.classList.add('hidden');
     if (bossDefeatHideTimer) { clearTimeout(bossDefeatHideTimer); bossDefeatHideTimer = null; }
     bossDefeatOverlay.classList.add('hidden');
+    if (bossVictoryHideTimer) { clearTimeout(bossVictoryHideTimer); bossVictoryHideTimer = null; }
+    bossVictoryOverlay.classList.add('hidden');
     storyEndingOverlay.classList.add('hidden');
     trueEndingOverlay.classList.add('hidden');
     gameOverRetryReady = false;
@@ -580,6 +584,21 @@
       bossIntroOverlay.classList.add('hidden');
       bossIntroHideTimer = null;
     }, 5000); // ~5s dramatic pause before battle, per explicit request
+  }
+
+  // The very first beat after defeating a story boss — a brief, purely triumphant "勝利！！"
+  // flash (own fanfare sfx, played by the caller) before anything else (the boss's own
+  // defeat-quote card, or the story/true-ending overlays) gets its turn. `onDone` is called
+  // once the flash auto-hides, so callers chain whatever should happen next through it
+  // instead of racing a second independent timer against this one.
+  function showBossVictory(onDone) {
+    bossVictoryOverlay.classList.remove('hidden');
+    if (bossVictoryHideTimer) clearTimeout(bossVictoryHideTimer);
+    bossVictoryHideTimer = setTimeout(() => {
+      bossVictoryOverlay.classList.add('hidden');
+      bossVictoryHideTimer = null;
+      if (onDone) onDone();
+    }, 1600);
   }
 
   // Post-victory dramatic pause: the just-defeated boss gets a defiant 捨てセリフ before the
@@ -889,17 +908,28 @@
         // every repeated broadcast while sitting in that phase.
         if (isCpuMatch && state.matchOver && humanSideWon(state, state.matchWinnerId)) {
           recordBossDefeated(storyStage, !!state.storyCoop);
+          if (state.exBossActive) recordExBossDefeated();
+          // The "勝利！！" flash always plays first, before anything stage-specific — its own
+          // fanfare sfx overrides the plain playWin() played just above for this same
+          // 'finished' transition (both fire, but the fanfare is the one that's actually
+          // audible/felt here; playWin() still matters for non-boss round wins, e.g. mid-
+          // series rounds against a story boss that don't reach matchOver, or a human-vs-
+          // human arena win, neither of which reach this branch at all).
+          if (audio) audio.playBossVictory();
           // storyStage < storyStageCount here means there's a next stage to advance to —
           // storyStageCount reflects the freshly-received state, same as everywhere else.
           // Never true for the EX fight (storyStage stays frozen at 5 === storyStageCount
           // throughout it), so this naturally skips the "before advancing" defeat-line pause
           // for the EX win — that ending gets its own dedicated overlay instead (see
           // trueEndingClear in updateHud()), not a "next stage" pause with nothing to advance to.
-          if (storyStage < storyStageCount) {
-            const boss = state.players.find((p) => p.isBoss);
-            if (boss) showBossDefeat(storyStage, boss);
-          }
-          if (state.exBossActive) recordExBossDefeated();
+          // Chained through showBossVictory's onDone rather than fired in parallel, so the
+          // two dramatic pauses play out one after another, not stacked/racing.
+          showBossVictory(() => {
+            if (storyStage < storyStageCount) {
+              const boss = state.players.find((p) => p.isBoss);
+              if (boss) showBossDefeat(storyStage, boss);
+            }
+          });
         }
         // Boss won the whole series — let the "GAME OVER" moment sit for a few seconds
         // before the retry button appears (see gameOverRetryReady), rather than offering
@@ -2065,15 +2095,18 @@
         // deferring to that flag rather than unhiding the button unconditionally every tick.
         if (gameOverRetryReady) storyRetryBtn.classList.remove('hidden');
       } else if (trueEndingClear) {
-        trueEndingOverlay.classList.remove('hidden');
+        // Same "wait for the victory flash to auto-hide" deferral as the stage-clear branch
+        // below — the true ending shouldn't appear stacked underneath/racing the flash.
+        if (bossVictoryOverlay.classList.contains('hidden')) trueEndingOverlay.classList.remove('hidden');
       } else if (finalStageClear) {
-        storyEndingOverlay.classList.remove('hidden');
+        if (bossVictoryOverlay.classList.contains('hidden')) storyEndingOverlay.classList.remove('hidden');
       } else {
-        // For a stage-clear specifically, keep rematchBtn hidden until the boss's defeat
-        // line (see showBossDefeat) has finished its own dramatic-pause auto-hide — same
-        // "defer to a one-time-started timer, re-checked every tick" pattern as gameOverReady
-        // above, just read directly off the overlay's own hidden state instead of a separate flag.
-        const waitingOnDefeatLine = stageAdvance && !bossDefeatOverlay.classList.contains('hidden');
+        // For a stage-clear specifically, keep rematchBtn hidden until both the "勝利！！"
+        // flash AND (chained after it) the boss's defeat line (see showBossDefeat) have each
+        // finished their own dramatic-pause auto-hide — same "defer to a one-time-started
+        // timer, re-checked every tick" pattern as gameOverReady above, just read directly
+        // off each overlay's own hidden state instead of a separate flag.
+        const waitingOnDefeatLine = stageAdvance && (!bossVictoryOverlay.classList.contains('hidden') || !bossDefeatOverlay.classList.contains('hidden'));
         if (!waitingOnDefeatLine) rematchBtn.classList.remove('hidden');
         rematchBtn.textContent = stageAdvance ? '次の面へ' : (isCpuMatch ? '次のラウンドへ' : 'もう一度対戦する');
       }

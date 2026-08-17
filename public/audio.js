@@ -286,6 +286,28 @@ window.GameAudio = (() => {
     [392, 349.23, 293.66, 246.94].forEach((f, i) => beep(f, 0.5, t + i * 0.13, 0.25, 'sawtooth'));
   }
 
+  // Bigger, more triumphant fanfare than the plain playWin() jingle used for an ordinary
+  // round win — reserved specifically for actually defeating a story-mode boss, which the
+  // player explicitly asked to feel more momentous: a low "impact" hit, a rising 6-note run
+  // doubled across two timbres (triangle lead + a brighter square layer) for fullness, then
+  // a sustained 4-note major chord that rings out under the "勝利！！" card.
+  function playBossVictory() {
+    ensureCtx();
+    const t = ctx.currentTime;
+    noiseBurst(t, 0.18, 0.35, 'lowpass', 700, sfxGain);
+    beep(90, 0.3, t, 0.4, 'sine');
+
+    const run = [392, 523.25, 659.25, 783.99, 987.77, 1174.66];
+    run.forEach((f, i) => {
+      const nt = t + 0.15 + i * 0.08;
+      beep(f, 0.45, nt, 0.24, 'triangle');
+      beep(f, 0.3, nt, 0.1, 'square');
+    });
+
+    const chordAt = t + 0.15 + run.length * 0.08 + 0.05;
+    [783.99, 987.77, 1174.66, 1567.98].forEach((f) => beep(f, 1.1, chordAt, 0.22, 'triangle'));
+  }
+
   function scheduleNote(freq, t, dur, type, vol) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -467,6 +489,7 @@ window.GameAudio = (() => {
     playRouletteMiss,
     playWin,
     playLose,
+    playBossVictory,
     startBgm,
     stopBgm,
     startTitleBgm,
