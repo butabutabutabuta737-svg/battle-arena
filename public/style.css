@@ -536,8 +536,16 @@ button:active {
 }
 
 /* ---- game screen ---- */
+/* Anchor from the top instead of inheriting .screen's justify-content:center — story mode
+   (extra storyStageLabel/mobWaveLabel/levelLabel rows) and 2P co-op (the extra allyHpBlock
+   row) both make this screen's content taller than a shorter phone viewport, and centering
+   an overflowing column pushes roughly half of that overflow above the visible top edge —
+   which is exactly the top HP bars, since .hud is the very first child. Top-anchoring keeps
+   them pinned at the top (right after the existing 18px padding) so they're never clipped,
+   regardless of how tall the rest of the HUD grows. */
 #game {
   flex-direction: column;
+  justify-content: flex-start;
   gap: 14px;
   padding: 18px;
   position: relative;
