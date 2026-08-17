@@ -260,7 +260,7 @@
   <div class="hud">
     <div class="hp-block">
       <div class="pname"><span id="nameMine">あなた</span><span class="downed-badge hidden" id="downedMine">💀戦闘不能</span></div>
-      <div class="hp-bar-bg"><div class="hp-bar-fill color-me" id="hpMine" style="width:100%"></div></div>
+      <div class="hp-bar-bg"><div class="hp-bar-fill color-me" id="hpMine" style="width:100%"></div><div class="hp-bar-bonus" id="hpBonusMine"></div></div>
       <div class="buff-row" id="buffMine"></div>
       <div class="bomb-status hidden" id="bombStatus">💣 所持数 <span id="bombStatusCount">0</span></div>
     </div>
@@ -268,6 +268,7 @@
       部屋 <b id="roomLabel">----</b>
       <div class="story-stage hidden" id="storyStageLabel"></div>
       <div class="story-stage wave-progress-label hidden" id="mobWaveLabel"></div>
+      <div class="story-stage level-label hidden" id="levelLabel"></div>
       <div class="match-score" id="matchScore">0 - 0</div>
     </div>
     <!-- Top-right slot: the boss in every mode except 2P co-op — there it shows the ally
@@ -276,7 +277,7 @@
          JS (color-boss / color-ally) since which one this slot represents varies by mode. -->
     <div class="hp-block" style="text-align:right">
       <div class="pname"><span id="nameTheirs">相手</span><span class="downed-badge hidden" id="downedTheirs">💀戦闘不能</span></div>
-      <div class="hp-bar-bg"><div class="hp-bar-fill" id="hpTheirs" style="width:100%"></div></div>
+      <div class="hp-bar-bg"><div class="hp-bar-fill" id="hpTheirs" style="width:100%"></div><div class="hp-bar-bonus" id="hpBonusTheirs"></div></div>
       <div class="buff-row buff-row-right" id="buffTheirs"></div>
     </div>
   </div>
@@ -292,7 +293,7 @@
        match their current on-screen meaning, only client.js's DOM references need to. -->
   <div class="hp-block ally-hp-block hidden" id="allyHpBlock">
     <div class="pname" id="nameAlly">ボス</div>
-    <div class="hp-bar-bg"><div class="hp-bar-fill color-boss" id="hpAlly" style="width:100%"></div></div>
+    <div class="hp-bar-bg"><div class="hp-bar-fill color-boss" id="hpAlly" style="width:100%"></div><div class="hp-bar-bonus" id="hpBonusAlly"></div></div>
     <div class="buff-row" id="buffAlly"></div>
   </div>
 
@@ -402,6 +403,11 @@
         <div class="boss-intro-line" id="waveIntroLine">「……」</div>
       </div>
     </div>
+
+    <!-- Story-mode level-up toast — a brief, non-blocking pop-up (unlike the boss-victory
+         flash, this can fire mid-combat, so it must never pause or cover the action) with its
+         own sfx (playLevelUp() in audio.js/client.js). Auto-hides itself. -->
+    <div class="level-up-toast hidden" id="levelUpToast">🎉 LEVEL UP! <span id="levelUpValue">Lv.2</span></div>
 
     <!-- floating joystick: appears wherever the player first touches (anywhere except
          another button), rather than a fixed-position pad -->

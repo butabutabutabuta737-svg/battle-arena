@@ -308,6 +308,15 @@ window.GameAudio = (() => {
     [783.99, 987.77, 1174.66, 1567.98].forEach((f) => beep(f, 1.1, chordAt, 0.22, 'triangle'));
   }
 
+  // Story-mode level-up cue — a bright 5-note ascending run, quicker/lighter than
+  // playBossVictory's fanfare since this fires mid-combat and shouldn't feel like a big pause.
+  function playLevelUp() {
+    ensureCtx();
+    const t = ctx.currentTime;
+    const run = [523.25, 659.25, 783.99, 1046.5, 1318.51];
+    run.forEach((f, i) => beep(f, 0.22, t + i * 0.07, 0.26, 'triangle'));
+  }
+
   function scheduleNote(freq, t, dur, type, vol) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -490,6 +499,7 @@ window.GameAudio = (() => {
     playWin,
     playLose,
     playBossVictory,
+    playLevelUp,
     startBgm,
     stopBgm,
     startTitleBgm,

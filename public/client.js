@@ -48,6 +48,9 @@
   const ctx = canvas.getContext('2d');
   const hpMine = $('#hpMine');
   const hpTheirs = $('#hpTheirs');
+  const hpBonusMine = $('#hpBonusMine');
+  const hpBonusTheirs = $('#hpBonusTheirs');
+  const hpBonusAlly = $('#hpBonusAlly');
   const nameMine = $('#nameMine');
   const nameTheirs = $('#nameTheirs');
   const rematchBtn = $('#rematchBtn');
@@ -94,6 +97,9 @@
   const waveIntroTitle = $('#waveIntroTitle');
   const waveIntroLine = $('#waveIntroLine');
   const mobWaveLabel = $('#mobWaveLabel');
+  const levelLabel = $('#levelLabel');
+  const levelUpToast = $('#levelUpToast');
+  const levelUpValue = $('#levelUpValue');
   const floatJoystick = $('#floatJoystick');
   const floatJoystickKnob = $('#floatJoystickKnob');
   const fireBtn = $('#fireBtn');
@@ -289,6 +295,8 @@
   let gameOverRetryReady = false; // flips true only after gameOverTimer elapses — keeps the
     // retry button hidden for a dramatic beat instead of appearing the instant the boss wins
   let gameOverTimer = null;
+  let lastStoryLevel = 1; // last storyLevel we've shown a level-up toast for
+  let levelUpHideTimer = null;
   let leavingIntentionally = false;
   let arena = { w: 800, h: 600, walls: [], trees: [], houses: [] };
   let latestState = null;
@@ -463,6 +471,9 @@
     downedMine.classList.add('hidden');
     downedTheirs.classList.add('hidden');
     downedBanner.classList.add('hidden');
+    lastStoryLevel = 1;
+    if (levelUpHideTimer) { clearTimeout(levelUpHideTimer); levelUpHideTimer = null; }
+    levelUpToast.classList.add('hidden');
   }
 
   function goToTitle() {
@@ -635,6 +646,19 @@
       waveIntroOverlay.classList.add('hidden');
       waveIntroHideTimer = null;
     }, 5000);
+  }
+
+  // Story-mode level-up notice — unlike the boss-intro/wave-intro cards above, this can fire
+  // mid-fight (right after a wave-mob or boss kill bumps room.storyLevel), so it's a small
+  // auto-hiding toast rather than a full-screen dramatic-pause overlay.
+  function showLevelUpToast(level) {
+    levelUpValue.textContent = `Lv.${level}`;
+    levelUpToast.classList.remove('hidden');
+    if (levelUpHideTimer) clearTimeout(levelUpHideTimer);
+    levelUpHideTimer = setTimeout(() => {
+      levelUpToast.classList.add('hidden');
+      levelUpHideTimer = null;
+    }, 2200);
   }
 
   // The very first beat after defeating a story boss — a brief, purely triumphant "勝利！！"
@@ -931,6 +955,18 @@
       // pattern as the boss intro above, keyed by mobWaveIndex instead of storyStage.
       if (state.phase === 'countdown' && state.mobWaveActive && state.mobWaveIndex !== introShownForWave) {
         showWaveIntro(state.mobWaveIndex);
+      }
+      // Level-up toast — fires the instant storyLevel actually increases (checked on every
+      // broadcast, not just phase transitions, since a level-up can land mid-fight). Always
+      // resyncs lastStoryLevel either way (up with a toast, or silently down on a story
+      // restart) so a later re-level-up after a restart isn't suppressed by a stale high
+      // watermark from the previous run.
+      if (typeof state.storyLevel === 'number') {
+        if (state.storyLevel > lastStoryLevel) {
+          showLevelUpToast(state.storyLevel);
+          if (audio) audio.playLevelUp();
+        }
+        lastStoryLevel = state.storyLevel;
       }
     }
 
@@ -2027,8 +2063,31 @@
     return (arena.houses || []).some((h) => x >= h.x && x <= h.x + h.size && y >= h.y && y <= h.y + h.size);
   }
 
+  const STORY_BASE_MAX_HP = 100; // must match game.js's MAX_HP — the un-leveled baseline
+
   function hpPct(p) {
     return (p.hp / (p.maxHp || 100)) * 100;
+  }
+
+  // Splits a player's HP bar into a normal fill (fillEl, unchanged from before) plus a
+  // gold "level bonus" overlay (bonusEl) covering whatever slice of the CURRENT fill sits
+  // beyond the un-leveled base 100 hp — see .hp-bar-bonus in style.css. The bar's own length
+  // never changes (still just hp/maxHp of whatever maxHp currently is); only the *coloring*
+  // of an already-filled portion changes. A player who hasn't leveled (maxHp <= base) or a
+  // boss (which never levels) simply gets a permanently-zero-width bonus segment.
+  function renderHpBar(fillEl, bonusEl, p) {
+    const maxHp = (p && p.maxHp) || STORY_BASE_MAX_HP;
+    const hp = Math.max(0, (p && p.hp) || 0);
+    const totalPct = Math.min(100, (hp / maxHp) * 100);
+    fillEl.style.width = `${totalPct}%`;
+    if (!bonusEl) return;
+    if (maxHp > STORY_BASE_MAX_HP && hp > STORY_BASE_MAX_HP) {
+      const startPct = (STORY_BASE_MAX_HP / maxHp) * 100;
+      bonusEl.style.left = `${startPct}%`;
+      bonusEl.style.width = `${Math.max(0, totalPct - startPct)}%`;
+    } else {
+      bonusEl.style.width = '0%';
+    }
   }
 
   function updateHud(state) {
@@ -2048,7 +2107,7 @@
 
     if (me) {
       nameMine.textContent = me.name;
-      hpMine.style.width = `${hpPct(me)}%`;
+      renderHpBar(hpMine, hpBonusMine, me);
       hpMine.classList.toggle('house-healing', me.hp < (me.maxHp || 100) && isInsideAnyHouse(me.x, me.y));
       // Downed-but-match-still-going only happens in 2P co-op (every other mode ends the
       // round the instant either side has a casualty, so this state can't occur there).
@@ -2064,7 +2123,7 @@
       // swapping just the label to "討伐中" reads as "on hold" instead of a stray full-hp
       // boss bar that looks like nothing's happening.
       nameTheirs.textContent = state.mobWaveActive && !isCoop ? 'ザコモンスター討伐中…' : topRight.name;
-      hpTheirs.style.width = `${hpPct(topRight)}%`;
+      renderHpBar(hpTheirs, hpBonusTheirs, topRight);
       hpTheirs.classList.toggle('house-healing', topRight.hp < (topRight.maxHp || 100) && isInsideAnyHouse(topRight.x, topRight.y));
       // Only ever relevant for the ally slot (co-op) — the boss "downed" is just the round
       // ending, no ambiguous mid-round state to flag here the way a fallen ally has.
@@ -2072,6 +2131,7 @@
     } else {
       nameTheirs.textContent = isCoop ? '仲間を待っています…' : '相手を待っています…';
       hpTheirs.style.width = '100%';
+      hpBonusTheirs.style.width = '0%';
       downedTheirs.classList.add('hidden');
     }
     renderBuffBadges(buffMine, me);
@@ -2081,11 +2141,12 @@
     if (isCoop) {
       if (boss) {
         nameAlly.textContent = state.mobWaveActive ? 'ザコモンスター討伐中…' : boss.name;
-        hpAlly.style.width = `${hpPct(boss)}%`;
+        renderHpBar(hpAlly, hpBonusAlly, boss);
         hpAlly.classList.toggle('house-healing', boss.hp < (boss.maxHp || 100) && isInsideAnyHouse(boss.x, boss.y));
       } else {
         nameAlly.textContent = '敵を待っています…';
         hpAlly.style.width = '100%';
+        hpBonusAlly.style.width = '0%';
       }
       renderBuffBadges(buffAlly, boss);
     }
@@ -2112,6 +2173,12 @@
       mobWaveLabel.classList.remove('hidden');
     } else {
       mobWaveLabel.classList.add('hidden');
+    }
+    if (isCpuMatch && typeof state.storyLevel === 'number') {
+      levelLabel.textContent = `⭐ Lv.${state.storyLevel}`;
+      levelLabel.classList.remove('hidden');
+    } else {
+      levelLabel.classList.add('hidden');
     }
 
     const myBombCount = me ? me.bombs || 0 : 0;

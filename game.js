@@ -126,6 +126,22 @@ function pickMobWaveColorTier(waveIndex) {
   }
   return 'blue';
 }
+// Story-mode leveling (story mode only — never touches arena/PvP rooms): every wave-mob or
+// boss kill counts once toward room.storyKillCount, and the level derived from it only ever
+// grants a max-HP bonus — nothing else about the player changes. STORY_LEVEL_KILLS_PER_LEVEL=5
+// means a flawless full 1P clear (4 waves x 10 mobs = 40, + 5 boss kills = 45 total kills)
+// lands almost exactly on the level cap (9 level-ups x 5 = 45) by the last boss, matching the
+// "最終面でレベル10くらい" pacing target.
+const STORY_LEVEL_CAP = 10;
+const STORY_LEVEL_KILLS_PER_LEVEL = 5;
+function storyLevelHpMult(level) {
+  const l = Math.min(Math.max(1, level), STORY_LEVEL_CAP);
+  return 1 + (l - 1) / (STORY_LEVEL_CAP - 1); // level1 -> 1x, level10 -> 2x, linear between
+}
+function addStoryKill(room) {
+  room.storyKillCount++;
+  room.storyLevel = Math.min(STORY_LEVEL_CAP, 1 + Math.floor(room.storyKillCount / STORY_LEVEL_KILLS_PER_LEVEL));
+}
 // Clone: a purely visual, non-collidable decoy offset to the player's side (mirrors the
 // existing trees/houses "visual-only, no server-side hitbox" pattern) — it's untargetable
 // by construction since bullets/laser/sword/bombs only ever check room.players, never a
@@ -1279,6 +1295,8 @@ function getRoom(id) {
       mobWaveKilled: 0,
       mobWaveNextSpawnAt: 0,
       pendingMobWaveIntro: false, // mirrors pendingStoryIntro's extended-countdown-wait trick
+      storyLevel: 1, // story-mode-only player level (1-10), see STORY_LEVEL_CAP/storyLevelHpMult
+      storyKillCount: 0, // every wave-mob or boss kill counts once; level = 1 + floor(kills / STORY_LEVEL_KILLS_PER_LEVEL)
       cpuState: null,
       phase: 'waiting', // waiting | countdown | playing | finished
       countdownEndsAt: 0,
@@ -1303,6 +1321,13 @@ function resetPositions(room) {
     const sp = spawnPoints[idx] || spawnPoints[spawnPoints.length - 1];
     p.x = sp.x;
     p.y = sp.y;
+    // Story-mode leveling only ever grants a max-HP bonus, and only to the human player(s) —
+    // the boss's own maxHp is set separately (see addCpuPlayer/STORY_BOSSES_2P_TUNING) and
+    // must stay untouched here. Recomputed every round so it always reflects the current
+    // level, including immediately after a level-up mid-run.
+    if (room.isCpuMatch && !p.isBoss) {
+      p.maxHp = Math.round(MAX_HP * storyLevelHpMult(room.storyLevel));
+    }
     p.hp = p.maxHp || MAX_HP;
     p.alive = true;
     p.bombs = 0;
@@ -1750,7 +1775,10 @@ function tick(room) {
     // kill from any of those four sources uniformly without duplicating this logic 4 times
     for (const m of room.monsters) {
       if (m.hp <= 0) {
-        if (m.wave) room.mobWaveKilled++;
+        if (m.wave) {
+          room.mobWaveKilled++;
+          addStoryKill(room);
+        }
         if (m.chicken) {
           // "周囲にアイテムが3種類獲得" — scattered around the death point, not stacked
           // exactly on top of each other
@@ -1947,6 +1975,8 @@ function broadcastState(room) {
     mobWaveCount: MOB_WAVE_COUNT,
     mobWaveSpawned: room.mobWaveSpawned,
     mobWaveKilled: room.mobWaveKilled,
+    storyLevel: room.storyLevel,
+    storyLevelCap: STORY_LEVEL_CAP,
   };
   const msg = JSON.stringify(state);
   for (const ws of room.players.keys()) {
@@ -2071,6 +2101,8 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
                 room.pendingStoryIntro = true;
               } else {
                 room.storyStage = 1;
+                room.storyLevel = 1;
+                room.storyKillCount = 0;
                 if (cpuPlayer) {
                   cpuPlayer.name = bossNameForStage(1);
                   cpuPlayer.line = bossLineForStage(1);
@@ -2081,6 +2113,7 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
                 room.pendingStoryIntro = true;
               }
             } else if (humanWon) {
+              addStoryKill(room); // the boss that was just defeated counts as one kill
               if (room.storyStage < STORY_BOSSES.length) {
                 // Just cleared a boss and more stages remain — insert the grunt wave
                 // mini-game before the next boss ("ボス→ミニゲーム→ボス…") instead of
@@ -2101,6 +2134,8 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
               // "retry" path is a fresh connection (see storyRetryBtn), but handle an
               // in-room rematch gracefully too rather than leaving story state stuck.
               room.storyStage = 1;
+              room.storyLevel = 1;
+              room.storyKillCount = 0;
               if (cpuPlayer) {
                 cpuPlayer.name = bossNameForStage(1);
                 cpuPlayer.line = bossLineForStage(1);
