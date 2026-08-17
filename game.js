@@ -1333,6 +1333,22 @@ function pickWeightedItemType() {
   return 'bomb';
 }
 
+// Same weighted pick as pickWeightedItemType(), but with 'heal' excluded — used only for the
+// roulette (the post-round item gamble). A roulette-granted item gets applied at the very
+// start of the next round, right after every player's hp is already reset to full in
+// resetPositions() — a 'heal' result there would be a guaranteed no-op (Math.min caps it at
+// already-full hp), i.e. a real "wasted win," not just a low-value one.
+const ROULETTE_ITEM_WEIGHTS = Object.fromEntries(Object.entries(ITEM_WEIGHTS).filter(([type]) => type !== 'heal'));
+const ROULETTE_ITEM_WEIGHT_TOTAL = Object.values(ROULETTE_ITEM_WEIGHTS).reduce((sum, w) => sum + w, 0);
+function pickRouletteItemType() {
+  let r = Math.random() * ROULETTE_ITEM_WEIGHT_TOTAL;
+  for (const [type, w] of Object.entries(ROULETTE_ITEM_WEIGHTS)) {
+    if (r < w) return type;
+    r -= w;
+  }
+  return 'bomb';
+}
+
 // Used for the golden chicken's death drop — "アイテムが3種類" (3 distinct types), not
 // just 3 rolls that could repeat the same type.
 function pickDistinctItemTypes(count) {
@@ -1495,15 +1511,18 @@ function tick(room) {
       }
       if (target) {
         // chicken runs from whoever's nearest instead of homing toward them — same
-        // nearest-player targeting, just the opposite direction
-        const sign = monster.chicken ? -1 : 1;
+        // nearest-player targeting, just the opposite direction. Story mode (isCpuMatch,
+        // covers both 1P and 2P co-op) is an explicit exception: every monster, chicken
+        // included, always approaches there — arena mode keeps the original flee behavior.
+        const fleeing = monster.chicken && !room.isCpuMatch;
+        const sign = fleeing ? -1 : 1;
         let dx = (target.x - monster.x) * sign;
         let dy = (target.y - monster.y) * sign;
         let len = Math.hypot(dx, dy) || 1;
         dx /= len;
         dy /= len;
 
-        if (monster.chicken) {
+        if (fleeing) {
           // Fleeing straight away from the player alone tends to run it into a corner or
           // screen edge, where it visually hides behind the fixed UI buttons — bias the
           // flee direction toward the arena center to counteract that, "無理して"
@@ -1695,7 +1714,7 @@ function tick(room) {
           }
           if (room.rouletteEnabled) {
             const hit = Math.random() < 0.5; // 50% miss, per spec
-            room.rouletteResult = { winnerId, hit, itemType: hit ? pickWeightedItemType() : null };
+            room.rouletteResult = { winnerId, hit, itemType: hit ? pickRouletteItemType() : null };
           }
         }
       }
@@ -1716,7 +1735,7 @@ function tick(room) {
             room.rouletteResult = {
               winnerId: winner.id,
               hit,
-              itemType: hit ? pickWeightedItemType() : null,
+              itemType: hit ? pickRouletteItemType() : null,
             };
           }
         }
