@@ -33,9 +33,7 @@ html, body {
 
 /* Title screen background art — fills the full mobile viewport (100dvh, falling back to vh
    for browsers without dvh support) rather than just the .screen div's own content height, so
-   it never letterboxes short of the actual screen edges on phones with dynamic browser UI. The
-   card/buttons on top stay exactly as before, just with their own backgrounds stripped (see
-   below) so this art shows straight through instead of being covered by a solid panel. */
+   it never letterboxes short of the actual screen edges on phones with dynamic browser UI. */
 #modeSelect {
   min-height: 100vh;
   min-height: 100dvh;
@@ -43,10 +41,15 @@ html, body {
   background-size: cover;
   background-position: center top;
 }
+/* Card stays as a visible "glass" panel (not fully transparent) so the title/button text has
+   enough contrast to read against the busy artwork — a frosted dark panel plus blur, rather
+   than the plain opaque .card default, so the art is still clearly visible through it. */
 #modeSelect .card {
-  background: transparent;
-  border: none;
-  box-shadow: none;
+  background: rgba(8, 10, 22, 0.62);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
 }
 
 .card {
