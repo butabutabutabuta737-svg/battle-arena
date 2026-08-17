@@ -653,6 +653,10 @@ button:active {
   letter-spacing: 0.03em;
 }
 
+.wave-progress-label {
+  color: #ff9a6b;
+}
+
 .arena-wrap {
   position: relative;
   width: 100%;
@@ -824,6 +828,23 @@ button:active {
 .boss-defeat-overlay .boss-intro-name {
   color: #c9ccd8;
   text-shadow: none;
+}
+
+/* ---- mob wave narration: reuses .boss-intro-overlay/.boss-intro-card, tinted a hostile
+   red-orange (no per-boss --boss-color to inherit here, so the color is set directly) —
+   deliberately distinct from any single boss's signature color since this is about a swarm,
+   not a character. No portrait — .wave-intro-title stands in as a big emoji/icon instead. */
+.wave-intro-overlay .boss-intro-stage {
+  color: #ff8a5b;
+}
+.wave-intro-title {
+  font-size: 56px;
+  line-height: 1;
+  filter: drop-shadow(0 0 18px rgba(255, 122, 74, 0.7));
+  animation: boss-intro-icon-pulse 1.2s ease-in-out infinite;
+}
+.wave-intro-overlay .boss-intro-line {
+  border-color: rgba(255, 138, 91, 0.35);
 }
 
 /* Brief "勝利！！" flash the instant a story boss falls, before the boss's own defeat-quote

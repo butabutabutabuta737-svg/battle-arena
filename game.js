@@ -92,6 +92,17 @@ const GOLDEN_CHICKEN_CHANCE = 0.08; // "そこまで高くない" — modest, no
 const GOLDEN_CHICKEN_SPEED = 160; // faster than the base monster, deliberately hard to run down
 const GOLDEN_CHICKEN_RADIUS = 18;
 const GOLDEN_CHICKEN_ITEM_COUNT = 3;
+// Mob wave: a mini-game inserted between story-mode boss fights ("ボス→ミニゲーム→ボス…").
+// 10 grunt monsters must be wiped out; per-wave tuning scales their speed/damage upward so
+// each wave (fought after clearing that stage's boss, before the next boss) feels harder.
+const MOB_WAVE_COUNT = 10;
+const MOB_WAVE_SPAWN_INTERVAL_MS = 550; // staggered arrival, not all 10 at once
+const MOB_WAVE_TUNING = [
+  { speedMult: 1.0, damageMult: 1.0 },
+  { speedMult: 1.15, damageMult: 1.15 },
+  { speedMult: 1.3, damageMult: 1.3 },
+  { speedMult: 1.45, damageMult: 1.5 },
+];
 // Clone: a purely visual, non-collidable decoy offset to the player's side (mirrors the
 // existing trees/houses "visual-only, no server-side hitbox" pattern) — it's untargetable
 // by construction since bullets/laser/sword/bombs only ever check room.players, never a
@@ -478,6 +489,7 @@ function fireLaser(room, shooterWs, shooter, now, originX, originY) {
   for (const [ows, op] of room.players) {
     if (ows === shooterWs || !op.alive) continue;
     if (room.storyCoop && !!shooter.isBoss === !!op.isBoss) continue; // co-op: never friendly fire
+    if (room.mobWaveActive && op.isBoss) continue; // boss is inert/hidden during a wave
     const toX = op.x - originX;
     const toY = op.y - originY;
     const t = toX * dirX + toY * dirY;
@@ -591,6 +603,7 @@ function attemptSword(room, ws, p, now) {
     for (const [ows, op] of room.players) {
       if (ows === ws || !op.alive) continue;
       if (room.storyCoop && !!p.isBoss === !!op.isBoss) continue; // co-op: never friendly fire
+      if (room.mobWaveActive && op.isBoss) continue; // boss is inert/hidden during a wave
       const dx = op.x - origin.x;
       const dy = op.y - origin.y;
       const d = Math.hypot(dx, dy);
@@ -672,6 +685,7 @@ function explodeBomb(room, bomb, now) {
     // (where !isCpuBomb just means "a human's bomb" and there's no ally to protect) is
     // completely unaffected.
     if (room.storyCoop && !isSelf && !isCpuBomb && !pl.isBoss) continue;
+    if (room.mobWaveActive && pl.isBoss) continue; // boss is inert/hidden during a wave
     const d = Math.hypot(pl.x - bomb.x, pl.y - bomb.y);
     if (d < BOMB_RADIUS + PLAYER_RADIUS) {
       // Only the boss's outgoing blast against the human is scaled — a boss caught in its
@@ -852,6 +866,14 @@ function updateCpuAI(room, now) {
   const cpu = room.players.get(cpuToken);
   const inp = room.inputs.get(cpuToken);
   if (!cpu || !inp) return;
+  if (room.mobWaveActive) {
+    // Boss stays inert (but present, so existing loss/state machinery keeps working
+    // untouched) while the grunt wave mini-game is being fought instead.
+    inp.up = inp.down = inp.left = inp.right = false;
+    inp.shooting = false;
+    inp.swording = false;
+    return;
+  }
   if (!cpu.alive) {
     inp.up = inp.down = inp.left = inp.right = false;
     inp.shooting = false;
@@ -1026,6 +1048,12 @@ function updateCpuAICoop(room, now) {
   const cpu = room.players.get(cpuToken);
   const inp = room.inputs.get(cpuToken);
   if (!cpu || !inp) return;
+  if (room.mobWaveActive) {
+    inp.up = inp.down = inp.left = inp.right = false;
+    inp.shooting = false;
+    inp.swording = false;
+    return;
+  }
   if (!cpu.alive) {
     inp.up = inp.down = inp.left = inp.right = false;
     inp.shooting = false;
@@ -1222,6 +1250,12 @@ function getRoom(id) {
         // by the very first joiner, in joinRoom() below. Every other CPU-match code path
         // (1P story, the EX boss) leaves this false and is completely unaffected by it.
       pendingStoryIntro: false,
+      mobWaveActive: false, // true while fighting the between-boss grunt wave mini-game
+      mobWaveIndex: 0, // 1-based: which wave (maps into MOB_WAVE_TUNING)
+      mobWaveSpawned: 0,
+      mobWaveKilled: 0,
+      mobWaveNextSpawnAt: 0,
+      pendingMobWaveIntro: false, // mirrors pendingStoryIntro's extended-countdown-wait trick
       cpuState: null,
       phase: 'waiting', // waiting | countdown | playing | finished
       countdownEndsAt: 0,
@@ -1307,13 +1341,14 @@ const STORY_INTRO_WAIT_MS = 5000;
 
 function startCountdown(room) {
   room.phase = 'countdown';
-  // Only the round that actually introduces a *new* stage gets the long wait — every other
-  // round (round 2/3 of the same boss's best-of-3, or a plain human-vs-human rematch) keeps
-  // the normal countdown, matching the client's own "show the boss card once per stage, not
-  // once per round" rule (introShownForStage).
-  const waitMs = room.isCpuMatch && room.pendingStoryIntro ? STORY_INTRO_WAIT_MS : 3000;
+  // Only the round that actually introduces a *new* stage (or a new mob wave) gets the long
+  // wait — every other round (round 2/3 of the same boss's best-of-3, or a plain
+  // human-vs-human rematch) keeps the normal countdown, matching the client's own "show the
+  // narration card once per transition, not once per round" rule (introShownForStage).
+  const waitMs = room.isCpuMatch && (room.pendingStoryIntro || room.pendingMobWaveIntro) ? STORY_INTRO_WAIT_MS : 3000;
   room.countdownEndsAt = Date.now() + waitMs;
   room.pendingStoryIntro = false;
+  room.pendingMobWaveIntro = false;
   resetPositions(room);
   broadcastWalls(room);
 }
@@ -1445,6 +1480,38 @@ function spawnMonster(room) {
   });
 }
 
+// A single grunt for the between-boss wave mini-game — a plain monster with no gold/chicken
+// rolls, tagged `wave` so tick()'s movement loop applies that wave's speed/damage tuning and
+// so the death-cleanup loop can count it toward mobWaveKilled.
+function spawnWaveMob(room) {
+  const tuning = MOB_WAVE_TUNING[Math.min(Math.max(1, room.mobWaveIndex), MOB_WAVE_TUNING.length) - 1];
+  const radius = MONSTER_RADIUS;
+  const spawnPoints = getSpawnPoints(room);
+  let x, y, tries = 0;
+  do {
+    ({ x, y } = pickEdgeSpawnPosition(radius));
+    tries++;
+  } while (
+    tries < 20 &&
+    (spawnPoints.some((s) => Math.hypot(s.x - x, s.y - y) < 140) ||
+      room.walls.some((w) => circleHitsRect(x, y, radius + 10, w)) ||
+      room.blocks.some((b) => circleHitsRect(x, y, radius + 10, b)))
+  );
+  room.monsters.push({
+    id: room.monsterId++,
+    x, y,
+    hp: MONSTER_MAX_HP, maxHp: MONSTER_MAX_HP,
+    gold: false,
+    chicken: false,
+    wave: true,
+    waveSpeedMult: tuning.speedMult,
+    waveDamageMult: tuning.damageMult,
+    lastHit: {},
+    lastAttackAt: 0,
+  });
+  room.mobWaveSpawned++;
+}
+
 function tick(room) {
   const now = Date.now();
   const dt = Math.min(0.05, (now - room.lastTick) / 1000);
@@ -1499,8 +1566,8 @@ function tick(room) {
 
     for (const monster of room.monsters) {
       const radius = monsterRadius(monster);
-      const speed = monster.chicken ? GOLDEN_CHICKEN_SPEED : monster.gold ? GOLD_MONSTER_SPEED : MONSTER_SPEED;
-      const contactDamage = monster.gold ? Math.round(MONSTER_CONTACT_DAMAGE * GOLD_MONSTER_CONTACT_DAMAGE_MULT) : MONSTER_CONTACT_DAMAGE;
+      const speed = monster.wave ? MONSTER_SPEED * monster.waveSpeedMult : monster.chicken ? GOLDEN_CHICKEN_SPEED : monster.gold ? GOLD_MONSTER_SPEED : MONSTER_SPEED;
+      const contactDamage = monster.wave ? Math.round(MONSTER_CONTACT_DAMAGE * monster.waveDamageMult) : monster.gold ? Math.round(MONSTER_CONTACT_DAMAGE * GOLD_MONSTER_CONTACT_DAMAGE_MULT) : MONSTER_CONTACT_DAMAGE;
 
       let target = null;
       let bestDist = Infinity;
@@ -1629,6 +1696,7 @@ function tick(room) {
       for (const [pws, p] of room.players) {
         if (p.id === b.ownerId || !p.alive) continue;
         if (room.storyCoop && !!b.ownerIsBoss === !!p.isBoss) continue; // co-op: never friendly fire
+        if (room.mobWaveActive && p.isBoss) continue; // boss is inert/hidden during a wave
         const d = Math.hypot(p.x - b.x, p.y - b.y);
         if (d < PLAYER_RADIUS + bRadius) {
           applyDamage(room, pws, p, b.damage || BASE_BULLET_DAMAGE, now);
@@ -1642,15 +1710,20 @@ function tick(room) {
     }
     room.blocks = room.blocks.filter((bl) => bl.hp > 0);
 
-    if (room.monsters.length < MONSTER_MAX_COUNT && now >= room.nextMonsterSpawnAt) {
+    if (!room.mobWaveActive && room.monsters.length < MONSTER_MAX_COUNT && now >= room.nextMonsterSpawnAt) {
       spawnMonster(room);
       room.nextMonsterSpawnAt = now + MONSTER_SPAWN_MIN_MS + Math.random() * (MONSTER_SPAWN_MAX_MS - MONSTER_SPAWN_MIN_MS);
+    }
+    if (room.mobWaveActive && room.mobWaveSpawned < MOB_WAVE_COUNT && now >= room.mobWaveNextSpawnAt) {
+      spawnWaveMob(room);
+      room.mobWaveNextSpawnAt = now + MOB_WAVE_SPAWN_INTERVAL_MS;
     }
     // dying monsters drop an item where they fell — checked once per tick here rather than
     // at each individual damage site (bullet/laser/sword/bomb), since it needs to catch a
     // kill from any of those four sources uniformly without duplicating this logic 4 times
     for (const m of room.monsters) {
       if (m.hp <= 0) {
+        if (m.wave) room.mobWaveKilled++;
         if (m.chicken) {
           // "周囲にアイテムが3種類獲得" — scattered around the death point, not stacked
           // exactly on top of each other
@@ -1688,7 +1761,32 @@ function tick(room) {
       return true;
     });
 
-    if (room.storyCoop) {
+    if (room.mobWaveActive) {
+      // Mob wave mini-game win/loss: cleared once all MOB_WAVE_COUNT grunts have both been
+      // spawned and killed; failed if every human (non-boss) player dies first. Deliberately
+      // does NOT touch room.matchWins/MATCH_WIN_TARGET — a wave isn't a best-of-3 round, it's
+      // a gate between two boss rounds — and deliberately leaves room.mobWaveActive true even
+      // after setting phase 'finished', since the rematch handler is the sole place that
+      // reads (and then clears) it to tell "we just finished a wave" apart from "we just
+      // finished a boss round".
+      const allPlayers = [...room.players.values()];
+      const boss = allPlayers.find((pl) => pl.isBoss);
+      const humans = allPlayers.filter((pl) => !pl.isBoss);
+      const humansDead = humans.length > 0 && humans.every((pl) => !pl.alive);
+      const waveCleared = room.mobWaveSpawned >= MOB_WAVE_COUNT && room.monsters.filter((m) => m.wave).length === 0;
+      if (humansDead) {
+        room.phase = 'finished';
+        room.winnerId = boss ? boss.id : null;
+        room.matchOver = true;
+        room.matchWinnerId = boss ? boss.id : null;
+      } else if (waveCleared) {
+        room.phase = 'finished';
+        const rep = humans[0];
+        room.winnerId = rep ? rep.id : null;
+        room.matchOver = true;
+        room.matchWinnerId = rep ? rep.id : null;
+      }
+    } else if (room.storyCoop) {
       // 3-player win condition: the round ends when either the whole boss side or the
       // whole ally side is wiped out — "the other 2 total players, one of them dead" no
       // longer uniquely identifies a winner once there are 3 players in the room, so this
@@ -1817,6 +1915,11 @@ function broadcastState(room) {
     storyComplete: room.storyComplete,
     exBossActive: room.exBossActive,
     storyCoop: room.storyCoop,
+    mobWaveActive: room.mobWaveActive,
+    mobWaveIndex: room.mobWaveIndex,
+    mobWaveCount: MOB_WAVE_COUNT,
+    mobWaveSpawned: room.mobWaveSpawned,
+    mobWaveKilled: room.mobWaveKilled,
   };
   const msg = JSON.stringify(state);
   for (const ws of room.players.keys()) {
@@ -1925,16 +2028,44 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
           if (room.isCpuMatch) {
             const cpuPlayer = room.players.get(room.cpuToken);
             const humanWon = cpuPlayer && room.matchWinnerId !== cpuPlayer.id;
-            if (humanWon) {
-              if (room.storyStage < STORY_BOSSES.length) {
+            if (room.mobWaveActive) {
+              // Just finished the grunt wave mini-game (clear or fail) — clear the flag and
+              // either advance to the next boss or restart the story from stage 1, mirroring
+              // the existing boss-clear/boss-loss branches below exactly.
+              room.mobWaveActive = false;
+              if (humanWon) {
                 room.storyStage += 1;
                 if (cpuPlayer) {
                   cpuPlayer.name = bossNameForStage(room.storyStage);
                   cpuPlayer.line = bossLineForStage(room.storyStage);
                   cpuPlayer.defeatLine = bossDefeatLineForStage(room.storyStage);
                 }
-                room.cpuState = null; // fresh AI decision cadence for the new boss's params
-                room.pendingStoryIntro = true; // next startCountdown() gets the long wait
+                room.cpuState = null;
+                room.pendingStoryIntro = true;
+              } else {
+                room.storyStage = 1;
+                if (cpuPlayer) {
+                  cpuPlayer.name = bossNameForStage(1);
+                  cpuPlayer.line = bossLineForStage(1);
+                  cpuPlayer.defeatLine = bossDefeatLineForStage(1);
+                }
+                room.cpuState = null;
+                room.storyComplete = false;
+                room.pendingStoryIntro = true;
+              }
+            } else if (humanWon) {
+              if (room.storyStage < STORY_BOSSES.length) {
+                // Just cleared a boss and more stages remain — insert the grunt wave
+                // mini-game before the next boss ("ボス→ミニゲーム→ボス…") instead of
+                // advancing storyStage immediately; storyStage only advances once the wave
+                // is later cleared (see the room.mobWaveActive branch above).
+                room.mobWaveActive = true;
+                room.mobWaveIndex = room.storyStage;
+                room.mobWaveSpawned = 0;
+                room.mobWaveKilled = 0;
+                room.mobWaveNextSpawnAt = 0;
+                room.monsters = [];
+                room.pendingMobWaveIntro = true; // next startCountdown() gets the long wait
               } else {
                 room.storyComplete = true;
               }

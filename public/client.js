@@ -89,6 +89,11 @@
   const bossDefeatName = $('#bossDefeatName');
   const bossDefeatLine = $('#bossDefeatLine');
   const bossVictoryOverlay = $('#bossVictoryOverlay');
+  const waveIntroOverlay = $('#waveIntroOverlay');
+  const waveIntroStage = $('#waveIntroStage');
+  const waveIntroTitle = $('#waveIntroTitle');
+  const waveIntroLine = $('#waveIntroLine');
+  const mobWaveLabel = $('#mobWaveLabel');
   const floatJoystick = $('#floatJoystick');
   const floatJoystickKnob = $('#floatJoystickKnob');
   const fireBtn = $('#fireBtn');
@@ -159,6 +164,17 @@
     { uniform: '#6b5b95', icon: '🔪', image: 'images/bosses/boss4.jpg', facePos: 'center top' }, // stage4: knife specialist, stealthy purple
     { uniform: '#ffd35b', icon: '👑', image: 'images/bosses/boss5.jpg', facePos: 'center top' }, // stage5: battlefield champion, gold
   ];
+  // Flavor text for the between-boss grunt-wave mini-game, indexed by mobWaveIndex-1 (1-4,
+  // matching game.js's MOB_WAVE_TUNING) — ties each wave to the boss just defeated and hints
+  // at the escalating threat of the next one. Purely client-side display text (the server has
+  // no reason to know or broadcast it — see mobWaveIndex's comment in game.js's broadcastState).
+  const MOB_WAVE_NARRATION = [
+    '見習い兵士を退けた——しかし戦場はまだ静まらない。散った雑兵たちが怒りにまかせて群がってくる。次なる強敵「歴戦の傭兵」にたどり着くには、まずこの群れを突破せねばならない。',
+    '歴戦の傭兵を討ち果たした。だが奥にはさらに統率の取れた部隊が控えている——その先鋒たちが殺気を纏って押し寄せる。「精鋭部隊長」のもとへ進むには、この群れを蹴散らせ。',
+    '精鋭部隊長を倒した。しかし静寂の奥から、闇に紛れた気配が次々と現れる。「血刃の暗殺者」が放った刺客たちだ。一体でも見逃せば、闇に沈められる。',
+    '血刃の暗殺者を破った。だが最後の壁——「戦場の覇者」を守る精鋭たちが、総力を挙げて立ちはだかる。ここが正念場だ。すべてを薙ぎ払い、頂点への道を切り開け。',
+  ];
+
   function shadeColor(hex, factor) {
     const n = parseInt(hex.slice(1), 16);
     const r = Math.round(((n >> 16) & 0xff) * factor);
@@ -252,9 +268,11 @@
   let storyStage = 1;
   let storyStageCount = 5;
   let introShownForStage = 0; // last storyStage the boss-intro card was shown for, so it fires once per stage, not once per round
+  let introShownForWave = 0; // mirrors introShownForStage, keyed by mobWaveIndex instead
   let bossIntroHideTimer = null;
   let bossDefeatHideTimer = null;
   let bossVictoryHideTimer = null;
+  let waveIntroHideTimer = null;
   let gameOverRetryReady = false; // flips true only after gameOverTimer elapses — keeps the
     // retry button hidden for a dramatic beat instead of appearing the instant the boss wins
   let gameOverTimer = null;
@@ -415,8 +433,11 @@
     laserBeams = [];
     shockwaves = [];
     introShownForStage = 0;
+    introShownForWave = 0;
     if (bossIntroHideTimer) { clearTimeout(bossIntroHideTimer); bossIntroHideTimer = null; }
     bossIntroOverlay.classList.add('hidden');
+    if (waveIntroHideTimer) { clearTimeout(waveIntroHideTimer); waveIntroHideTimer = null; }
+    waveIntroOverlay.classList.add('hidden');
     if (bossDefeatHideTimer) { clearTimeout(bossDefeatHideTimer); bossDefeatHideTimer = null; }
     bossDefeatOverlay.classList.add('hidden');
     if (bossVictoryHideTimer) { clearTimeout(bossVictoryHideTimer); bossVictoryHideTimer = null; }
@@ -584,6 +605,23 @@
       bossIntroOverlay.classList.add('hidden');
       bossIntroHideTimer = null;
     }, 5000); // ~5s dramatic pause before battle, per explicit request
+  }
+
+  // Pre-wave dramatic pause — same timing/mechanism as showBossIntro (5s, matches server's
+  // STORY_INTRO_WAIT_MS via pendingMobWaveIntro), but shows fixed narration text instead of a
+  // specific boss's portrait/line, since a grunt swarm has no single character to introduce.
+  function showWaveIntro(index) {
+    introShownForWave = index;
+    const i = Math.min(Math.max(1, index), MOB_WAVE_NARRATION.length) - 1;
+    waveIntroStage.textContent = `第${index}面 突破イベント`;
+    waveIntroTitle.textContent = '⚔️ ザコモンスター襲来！';
+    waveIntroLine.textContent = MOB_WAVE_NARRATION[i];
+    waveIntroOverlay.classList.remove('hidden');
+    if (waveIntroHideTimer) clearTimeout(waveIntroHideTimer);
+    waveIntroHideTimer = setTimeout(() => {
+      waveIntroOverlay.classList.add('hidden');
+      waveIntroHideTimer = null;
+    }, 5000);
   }
 
   // The very first beat after defeating a story boss — a brief, purely triumphant "勝利！！"
@@ -872,9 +910,14 @@
       // its pre-EX value (5), so it needs its own guard key ('EX', a string — always !==
       // whatever numeric stage was last shown) rather than reusing the plain stage number.
       const introKey = state.exBossActive ? 'EX' : state.storyStage;
-      if (state.phase === 'countdown' && state.storyStage && introKey !== introShownForStage) {
+      if (state.phase === 'countdown' && state.storyStage && !state.mobWaveActive && introKey !== introShownForStage) {
         const boss = state.players.find((p) => p.isBoss);
         if (boss) showBossIntro(state.storyStage, boss, state.exBossActive);
+      }
+      // Grunt-wave narration — same "fires once per transition, gated by a remembered key"
+      // pattern as the boss intro above, keyed by mobWaveIndex instead of storyStage.
+      if (state.phase === 'countdown' && state.mobWaveActive && state.mobWaveIndex !== introShownForWave) {
+        showWaveIntro(state.mobWaveIndex);
       }
     }
 
@@ -907,7 +950,11 @@
         // since this whole block only runs on the 'finished' phase-transition edge, not on
         // every repeated broadcast while sitting in that phase.
         if (isCpuMatch && state.matchOver && humanSideWon(state, state.matchWinnerId)) {
-          recordBossDefeated(storyStage, !!state.storyCoop);
+          // A wave-clear also reaches matchOver/humanSideWon (see game.js's mobWaveActive
+          // win-check), but it isn't a boss kill — the boss was already recorded when the
+          // *previous* round (the actual boss fight) finished, so skip re-recording here and
+          // skip the boss's defeat-quote card below (there's no boss on screen to have said it).
+          if (!state.mobWaveActive) recordBossDefeated(storyStage, !!state.storyCoop);
           if (state.exBossActive) recordExBossDefeated();
           // The "勝利！！" flash always plays first, before anything stage-specific — its own
           // fanfare sfx overrides the plain playWin() played just above for this same
@@ -925,7 +972,7 @@
           // Chained through showBossVictory's onDone rather than fired in parallel, so the
           // two dramatic pauses play out one after another, not stacked/racing.
           showBossVictory(() => {
-            if (storyStage < storyStageCount) {
+            if (!state.mobWaveActive && storyStage < storyStageCount) {
               const boss = state.players.find((p) => p.isBoss);
               if (boss) showBossDefeat(storyStage, boss);
             }
@@ -1875,6 +1922,7 @@
       for (const m of latestState.monsters || []) drawMonster(m, t);
       for (const b of latestState.bullets) drawBullet(b);
       for (const p of latestState.players) {
+        if (latestState.mobWaveActive && p.isBoss) continue; // inert/off-screen during a wave
         drawShip(p, p.id === myId);
         if (p.clone) drawCloneShip(p, p.id === myId);
       }
@@ -1994,7 +2042,11 @@
     hpTheirs.classList.toggle('color-boss', !isCoop);
     hpTheirs.classList.toggle('color-ally', isCoop);
     if (topRight) {
-      nameTheirs.textContent = topRight.name;
+      // The boss stays present-but-inert (untargetable, full hp) during a mob wave — see
+      // game.js's mobWaveActive damage exclusion — so its hp bar never actually moves here;
+      // swapping just the label to "討伐中" reads as "on hold" instead of a stray full-hp
+      // boss bar that looks like nothing's happening.
+      nameTheirs.textContent = state.mobWaveActive && !isCoop ? 'ザコモンスター討伐中…' : topRight.name;
       hpTheirs.style.width = `${hpPct(topRight)}%`;
       hpTheirs.classList.toggle('house-healing', topRight.hp < (topRight.maxHp || 100) && isInsideAnyHouse(topRight.x, topRight.y));
       // Only ever relevant for the ally slot (co-op) — the boss "downed" is just the round
@@ -2011,7 +2063,7 @@
     allyHpBlock.classList.toggle('hidden', !isCoop);
     if (isCoop) {
       if (boss) {
-        nameAlly.textContent = boss.name;
+        nameAlly.textContent = state.mobWaveActive ? 'ザコモンスター討伐中…' : boss.name;
         hpAlly.style.width = `${hpPct(boss)}%`;
         hpAlly.classList.toggle('house-healing', boss.hp < (boss.maxHp || 100) && isInsideAnyHouse(boss.x, boss.y));
       } else {
@@ -2036,6 +2088,13 @@
       storyStageLabel.classList.remove('hidden');
     } else {
       storyStageLabel.classList.add('hidden');
+    }
+    if (state.mobWaveActive) {
+      const remaining = Math.max(0, (state.mobWaveCount || 0) - (state.mobWaveKilled || 0));
+      mobWaveLabel.textContent = `⚔️ 残りザコ ${remaining}/${state.mobWaveCount || 0}`;
+      mobWaveLabel.classList.remove('hidden');
+    } else {
+      mobWaveLabel.classList.add('hidden');
     }
 
     const myBombCount = me ? me.bombs || 0 : 0;
@@ -2080,7 +2139,11 @@
       // two endings are mutually exclusive, trueEndingClear takes priority.
       const trueEndingClear = humanWonMatch && exBossActive;
       const finalStageClear = humanWonMatch && storyStage >= storyStageCount && !exBossActive;
-      const stageAdvance = humanWonMatch && storyStage < storyStageCount;
+      // A wave-clear reaches humanWonMatch too (see game.js's mobWaveActive win-check) but
+      // isn't a boss kill, so it gets its own branch below rather than falling into
+      // stageAdvance's boss-defeat-quote-gated flow — there's no boss dialogue to wait on.
+      const waveCleared = humanWonMatch && !!state.mobWaveActive;
+      const stageAdvance = humanWonMatch && !state.mobWaveActive && storyStage < storyStageCount;
 
       rematchBtn.classList.add('hidden');
       storyEndingOverlay.classList.add('hidden');
@@ -2100,6 +2163,11 @@
         if (bossVictoryOverlay.classList.contains('hidden')) trueEndingOverlay.classList.remove('hidden');
       } else if (finalStageClear) {
         if (bossVictoryOverlay.classList.contains('hidden')) storyEndingOverlay.classList.remove('hidden');
+      } else if (waveCleared) {
+        // No boss-defeat-quote card plays for a wave-clear (see handleState's guard), so this
+        // only needs to wait on the "勝利！！" flash itself, not bossDefeatOverlay too.
+        if (bossVictoryOverlay.classList.contains('hidden')) rematchBtn.classList.remove('hidden');
+        rematchBtn.textContent = 'ボスへ進む';
       } else {
         // For a stage-clear specifically, keep rematchBtn hidden until both the "勝利！！"
         // flash AND (chained after it) the boss's defeat line (see showBossDefeat) have each
@@ -2112,13 +2180,16 @@
       }
 
       if (bossWon) {
-        resultBanner.textContent = 'GAME OVER…';
+        resultBanner.textContent = state.mobWaveActive ? 'ザコモンスターの猛攻に敗れた…' : 'GAME OVER…';
         resultBanner.className = 'result-banner result-lose';
       } else if (trueEndingClear) {
         resultBanner.textContent = '🌌 真のエンディング到達！';
         resultBanner.className = 'result-banner result-win';
       } else if (finalStageClear) {
         resultBanner.textContent = '🏆 ストーリークリア！';
+        resultBanner.className = 'result-banner result-win';
+      } else if (waveCleared) {
+        resultBanner.textContent = '⚔️ ザコモンスター全滅！ 突破！';
         resultBanner.className = 'result-banner result-win';
       } else if (stageAdvance) {
         resultBanner.textContent = `ボス撃破！ 第${storyStage}面クリア！`;

@@ -264,6 +264,7 @@
     <div class="room-tag">
       部屋 <b id="roomLabel">----</b>
       <div class="story-stage hidden" id="storyStageLabel"></div>
+      <div class="story-stage wave-progress-label hidden" id="mobWaveLabel"></div>
       <div class="match-score" id="matchScore">0 - 0</div>
     </div>
     <!-- Top-right slot: the boss in every mode except 2P co-op — there it shows the ally
@@ -384,6 +385,18 @@
         <img class="boss-intro-portrait" id="bossDefeatPortrait" src="images/bosses/boss1.jpg" alt="" />
         <div class="boss-intro-name" id="bossDefeatName">見習い兵士</div>
         <div class="boss-intro-line" id="bossDefeatLine">「……」</div>
+      </div>
+    </div>
+
+    <!-- Between-boss mini-game narration: shown just before the grunt wave starts (and, with
+         a distinct message, is what greets the player right after it's cleared — both reuse
+         .boss-intro-overlay's layout/timing but with no portrait, since this is flavor text
+         about the coming/just-fought swarm, not a specific character. -->
+    <div class="boss-intro-overlay wave-intro-overlay hidden" id="waveIntroOverlay">
+      <div class="boss-intro-card">
+        <div class="boss-intro-stage" id="waveIntroStage">ザコモンスター襲来</div>
+        <div class="wave-intro-title" id="waveIntroTitle">⚔️</div>
+        <div class="boss-intro-line" id="waveIntroLine">「……」</div>
       </div>
     </div>
 
