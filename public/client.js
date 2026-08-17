@@ -367,6 +367,14 @@
     if (onTitleScreen) window.GameAudio.startTitleBgm();
   }
 
+  // Gunshot feedback for the pre-game selection buttons specifically (mode choice, story
+  // 1P/2P choice, create/join a room) — reuses the same playShoot() SFX the in-match fire
+  // button uses, per explicit request that these "starting the game" buttons sound like a
+  // gunshot rather than the (previously silent) plain click.
+  function playSelectSfx() {
+    if (window.GameAudio) window.GameAudio.playShoot();
+  }
+
   // ---- sound mute toggle ----
   muteBtn.addEventListener('click', () => {
     audioReady();
@@ -508,6 +516,7 @@
 
   modeArenaBtn.addEventListener('click', () => {
     audioReady();
+    playSelectSfx();
     modeSelect.classList.add('hidden');
     lobby.classList.remove('hidden');
   });
@@ -530,6 +539,7 @@
 
   modeStoryBtn.addEventListener('click', () => {
     audioReady();
+    playSelectSfx();
     modeSelect.classList.add('hidden');
     storyIntro.classList.remove('hidden');
     renderStorySilhouettes();
@@ -542,6 +552,8 @@
   });
 
   createBtn.addEventListener('click', () => {
+    audioReady();
+    playSelectSfx();
     const room = randomRoomCode();
     const name = nameInput.value.trim() || 'プレイヤー';
     connect(room, name, null, rouletteToggle.checked);
@@ -602,11 +614,13 @@
   certOverlay.addEventListener('click', (e) => { if (e.target === certOverlay) certOverlay.classList.add('hidden'); });
 
   joinBtn.addEventListener('click', () => {
+    audioReady();
     const room = roomInput.value.trim().toUpperCase();
     if (!room) {
       alert('部屋コードを入力してください');
       return;
     }
+    playSelectSfx();
     const name = nameInput.value.trim() || 'プレイヤー';
     connect(room, name);
   });
@@ -723,7 +737,7 @@
     resetClientState();
     connect(room, name, true, storyRouletteToggle.checked);
   }
-  story1pBtn.addEventListener('click', () => { audioReady(); startStoryMode(); });
+  story1pBtn.addEventListener('click', () => { audioReady(); playSelectSfx(); startStoryMode(); });
   storyRetryBtn.addEventListener('click', () => { audioReady(); startStoryMode(); });
   storyEndingTitleBtn.addEventListener('click', () => { audioReady(); goToTitle(); });
 
@@ -743,6 +757,7 @@
   }
   story2pBtn.addEventListener('click', () => {
     audioReady();
+    playSelectSfx();
     storyIntro.classList.add('hidden');
     story2pLobby.classList.remove('hidden');
   });
@@ -753,6 +768,7 @@
   });
   story2pCreateBtn.addEventListener('click', () => {
     audioReady();
+    playSelectSfx();
     const room = randomRoomCode();
     const name = story2pNameInput.value.trim() || 'プレイヤー';
     connectStory2p(room, name, story2pRouletteToggle.checked);
@@ -764,6 +780,7 @@
       alert('部屋コードを入力してください');
       return;
     }
+    playSelectSfx();
     const name = story2pNameInput.value.trim() || 'プレイヤー';
     connectStory2p(room, name, story2pRouletteToggle.checked);
   });
