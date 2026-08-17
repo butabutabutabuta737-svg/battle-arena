@@ -31,10 +31,11 @@ html, body {
   padding: 24px;
 }
 
-/* Title screen background art — fills the full mobile viewport (100dvh, falling back to vh
-   for browsers without dvh support) rather than just the .screen div's own content height, so
-   it never letterboxes short of the actual screen edges on phones with dynamic browser UI. */
-#modeSelect {
+/* Title + story-mode-intro background art — fills the full mobile viewport (100dvh, falling
+   back to vh for browsers without dvh support) rather than just the .screen div's own content
+   height, so it never letterboxes short of the actual screen edges on phones with dynamic
+   browser UI. Shared by both screens for a consistent pre-battle look. */
+#modeSelect, #storyIntro {
   min-height: 100vh;
   min-height: 100dvh;
   background-image: url('images/title-bg.jpg');
@@ -44,7 +45,7 @@ html, body {
 /* Card stays as a visible "glass" panel (not fully transparent) so the title/button text has
    enough contrast to read against the busy artwork — a frosted dark panel plus blur, rather
    than the plain opaque .card default, so the art is still clearly visible through it. */
-#modeSelect .card {
+#modeSelect .card, #storyIntro .card {
   background: rgba(8, 10, 22, 0.62);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
