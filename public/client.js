@@ -48,6 +48,7 @@
   const ctx = canvas.getContext('2d');
   const hpMine = $('#hpMine');
   const hpTheirs = $('#hpTheirs');
+  const hpBlockTheirs = $('#hpBlockTheirs');
   const hpBonusMine = $('#hpBonusMine');
   const hpBonusTheirs = $('#hpBonusTheirs');
   const hpBonusAlly = $('#hpBonusAlly');
@@ -2113,29 +2114,23 @@
 
   const STORY_BASE_MAX_HP = 100; // must match game.js's MAX_HP — the un-leveled baseline
 
-  function hpPct(p) {
-    return (p.hp / (p.maxHp || 100)) * 100;
-  }
-
-  // Splits a player's HP bar into a normal fill (fillEl, unchanged from before) plus a
-  // gold "level bonus" overlay (bonusEl) covering whatever slice of the CURRENT fill sits
-  // beyond the un-leveled base 100 hp — see .hp-bar-bonus in style.css. The bar's own length
-  // never changes (still just hp/maxHp of whatever maxHp currently is); only the *coloring*
-  // of an already-filled portion changes. A player who hasn't leveled (maxHp <= base) or a
-  // boss (which never levels) simply gets a permanently-zero-width bonus segment.
+  // fillEl always represents the un-leveled base 0-100 hp on the bg track's normal 100%-width
+  // scale, exactly like before story-mode leveling existed. bonusEl (see .hp-bar-bonus in
+  // style.css, anchored at left:100% of that same track) extends the bar further right by
+  // however much hp exceeds that base 100, on the *same* per-hp scale — so the bar's total
+  // rendered length actually grows with a level-up (a level-10 character at full health is
+  // visibly ~2x the original track's length) instead of just recoloring part of a fixed-length
+  // bar, which didn't read as an actual increase. A player who hasn't leveled (maxHp<=base) or
+  // a boss (which never gains story-mode levels) simply never has hp exceed the base, so
+  // bonusEl's width collapses to 0 and the display is pixel-identical to the original bar.
   function renderHpBar(fillEl, bonusEl, p) {
     const maxHp = (p && p.maxHp) || STORY_BASE_MAX_HP;
-    const hp = Math.max(0, (p && p.hp) || 0);
-    const totalPct = Math.min(100, (hp / maxHp) * 100);
-    fillEl.style.width = `${totalPct}%`;
+    const hp = Math.max(0, Math.min((p && p.hp) || 0, maxHp));
+    const baseHp = Math.min(hp, STORY_BASE_MAX_HP);
+    fillEl.style.width = `${(baseHp / STORY_BASE_MAX_HP) * 100}%`;
     if (!bonusEl) return;
-    if (maxHp > STORY_BASE_MAX_HP && hp > STORY_BASE_MAX_HP) {
-      const startPct = (STORY_BASE_MAX_HP / maxHp) * 100;
-      bonusEl.style.left = `${startPct}%`;
-      bonusEl.style.width = `${Math.max(0, totalPct - startPct)}%`;
-    } else {
-      bonusEl.style.width = '0%';
-    }
+    const bonusHp = Math.max(0, hp - STORY_BASE_MAX_HP);
+    bonusEl.style.width = `${(bonusHp / STORY_BASE_MAX_HP) * 100}%`;
   }
 
   function updateHud(state) {
@@ -2182,10 +2177,18 @@
       hpBonusTheirs.style.width = '0%';
       downedTheirs.classList.add('hidden');
     }
+    // The mob-wave mini-game is cleared by kill count, not by beating the boss down — its hp
+    // bar is irrelevant (and stays static/full the whole time, since the boss is untargetable
+    // during a wave, see game.js) — so hide it entirely for the duration, rather than just
+    // relabeling it, per explicit request. Only applies where this slot actually shows the
+    // boss: in 2P co-op, hpTheirs shows the ally (a human teammate), who stays relevant.
+    hpBlockTheirs.classList.toggle('hidden', !isCoop && !!state.mobWaveActive);
     renderBuffBadges(buffMine, me);
     renderBuffBadges(buffTheirs, topRight);
 
-    allyHpBlock.classList.toggle('hidden', !isCoop);
+    // allyHpBlock shows the boss in co-op (see index.html's comment on it) — hidden outside
+    // co-op as before, and now also hidden during a wave for the same reason as hpBlockTheirs.
+    allyHpBlock.classList.toggle('hidden', !isCoop || !!state.mobWaveActive);
     if (isCoop) {
       if (boss) {
         nameAlly.textContent = state.mobWaveActive ? 'ザコモンスター討伐中…' : boss.name;

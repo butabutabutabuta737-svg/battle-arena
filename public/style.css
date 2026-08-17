@@ -13,6 +13,13 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
+  /* Plain 100% height chains up to the viewport, but iOS Safari (and some Android browsers)
+     historically size that as if browser chrome (address bar etc.) were hidden — the actual
+     visible area can be shorter, which is exactly the kind of thing that made the top HUD
+     read as "見切れる" (clipped) on some OSes but not others. 100dvh (dynamic viewport height)
+     tracks the real, currently-visible height instead; falls back to plain 100% on browsers
+     that don't support dvh. */
+  min-height: 100dvh;
   overscroll-behavior: none;
   background: radial-gradient(circle at 50% 0%, #1b2140 0%, #0a0d1c 70%);
   color: #eef1ff;
@@ -617,7 +624,12 @@ button:active {
   height: 11px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.1);
-  overflow: hidden;
+  /* The bg track's own footprint is the "original HP meter" and never resizes — per explicit
+     request, it stays exactly as it always was. overflow:visible (was hidden) is what lets
+     .hp-bar-bonus (below) actually extend past its right edge instead of being invisibly
+     clipped there — a same-length recolored bar didn't read as "HP actually increased", so
+     the bonus now genuinely makes the total bar longer. */
+  overflow: visible;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 .hp-bar-fill {
@@ -628,22 +640,25 @@ button:active {
   border-radius: 6px;
   transition: width 0.12s linear;
 }
-/* Story-mode level bonus: the bar's own length never changes (still just hp/maxHp of
-   whatever maxHp currently is), but the slice of it that's owed to the level-up HP bonus
-   (i.e. beyond the un-leveled base 100) renders in this distinct gold tone, layered on top
-   of .hp-bar-fill at the same spot — see renderHpBar() in client.js for the math. Width/left
-   default to 0 so it's invisible whenever a player is unleveled or a bar belongs to the boss
-   (who never levels). */
+/* Story-mode level bonus, redesigned to visibly extend the bar rather than recolor part of
+   a fixed-length one (see renderHpBar() in client.js): .hp-bar-fill only ever represents the
+   un-leveled base 0-100 hp, scaled to the bg track's normal 100%-width scale exactly as
+   before. This element picks up starting at the track's own right edge (left:100%) and
+   extends further right by however much hp exceeds that base 100 — a level-10 character at
+   full health ends up with a bar that's visibly ~2x the original track's length, and a boss
+   (whose maxHp never comes from story leveling) simply never gets a nonzero width here. Once
+   hp drops back to <=100 (whether from damage or simply not being leveled), width collapses
+   to 0 and the display reverts to exactly the plain original bar. */
 .hp-bar-bonus {
   position: absolute;
   top: 0;
-  left: 0;
+  left: 100%;
   width: 0;
   height: 100%;
   border-radius: 6px;
   background: linear-gradient(90deg, #ffd35b, #fff3b0);
   box-shadow: 0 0 10px rgba(255, 211, 91, 0.85);
-  transition: left 0.12s linear, width 0.12s linear;
+  transition: width 0.12s linear;
   pointer-events: none;
 }
 /* Color is a class, not a fixed per-id rule — which color a given HP bar slot needs depends
@@ -784,6 +799,10 @@ button:active {
   border-radius: 14px;
   text-align: center;
   padding: 20px;
+  /* Same fix as .boss-intro-overlay below: this box's height is pinned to the rendered
+     canvas height, which can be shorter than its content on a short viewport — scrollable
+     instead of silently clipping the banner/button. */
+  overflow-y: auto;
 }
 
 .overlay .status-big {
@@ -872,6 +891,13 @@ button:active {
   align-items: center;
   gap: 8px;
   margin: auto;
+  /* align-items:center (not stretch) lets each child size to its own natural/intrinsic width
+     — fine for short labels, but a wide single-line child (no max-width of its own) could
+     render wider than the viewport with nothing forcing it to wrap, overflowing equally past
+     both the left and right screen edges since the whole card is horizontally centered. This
+     caps the card itself so nothing inside it can do that. */
+  max-width: 100%;
+  min-width: 0;
   animation: boss-intro-pop 0.45s cubic-bezier(.2,1.4,.4,1);
 }
 .boss-intro-stage {
@@ -956,6 +982,11 @@ button:active {
   line-height: 1.3;
   word-break: keep-all;
   overflow-wrap: break-word;
+  /* Without an explicit width cap, a flex child with align-items:center has nothing forcing
+     it to wrap at all — it just renders at its natural single-line width, which on a narrow
+     phone can exceed the viewport, with the excess split invisibly past both the left and
+     right screen edges (reported as the wave banner's edge text being unreadable). */
+  max-width: 100%;
   filter: drop-shadow(0 0 18px rgba(255, 122, 74, 0.7));
   animation: boss-intro-icon-pulse 1.2s ease-in-out infinite;
 }
@@ -1013,6 +1044,10 @@ button:active {
   padding: 24px;
   text-align: center;
   animation: game-over-fade 0.6s ease;
+  /* Same fix as .boss-intro-overlay: this box's height is pinned to the rendered canvas
+     height, which can be shorter than the card on a short viewport — scrollable + margin:auto
+     on the card (below) so nothing (including the retry button) is ever unreachable. */
+  overflow-y: auto;
 }
 .game-over-card {
   display: flex;
@@ -1020,6 +1055,7 @@ button:active {
   align-items: center;
   gap: 18px;
   max-width: 460px;
+  margin: auto;
   animation: game-over-shake 0.5s ease;
 }
 .game-over-title {
@@ -1063,11 +1099,19 @@ button:active {
   padding: 24px;
   text-align: center;
   animation: boss-intro-fade 0.5s ease;
+  /* This box's height is pinned to the rendered canvas height (an absolutely-positioned
+     inset:0 child never grows its .arena-wrap parent's own height) — the story-ending card's
+     long paragraph + tag/title + a 2-button row is real content that can be taller than a
+     short phone viewport's canvas, which was silently clipping the "戦場の深部へ進む" button
+     off the bottom/top on some devices, making the EX stage look unreachable. Scrollable +
+     margin:auto on the card (below) fixes it the same way as .boss-intro-overlay. */
+  overflow-y: auto;
 }
 .story-ending-card {
   display: flex;
   flex-direction: column;
   align-items: center;
+  margin: auto;
   gap: 16px;
   max-width: 520px;
   animation: boss-intro-pop 0.6s cubic-bezier(.2,1.4,.4,1);
@@ -1108,6 +1152,7 @@ button:active {
   padding: 24px;
   text-align: center;
   animation: boss-intro-fade 0.5s ease;
+  overflow-y: auto;
 }
 .true-ending-card {
   display: flex;
@@ -1115,6 +1160,7 @@ button:active {
   align-items: center;
   gap: 16px;
   max-width: 540px;
+  margin: auto;
   animation: boss-intro-pop 0.6s cubic-bezier(.2,1.4,.4,1);
 }
 .true-ending-tag {

@@ -1656,6 +1656,7 @@ function tick(room) {
       let bestDist = Infinity;
       for (const [, p] of room.players) {
         if (!p.alive) continue;
+        if (room.mobWaveActive && p.isBoss) continue; // boss is inert/untargetable during a wave — wave mobs only ever chase the human(s)
         const d = Math.hypot(p.x - monster.x, p.y - monster.y);
         if (d < bestDist) { bestDist = d; target = p; }
       }
@@ -1727,6 +1728,7 @@ function tick(room) {
         // the chicken is purely an evasion target — no threat, no contact damage at all
         for (const [pws, p] of room.players) {
           if (!p.alive) continue;
+          if (room.mobWaveActive && p.isBoss) continue; // boss is inert/untargetable during a wave
           const d = Math.hypot(p.x - monster.x, p.y - monster.y);
           if (d < PLAYER_RADIUS + radius) {
             const last = monster.lastHit[p.id] || 0;
