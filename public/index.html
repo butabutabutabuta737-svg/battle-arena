@@ -19,8 +19,11 @@
 <button class="home-btn hidden" id="homeBtn" title="タイトルに戻る">🏠</button>
 
 <div id="modeSelect" class="screen">
-  <div class="card">
-    <h1>⚔️ 戦場の狼達</h1>
+  <!-- No on-screen <h1> here on purpose — the title screen's background art (see style.css's
+       #modeSelect background-image) already has "戦場の狼達" baked into the artwork itself,
+       so a second text title would be redundant. .title-screen-card nudges the card down
+       instead (see style.css) so it visually balances under the image's own logo. -->
+  <div class="card title-screen-card">
     <p class="subtitle">2人対戦のリアルタイム弾よけバトルゲーム。まずは遊び方を選んでください。</p>
 
     <div class="mode-select-row">

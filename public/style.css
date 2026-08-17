@@ -34,13 +34,27 @@ html, body {
 /* Title + story-mode-intro + real-time-arena-lobby background art — fills the full mobile
    viewport (100dvh, falling back to vh for browsers without dvh support) rather than just the
    .screen div's own content height, so it never letterboxes short of the actual screen edges
-   on phones with dynamic browser UI. Shared by all three pre-battle screens for a consistent look. */
+   on phones with dynamic browser UI. */
 #modeSelect, #storyIntro, #lobby {
   min-height: 100vh;
   min-height: 100dvh;
-  background-image: url('images/title-bg.jpg');
   background-size: cover;
   background-position: center top;
+}
+/* Title screen only gets its own art with the "戦場の狼達" logo baked directly into the
+   image (see the removed <h1> in index.html) — the other two screens keep the plain artwork
+   since they still show their own on-screen heading text. */
+#modeSelect {
+  background-image: url('images/title-bg-logo.jpg');
+}
+#storyIntro, #lobby {
+  background-image: url('images/title-bg.jpg');
+}
+/* Nudges the card down from dead-center so it sits clear of the logo/title text baked into
+   the top of the title art instead of overlapping it — balances the screen now that the
+   on-screen <h1> is gone (the image supplies the title on its own). */
+.title-screen-card {
+  margin-top: 12vh;
 }
 /* Card stays as a visible "glass" panel (not fully transparent) so the title/button text has
    enough contrast to read against the busy artwork — a frosted dark panel plus blur, rather
