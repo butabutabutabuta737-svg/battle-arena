@@ -666,16 +666,21 @@ button:active {
 /* Story-mode level bonus, redesigned to visibly extend the bar rather than recolor part of
    a fixed-length one (see renderHpBar() in client.js): .hp-bar-fill only ever represents the
    un-leveled base 0-100 hp, scaled to the bg track's normal 100%-width scale exactly as
-   before. This element picks up starting at the track's own right edge (left:100%) and
-   extends further right by however much hp exceeds that base 100 — a level-10 character at
-   full health ends up with a bar that's visibly ~2x the original track's length, and a boss
+   before. This element picks up starting just before the track's own right edge and extends
+   further right by however much hp exceeds that base 100 — a level-10 character at full
+   health ends up with a bar that's visibly ~2x the original track's length, and a boss
    (whose maxHp never comes from story leveling) simply never gets a nonzero width here. Once
    hp drops back to <=100 (whether from damage or simply not being leveled), width collapses
-   to 0 and the display reverts to exactly the plain original bar. */
+   to 0 and the display reverts to exactly the plain original bar. left is deliberately
+   `100% - 8px`, not a flush `100%` — both segments independently have border-radius:6px on
+   all four corners, so butting them exactly edge-to-edge left a visible dip/seam where the
+   fill's rounded right corner met the bonus's rounded left corner instead of reading as one
+   continuous bar; overlapping the bonus back over the last few px of the fill (painting on
+   top, since it's the later sibling) hides that seam under the bonus's own flat body. */
 .hp-bar-bonus {
   position: absolute;
   top: 0;
-  left: 100%;
+  left: calc(100% - 8px);
   width: 0;
   height: 100%;
   border-radius: 6px;
@@ -921,8 +926,15 @@ button:active {
   /* align-items:center (not stretch) lets each child size to its own natural/intrinsic width
      — fine for short labels, but a wide single-line child (no max-width of its own) could
      render wider than the viewport with nothing forcing it to wrap, overflowing equally past
-     both the left and right screen edges since the whole card is horizontally centered. This
-     caps the card itself so nothing inside it can do that. */
+     both the left and right screen edges since the whole card is horizontally centered.
+     max-width:100% alone left this as a fit-content box with only an upper *cap* — a
+     percentage max-width on a *descendant* (.wave-intro-title, .boss-intro-line) then has to
+     resolve against that still-fit-content (not yet definite) box, which is exactly the kind
+     of nested-percentage-in-shrink-to-fit case browsers are known to disagree on. Giving the
+     card an explicit, definite width up front removes the ambiguity entirely — children still
+     center within it via align-items:center as before, this doesn't change how anything that
+     already fit looks. */
+  width: 100%;
   max-width: 100%;
   min-width: 0;
   animation: boss-intro-pop 0.45s cubic-bezier(.2,1.4,.4,1);
@@ -1339,9 +1351,25 @@ button:active {
   line-height: 1.6;
 }
 
+/* Only one of these ever actually renders per device (see the pointer:coarse override below)
+   — showing both PC and touch instructions to everyone was most of what made this element
+   tall enough to get obscured by the fire/sword/bomb buttons on phones. */
+.hint-touch {
+  display: none;
+}
 @media (pointer: coarse) {
   .hint {
-    padding-bottom: 96px;
+    /* Shrunk from 96px now that the text itself is much shorter (touch-only, one short
+       line instead of the full PC+touch string) — still enough clearance for the
+       fire/sword/detonate buttons near the bottom of .arena-wrap, just not as much
+       reserved space as before. */
+    padding-bottom: 56px;
+  }
+  .hint-pc {
+    display: none;
+  }
+  .hint-touch {
+    display: inline;
   }
 }
 

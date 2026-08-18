@@ -436,6 +436,7 @@
     fitArena();
     setTimeout(fitArena, 60);
     setTimeout(fitArena, 300);
+    setTimeout(fitArena, 1200); // catches slower devices/connections still settling fonts/layout well after the first two checks
   }
   window.addEventListener('resize', fitArenaSoon);
   window.addEventListener('orientationchange', fitArenaSoon);
