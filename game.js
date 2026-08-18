@@ -1665,7 +1665,11 @@ function tick(room) {
       let bestDist = Infinity;
       for (const [, p] of room.players) {
         if (!p.alive) continue;
-        if (room.mobWaveActive && p.isBoss) continue; // boss is inert/untargetable during a wave — wave mobs only ever chase the human(s)
+        // In any story-mode room (1P or 2P co-op — not just during the mob-wave mini-game),
+        // monsters are wildlife roaming the battlefield, not the boss's own allies — they
+        // should only ever threaten the human(s), never the boss, whether they're wave mobs
+        // or an ordinary ambient spawn that happened to appear during a ordinary boss round.
+        if (room.isCpuMatch && p.isBoss) continue;
         const d = Math.hypot(p.x - monster.x, p.y - monster.y);
         if (d < bestDist) { bestDist = d; target = p; }
       }
@@ -1737,7 +1741,7 @@ function tick(room) {
         // the chicken is purely an evasion target — no threat, no contact damage at all
         for (const [pws, p] of room.players) {
           if (!p.alive) continue;
-          if (room.mobWaveActive && p.isBoss) continue; // boss is inert/untargetable during a wave
+          if (room.isCpuMatch && p.isBoss) continue; // same story-mode-wide exclusion as the targeting loop above
           const d = Math.hypot(p.x - monster.x, p.y - monster.y);
           if (d < PLAYER_RADIUS + radius) {
             const last = monster.lastHit[p.id] || 0;
@@ -1756,6 +1760,7 @@ function tick(room) {
         let hitAny = false;
         for (const [pws, p] of room.players) {
           if (!p.alive) continue;
+          if (room.isCpuMatch && p.isBoss) continue; // same story-mode-wide exclusion as the targeting/contact loops above — this one had no boss guard at all before
           const d = Math.hypot(p.x - monster.x, p.y - monster.y);
           if (d < GOLD_MONSTER_ATTACK_RANGE) {
             applyDamage(room, pws, p, GOLD_MONSTER_ATTACK_DAMAGE, now);
