@@ -977,6 +977,34 @@ button:active {
   word-break: keep-all;
   overflow-wrap: break-word;
 }
+/* On phones, .boss-intro-overlay's height is pinned to the arena canvas's rendered height,
+   which on a typical portrait phone is much shorter than the card's natural content height
+   (stage label + 140x175 portrait + name + line, plus gaps/padding, ~300px+). overflow-y:auto
+   was meant to let it scroll into view, but the overlay is short enough that the card content
+   overflows past its visible bottom edge with no scroll indicator, silently clipping most of
+   .boss-intro-line — the box's top ~10px sliver shows but the セリフ text itself falls below
+   the fold (confirmed via a Playwright iPhone-13-viewport reproduction: line.bottom exceeded
+   the overlay's clipped bottom by ~37-57px). Shrinking the card on touch devices (a reasonable
+   phone proxy, consistent with .hint-touch's existing pointer:coarse usage above) keeps the
+   whole card comfortably within a short viewport instead of relying on scroll discovery. */
+@media (pointer: coarse) {
+  .boss-intro-overlay {
+    padding: 12px;
+  }
+  .boss-intro-card {
+    gap: 5px;
+  }
+  .boss-intro-portrait {
+    width: 92px;
+    height: 115px;
+  }
+  .boss-intro-name {
+    font-size: 20px;
+  }
+  .boss-intro-line {
+    padding: 8px 14px;
+  }
+}
 @keyframes boss-intro-fade {
   0% { opacity: 0; }
   100% { opacity: 1; }
