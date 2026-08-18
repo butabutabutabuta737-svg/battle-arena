@@ -417,7 +417,11 @@
       visibleSiblings++;
     }
     usedHeight += gap * Math.max(0, visibleSiblings - 1);
-    const availableHeight = Math.max(160, viewportH - usedHeight - 6);
+    // Slightly larger safety margin than a bare 6px — OS/browser-chrome quirks (address bar
+    // show/hide, safe-area insets not fully reflected in visualViewport on some browsers)
+    // mean the real available space can come in a bit smaller than this calculation expects;
+    // erring on the side of a slightly smaller arena is far better than clipping the HUD.
+    const availableHeight = Math.max(160, viewportH - usedHeight - 16);
     const availableWidth = Math.max(240, viewportW - padLeft - padRight);
     const ratio = 800 / 600;
     let w = Math.min(800, availableWidth);
@@ -945,7 +949,13 @@
   let joystickOrigin = { x: 0, y: 0 };
 
   function isButtonTouch(el) {
-    return !!(el && el.closest && el.closest('button'));
+    // Also excludes the top HUD (.hud) — dragging from your own HP bar to move was never a
+    // real use pattern anyway, and this doubles as a genuine scroll-fallback escape hatch:
+    // #game's touch-action:none + this handler's own preventDefault() below are what actually
+    // block native touch-scroll (not the CSS property alone), so a touch that never reaches
+    // preventDefault (because it started on the excluded HUD) can still scroll the page
+    // normally if fitArena()'s sizing is ever off by enough to matter on some OS/browser.
+    return !!(el && el.closest && (el.closest('button') || el.closest('.hud')));
   }
 
   function joystickUpdate(clientX, clientY) {
