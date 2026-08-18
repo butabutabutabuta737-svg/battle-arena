@@ -555,6 +555,14 @@ button:active {
   justify-content: flex-start;
   gap: 14px;
   padding: 18px;
+  /* Extra top-only padding, on top of the plain 18px above — some phone OS/browser
+     combinations report a "safe" viewport that's actually still partly covered by floating
+     browser chrome (a compact/translucent address bar that overlays content instead of
+     pushing it down, common on some Android browsers) that env(safe-area-inset-top) doesn't
+     know about at all (that only covers notches/status bars). Pushing the HUD down by a fixed
+     buffer clears that dead zone; per explicit request, using up some of the slack that was
+     otherwise sitting unused at the bottom of the screen. */
+  padding-top: max(18px, env(safe-area-inset-top) + 28px);
   position: relative;
   touch-action: none;
 }
@@ -563,7 +571,13 @@ button:active {
    on small screens directly reclaims real width for the "battle stage", not just cosmetic. */
 @media (max-width: 480px) {
   #game {
-    padding: 8px;
+    /* Individual sides, not the padding:8px shorthand — that would silently reset padding-top
+       back down and undo the extra top clearance above, on exactly the narrow-phone screens
+       that most need it. */
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-bottom: 8px;
+    padding-top: max(8px, env(safe-area-inset-top) + 28px);
     gap: 8px;
   }
 }
@@ -798,6 +812,10 @@ button:active {
 .overlay {
   position: absolute;
   inset: 0;
+  z-index: 5; /* explicit, and deliberately below .boss-intro-overlay's 30 — #waitOverlay
+    (this class) stays visible for the whole 'countdown' phase, at the same time the boss-
+    intro card is also shown on top of it; both are position:absolute siblings so paint order
+    otherwise depends on implicit stacking rules that shouldn't be left to chance here. */
   display: flex;
   align-items: center;
   justify-content: center;
