@@ -508,6 +508,11 @@
 
     ws.addEventListener('close', () => {
       if (window.GameAudio) window.GameAudio.stopBgm();
+      // An intentional close (goToTitle()/a fresh connect()) already runs resetClientState(),
+      // which cancels this — but an unexpected drop (server hiccup, network loss) reaches
+      // this path without ever calling it, so a roulette spin still mid-flight would
+      // otherwise keep ticking in the background under the "connection lost" message.
+      if (rouletteSpinTimer) { clearTimeout(rouletteSpinTimer); rouletteSpinTimer = null; }
       if (leavingIntentionally) return;
       statusLabel.textContent = '接続が切れました。ページを再読み込みしてください。';
       waitOverlay.classList.remove('hidden');
@@ -548,6 +553,15 @@
     lastStoryLevel = 1;
     if (levelUpHideTimer) { clearTimeout(levelUpHideTimer); levelUpHideTimer = null; }
     levelUpToast.classList.add('hidden');
+    // The roulette reveal chains itself via a recursive setTimeout (up to 18 steps, ~2.5s
+    // total) with its own tick sound each step — every other in-flight SFX timer here gets
+    // cancelled on reset, but this one didn't, so a spin still mid-flight when the match
+    // ends and the player navigates away (home button, story-ending transition, a fresh
+    // connection) kept firing its tick sound in the background with nothing left on screen
+    // still showing the spin, reading as "the sound effect won't stop".
+    if (rouletteSpinTimer) { clearTimeout(rouletteSpinTimer); rouletteSpinTimer = null; }
+    rouletteReel.classList.remove('spinning');
+    rouletteBlock.classList.add('hidden');
   }
 
   function goToTitle() {
