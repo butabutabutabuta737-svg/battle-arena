@@ -809,7 +809,16 @@ const STORY_BOSSES = [
   { name: '見習い兵士', line: '容赦はしない。この戦場で、貴様を叩き潰してやる!', defeatLine: 'ば……馬鹿な……この俺が……こんな所で……!', reactionMs: 620, aimJitter: 0.68, fireChance: 0.40, dodgeChance: 0.08, itemSeekChance: 0.25, preferredRange: 270, moveJitter: 0.62, atkMult: 0.5, swordMult: 1.0 },
   { name: '歴戦の傭兵', line: 'ここまで来たとは大したものだ。だが、俺がここで止めてやる。', defeatLine: 'ちっ……まだ甘かったか。だが、この先で待つ者たちは、こんなものじゃないぞ。', reactionMs: 460, aimJitter: 0.48, fireChance: 0.60, dodgeChance: 0.28, itemSeekChance: 0.42, preferredRange: 250, moveJitter: 0.42, atkMult: 0.75, swordMult: 1.0 },
   { name: '精鋭部隊長', line: '前線に立つには…まだ早い。ここで終わらせてやろう。', defeatLine: '……見事だ。だが俺はまだ、本隊を守る壁の一枚に過ぎん。この先、後悔するなよ。', reactionMs: 320, aimJitter: 0.30, fireChance: 0.78, dodgeChance: 0.48, itemSeekChance: 0.60, preferredRange: 233, moveJitter: 0.28, atkMult: 1.0, swordMult: 1.0 },
-  { name: '血刃の暗殺者', line: '無駄な足掻きだ。闇に潜むこの一振りが、貴様の命を刈り取る。', defeatLine: 'くっ……この闇より深い一撃とはな。だが、あの御方の前ではまだ児戯に等しい。', reactionMs: 200, aimJitter: 0.16, fireChance: 0.90, dodgeChance: 0.68, itemSeekChance: 0.78, preferredRange: 220, moveJitter: 0.16, atkMult: 1.0, swordMult: 1.5 },
+  // preferredRange dropped to well inside melee reach (SWORD_RANGE+PLAYER_RADIUS=86) — every
+  // other boss's preferredRange keeps it at ranged/kiting distance, but this one is a sword
+  // specialist (already had the highest swordMult) and should actually fight like one: the
+  // existing "close in / back off / strafe" movement logic in updateCpuAI aims to sit at
+  // preferredRange, so setting it to melee range makes swording (not shooting) the boss's
+  // default state, per explicit request. inp.shooting is already unconditionally suppressed
+  // whenever inp.swording is true (see updateCpuAI's `inp.shooting = st.firing && !inp.swording`),
+  // so gunfire naturally only happens while still closing the distance or briefly repositioned
+  // by a dodge — "必要な時は銃撃も" — with zero extra logic needed beyond this one number.
+  { name: '血刃の暗殺者', line: '無駄な足掻きだ。闇に潜むこの一振りが、貴様の命を刈り取る。', defeatLine: 'くっ……この闇より深い一撃とはな。だが、あの御方の前ではまだ児戯に等しい。', reactionMs: 200, aimJitter: 0.16, fireChance: 0.90, dodgeChance: 0.68, itemSeekChance: 0.78, preferredRange: 60, moveJitter: 0.16, atkMult: 1.0, swordMult: 1.5 },
   { name: '戦場の覇者', line: 'よくぞここまで生き延びた…だがこの戦場に立つ資格があるのは、俺だけだ!', defeatLine: 'ば……馬鹿な……この俺が……戦場の狼に……敗れると……は……。', reactionMs: 100, aimJitter: 0.05, fireChance: 1.00, dodgeChance: 0.92, itemSeekChance: 0.95, preferredRange: 208, moveJitter: 0.06, atkMult: 1.0, swordMult: 1.0 },
 ];
 
@@ -844,7 +853,7 @@ const STORY_BOSSES_2P_TUNING = [
   { hpMult: 1.7, reactionMs: 520, aimJitter: 0.58, fireChance: 0.45, dodgeChance: 0.18, itemSeekChance: 0.25, preferredRange: 280, moveJitter: 0.55 },
   { hpMult: 1.9, reactionMs: 380, aimJitter: 0.40, fireChance: 0.65, dodgeChance: 0.38, itemSeekChance: 0.42, preferredRange: 260, moveJitter: 0.38 },
   { hpMult: 2.1, reactionMs: 260, aimJitter: 0.26, fireChance: 0.82, dodgeChance: 0.58, itemSeekChance: 0.60, preferredRange: 240, moveJitter: 0.25 },
-  { hpMult: 2.3, reactionMs: 170, aimJitter: 0.14, fireChance: 0.92, dodgeChance: 0.76, itemSeekChance: 0.78, preferredRange: 226, moveJitter: 0.14 },
+  { hpMult: 2.3, reactionMs: 170, aimJitter: 0.14, fireChance: 0.92, dodgeChance: 0.76, itemSeekChance: 0.78, preferredRange: 65, moveJitter: 0.14 }, // same melee-focus override as the 1P STORY_BOSSES entry — this table overrides preferredRange too, so it needed its own change
   { hpMult: 2.6, reactionMs: 85, aimJitter: 0.04, fireChance: 1.00, dodgeChance: 0.95, itemSeekChance: 0.95, preferredRange: 214, moveJitter: 0.05 },
 ];
 const STORY_BOSSES_2P = STORY_BOSSES.map((b, i) => ({ ...b, ...STORY_BOSSES_2P_TUNING[i] }));
