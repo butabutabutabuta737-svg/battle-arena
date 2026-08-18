@@ -558,6 +558,15 @@ button:active {
   position: relative;
   touch-action: none;
 }
+/* On a narrow phone, the arena's width (and so its overall size, since it scales by a fixed
+   4:3 ratio) is set by however much horizontal room is left after this padding — trimming it
+   on small screens directly reclaims real width for the "battle stage", not just cosmetic. */
+@media (max-width: 480px) {
+  #game {
+    padding: 8px;
+    gap: 8px;
+  }
+}
 
 .hud {
   width: 100%;

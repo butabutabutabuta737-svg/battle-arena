@@ -46,6 +46,7 @@
   const statusLabel = $('#statusLabel');
   const canvas = $('#canvas');
   const ctx = canvas.getContext('2d');
+  const arenaWrap = $('.arena-wrap');
   const hpMine = $('#hpMine');
   const hpTheirs = $('#hpTheirs');
   const hpBlockTheirs = $('#hpBlockTheirs');
@@ -297,6 +298,7 @@
     // retry button hidden for a dramatic beat instead of appearing the instant the boss wins
   let gameOverTimer = null;
   let lastStoryLevel = 1; // last storyLevel we've shown a level-up toast for
+  let lastArenaFitSignature = ''; // re-run fitArena() only when something HUD-height-affecting actually changes, not every ~33ms updateHud() tick
   let levelUpHideTimer = null;
   let leavingIntentionally = false;
   let arena = { w: 800, h: 600, walls: [], trees: [], houses: [] };
@@ -383,6 +385,59 @@
     muteBtn.textContent = muted ? '🔇' : '🔊';
   });
 
+  // The canvas was purely width-driven (CSS width:100%; height:auto, fixed 800x600 aspect
+  // ratio) — on a typical tall phone that leaves a lot of vertical space below/around it
+  // unused, since the actual constraint should be "whichever of width or height is tighter",
+  // not "always scale from width". This measures the real, current per-device available
+  // space (HUD + hint text + gaps + padding all vary — by story mode vs arena, 1P vs 2P co-op,
+  // and by the phone's own OS/browser-chrome behavior) and sets .arena-wrap's max-width so the
+  // canvas grows to fill whichever dimension is actually the tighter fit, letterboxing only
+  // the other one. Pure JS measurement rather than a CSS-only aspect-ratio trick, since the
+  // latter doesn't reliably clamp both dimensions at once across browsers and this needs to
+  // be exactly right, not approximate.
+  function fitArena() {
+    if (!arenaWrap || gameScreen.classList.contains('hidden')) return;
+    arenaWrap.style.maxWidth = ''; // reset first so this measurement isn't biased by the last result
+    const viewportH = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+    const viewportW = (window.visualViewport && window.visualViewport.width) || window.innerWidth;
+    const gameStyle = getComputedStyle(gameScreen);
+    const padTop = parseFloat(gameStyle.paddingTop) || 0;
+    const padBottom = parseFloat(gameStyle.paddingBottom) || 0;
+    const padLeft = parseFloat(gameStyle.paddingLeft) || 0;
+    const padRight = parseFloat(gameStyle.paddingRight) || 0;
+    const gap = parseFloat(gameStyle.rowGap) || parseFloat(gameStyle.gap) || 0;
+    let usedHeight = padTop + padBottom;
+    let visibleSiblings = 0;
+    for (const kid of gameScreen.children) {
+      if (kid === arenaWrap) { visibleSiblings++; continue; }
+      const cs = getComputedStyle(kid);
+      if (cs.display === 'none') continue;
+      if (cs.position === 'absolute' || cs.position === 'fixed') continue; // doesn't take flow space (e.g. downed-banner)
+      usedHeight += kid.getBoundingClientRect().height;
+      visibleSiblings++;
+    }
+    usedHeight += gap * Math.max(0, visibleSiblings - 1);
+    const availableHeight = Math.max(160, viewportH - usedHeight - 6);
+    const availableWidth = Math.max(240, viewportW - padLeft - padRight);
+    const ratio = 800 / 600;
+    let w = Math.min(800, availableWidth);
+    if (w / ratio > availableHeight) w = availableHeight * ratio; // height is the tighter constraint
+    arenaWrap.style.maxWidth = `${Math.round(w)}px`;
+  }
+  // Delayed re-runs on top of the immediate one, matching this project's established PWA-
+  // standalone-resize pattern: layout (address bar show/hide, safe-area insets, orientation
+  // settle, home-screen-launch sizing) can still be shifting for a beat after these events
+  // fire, especially in installed-PWA standalone mode.
+  function fitArenaSoon() {
+    fitArena();
+    setTimeout(fitArena, 60);
+    setTimeout(fitArena, 300);
+  }
+  window.addEventListener('resize', fitArenaSoon);
+  window.addEventListener('orientationchange', fitArenaSoon);
+  window.addEventListener('pageshow', fitArenaSoon);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', fitArenaSoon);
+
   function randomRoomCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let s = '';
@@ -410,6 +465,7 @@
       homeBtn.classList.remove('hidden');
       roomLabel.textContent = room;
       roomLabel2.textContent = room;
+      fitArenaSoon();
     });
 
     ws.addEventListener('message', (ev) => {
@@ -461,6 +517,7 @@
   function resetClientState() {
     myId = null;
     isCpuMatch = false;
+    lastArenaFitSignature = '';
     latestState = null;
     prevState = null;
     lastPhase = null;
@@ -2141,6 +2198,15 @@
     // other human" there via the isBoss-less arena-mode player objects (isBoss is simply
     // undefined on them, and .find(p=>p.isBoss) only ever matches the CPU token).
     const isCoop = !!state.storyCoop;
+    // The HUD's actual row count (and so its height, and so how much room is left for the
+    // arena) only ever changes at these few event boundaries, not every tick — re-measure
+    // fitArena() just on those, rather than every ~33ms broadcast (which would mean constant
+    // layout thrashing for no visual benefit).
+    const arenaFitSignature = `${isCpuMatch}|${isCoop}|${!!state.mobWaveActive}`;
+    if (arenaFitSignature !== lastArenaFitSignature) {
+      lastArenaFitSignature = arenaFitSignature;
+      fitArenaSoon();
+    }
     const boss = isCoop ? state.players.find((p) => p.isBoss) : state.players.find((p) => p.id !== myId);
     const ally = isCoop ? state.players.find((p) => p.id !== myId && !p.isBoss) : null;
     // Top row is reserved for the two human players in co-op (per explicit request) — the
