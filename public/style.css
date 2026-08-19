@@ -909,10 +909,33 @@ button:active {
   text-shadow: 0 0 18px rgba(143, 176, 255, 0.6);
 }
 
+/* .btn-primary/.btn-secondary's flex:1 (see their own rules) was designed for .btn-row's
+   *horizontal* flex layout, where it splits width evenly between buttons. .overlay is a
+   *column*-direction flex container, so that same flex:1 was instead stretching any such
+   button to fill the whole remaining vertical space — #resumeBtn ended up a ~240px-tall bar.
+   Reset back to sizing from content for any button living directly in an overlay. */
+.overlay button {
+  flex: none;
+}
+
 /* Above every other overlay (boss-intro's 30, story/true-ending's 35) — pausing mid-fight
    should freeze/cover whatever's on screen, dramatic cards included, not sit behind them. */
 #pauseOverlay {
   z-index: 50;
+}
+#resumeBtn {
+  padding: 14px 34px;
+  font-size: 17px;
+  border-radius: 999px;
+  box-shadow: 0 0 26px rgba(111, 91, 255, 0.7), 0 8px 22px rgba(0, 0, 0, 0.4);
+  animation: resume-btn-pulse 1.8s ease-in-out infinite;
+}
+@keyframes resume-btn-pulse {
+  0%, 100% { box-shadow: 0 0 26px rgba(111, 91, 255, 0.7), 0 8px 22px rgba(0, 0, 0, 0.4); }
+  50% { box-shadow: 0 0 40px rgba(143, 176, 255, 0.95), 0 8px 22px rgba(0, 0, 0, 0.4); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #resumeBtn { animation: none; }
 }
 
 .overlay .result-banner {
