@@ -2,7 +2,12 @@
 const WebSocket = require('ws');
 
 const ARENA_W = 800;
-const ARENA_H = 600;
+// Taller than the original 600 (portrait-ish, matches how phones are actually held) — every
+// y-placement in this file already reads ARENA_H symbolically (spawn points, wall/tree/house
+// bounds, monster clamping), so this is a clean size-only change with no other constant to
+// rescale. ARENA_W stays untouched so horizontal spawn separation / boss preferredRange tuning
+// (all X-axis) is unaffected.
+const ARENA_H = 1000;
 const BASE_PLAYER_SPEED = 220; // px/sec
 const PLAYER_RADIUS = 16;
 const BULLET_SPEED = 480; // px/sec

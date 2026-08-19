@@ -301,7 +301,7 @@
   let lastArenaFitSignature = ''; // re-run fitArena() only when something HUD-height-affecting actually changes, not every ~33ms updateHud() tick
   let levelUpHideTimer = null;
   let leavingIntentionally = false;
-  let arena = { w: 800, h: 600, walls: [], trees: [], houses: [] };
+  let arena = { w: 800, h: 1000, walls: [], trees: [], houses: [] }; // matches game.js's ARENA_W/ARENA_H defaults, before the real value arrives from the server
   let latestState = null;
   let prevState = null;
   let lastPhase = null;
@@ -423,8 +423,8 @@
     // erring on the side of a slightly smaller arena is far better than clipping the HUD.
     const availableHeight = Math.max(160, viewportH - usedHeight - 16);
     const availableWidth = Math.max(240, viewportW - padLeft - padRight);
-    const ratio = 800 / 600;
-    let w = Math.min(800, availableWidth);
+    const ratio = arena.w / arena.h; // derived from the live world size, not hardcoded, so this stays correct if the arena's dimensions ever change again
+    let w = Math.min(arena.w, availableWidth);
     if (w / ratio > availableHeight) w = availableHeight * ratio; // height is the tighter constraint
     arenaWrap.style.maxWidth = `${Math.round(w)}px`;
   }
@@ -2196,23 +2196,30 @@
 
   const STORY_BASE_MAX_HP = 100; // must match game.js's MAX_HP — the un-leveled baseline
 
-  // fillEl always represents the un-leveled base 0-100 hp on the bg track's normal 100%-width
-  // scale, exactly like before story-mode leveling existed. bonusEl (see .hp-bar-bonus in
-  // style.css, anchored at left:100% of that same track) extends the bar further right by
-  // however much hp exceeds that base 100, on the *same* per-hp scale — so the bar's total
-  // rendered length actually grows with a level-up (a level-10 character at full health is
-  // visibly ~2x the original track's length) instead of just recoloring part of a fixed-length
-  // bar, which didn't read as an actual increase. A player who hasn't leveled (maxHp<=base) or
-  // a boss (which never gains story-mode levels) simply never has hp exceed the base, so
-  // bonusEl's width collapses to 0 and the display is pixel-identical to the original bar.
+  // fillEl+bonusEl (see .hp-bar-bonus in style.css) together always span exactly the track's
+  // own 100%-width box — never further. `scale` shrinks both proportionally once maxHp exceeds
+  // the un-leveled baseline, so a leveled player or a boss with an hp multiplier reads as "more
+  // of the track is the (differently-colored) bonus segment" rather than "the bar physically
+  // grows past the track". It used to be the latter (bonusEl extended past a fixed
+  // left:calc(100% - 8px) anchor, unscaled, by however much hp exceeded the baseline) — that
+  // was fine for a modestly-leveled player, but a 2P co-op boss's hp multiplier (up to 2.6x from
+  // stage 1, see STORY_BOSSES_2P_TUNING's hpMult) blew the bar out to 2.6x its track's length
+  // with nothing capping it, running the whole thing off the right edge of the screen on phones
+  // (confirmed via a live 2-connection repro). bonusEl's left is now set here alongside its
+  // width, anchored to wherever fillEl's rescaled edge actually lands, so the "no seam" overlap
+  // still holds at any scale. When maxHp is at the baseline (the overwhelmingly common case —
+  // arena mode, un-leveled/1P story, a boss with no multiplier), scale is exactly 1 and this
+  // renders pixel-identical to the original fixed-track version.
   function renderHpBar(fillEl, bonusEl, p) {
     const maxHp = (p && p.maxHp) || STORY_BASE_MAX_HP;
     const hp = Math.max(0, Math.min((p && p.hp) || 0, maxHp));
-    const baseHp = Math.min(hp, STORY_BASE_MAX_HP);
-    fillEl.style.width = `${(baseHp / STORY_BASE_MAX_HP) * 100}%`;
+    const scale = STORY_BASE_MAX_HP / Math.max(STORY_BASE_MAX_HP, maxHp);
+    const baseWidthPct = Math.min(hp, STORY_BASE_MAX_HP) * scale;
+    fillEl.style.width = `${baseWidthPct}%`;
     if (!bonusEl) return;
     const bonusHp = Math.max(0, hp - STORY_BASE_MAX_HP);
-    bonusEl.style.width = `${(bonusHp / STORY_BASE_MAX_HP) * 100}%`;
+    bonusEl.style.left = `calc(${baseWidthPct}% - 8px)`;
+    bonusEl.style.width = `${bonusHp * scale}%`;
   }
 
   function updateHud(state) {
