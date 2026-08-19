@@ -1405,8 +1405,14 @@ button:active {
    used from the title screen, so 遊び方 is reachable mid-battle too, per explicit request. */
 .help-toggle-btn {
   position: fixed;
-  top: calc(max(14px, env(safe-area-inset-top)) + 50px);
-  right: max(14px, env(safe-area-inset-right));
+  /* Bottom-left, per explicit request (was stacked below .mute-btn top-right) — matches
+     .fire-btn/.sword-btn's own bottom offset formula so it sits at a consistent height with
+     the other in-battle floating buttons, just mirrored to the empty bottom-left corner. That
+     corner was genuinely free (no other fixed-position control there), and this button's
+     single-circle footprint is well within the vertical clearance fitArena() already reserves
+     for the (taller, stacked) sword+fire pair on the right, so no other layout change needed. */
+  bottom: max(20px, env(safe-area-inset-bottom) + 14px);
+  left: max(18px, env(safe-area-inset-left) + 10px);
   z-index: 20;
   width: 36px;
   height: 36px;
