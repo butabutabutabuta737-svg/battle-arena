@@ -418,6 +418,21 @@
       visibleSiblings++;
     }
     usedHeight += gap * Math.max(0, visibleSiblings - 1);
+    // The fire/sword/bomb action buttons are position:fixed, anchored to the *true* viewport
+    // bottom — the loop above deliberately skips them (they take no flex-flow space), but that
+    // also means nothing here was reserving their footprint at all. That was invisible as long
+    // as the arena ended up height-bound (sized to exactly fill availableHeight, landing .hint
+    // flush against the reserved gap below it) — but a width-bound arena (the common case on a
+    // tall phone: the arena's width, not height, is what's actually the tighter constraint,
+    // especially now that the arena itself is taller/portrait-shaped) leaves the whole
+    // HUD+arena+hint stack sitting at a FIXED absolute height regardless of the real viewport
+    // height, so on a moderately-short real viewport (visible browser address-bar chrome,
+    // smaller phones) the buttons crept upward into the hint text with nothing accounting for
+    // it. Measuring the highest button's live position (rather than a guessed constant) also
+    // naturally captures whatever safe-area-inset is actually in effect on this device.
+    const swordBtnEl = document.getElementById('swordBtn');
+    const buttonFootprint = swordBtnEl ? Math.max(0, viewportH - swordBtnEl.getBoundingClientRect().top) : 0;
+    usedHeight += buttonFootprint;
     // Slightly larger safety margin than a bare 6px — OS/browser-chrome quirks (address bar
     // show/hide, safe-area insets not fully reflected in visualViewport on some browsers)
     // mean the real available space can come in a bit smaller than this calculation expects;

@@ -1407,11 +1407,11 @@ button:active {
 }
 @media (pointer: coarse) {
   .hint {
-    /* Shrunk from 96px now that the text itself is much shorter (touch-only, one short
-       line instead of the full PC+touch string) — still enough clearance for the
-       fire/sword/detonate buttons near the bottom of .arena-wrap, just not as much
-       reserved space as before. */
-    padding-bottom: 56px;
+    /* This used to be the ONLY thing reserving clearance from the fire/sword/detonate
+       buttons (56px), which broke down whenever the arena ended up width-bound instead of
+       height-bound (see fitArena()'s buttonFootprint reservation in client.js, which is now
+       what actually guarantees the gap) — this is just a small visual breathing gap now. */
+    padding-bottom: 14px;
   }
   .hint-pc {
     display: none;
