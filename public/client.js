@@ -1921,7 +1921,12 @@
       ctx.shadowColor = uniform;
       ctx.shadowBlur = 6;
     }
-    ctx.fillText(p.name, p.x, p.y - 26 - tier * 1.5);
+    // p.name is the full "1面ボス「見習い兵士」" form (shared with the HUD's own name label,
+    // which still wants the stage number/brackets per an earlier request) — too long to float
+    // legibly above the character during battle, so just the bare name goes here. EX_BOSS's
+    // name ('戦神') was never wrapped this way and passes through the replace() untouched.
+    const floatingName = isBoss ? p.name.replace(/^\d+面ボス「(.+)」$/, '$1') : p.name;
+    ctx.fillText(floatingName, p.x, p.y - 26 - tier * 1.5);
     ctx.restore();
   }
 
