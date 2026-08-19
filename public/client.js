@@ -82,7 +82,6 @@
   const storyEndingTitleBtn = $('#storyEndingTitleBtn');
   const challengeExBtn = $('#challengeExBtn');
   const trueEndingOverlay = $('#trueEndingOverlay');
-  const trueEndingTitleBtn = $('#trueEndingTitleBtn');
   const gameOverOverlay = $('#gameOverOverlay');
   const bossIntroOverlay = $('#bossIntroOverlay');
   const bossIntroStage = $('#bossIntroStage');
@@ -297,6 +296,8 @@
   let gameOverRetryReady = false; // flips true only after gameOverTimer elapses — keeps the
     // retry button hidden for a dramatic beat instead of appearing the instant the boss wins
   let gameOverTimer = null;
+  let trueEndingTapReady = false; // flips true (and reveals the "tap to continue" hint) only after trueEndingRevealTimer elapses — same "let it sit" beat as gameOverRetryReady above
+  let trueEndingRevealTimer = null;
   let lastStoryLevel = 1; // last storyLevel we've shown a level-up toast for
   let lastArenaFitSignature = ''; // re-run fitArena() only when something HUD-height-affecting actually changes, not every ~33ms updateHud() tick
   let levelUpHideTimer = null;
@@ -549,6 +550,9 @@
     bossVictoryOverlay.classList.add('hidden');
     storyEndingOverlay.classList.add('hidden');
     trueEndingOverlay.classList.add('hidden');
+    trueEndingOverlay.classList.remove('ready');
+    trueEndingTapReady = false;
+    if (trueEndingRevealTimer) { clearTimeout(trueEndingRevealTimer); trueEndingRevealTimer = null; }
     gameOverRetryReady = false;
     if (gameOverTimer) { clearTimeout(gameOverTimer); gameOverTimer = null; }
     gameOverOverlay.classList.add('hidden');
@@ -871,7 +875,13 @@
     audioReady();
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'startExStage' }));
   });
-  trueEndingTitleBtn.addEventListener('click', () => { audioReady(); goToTitle(); });
+  // Whole-screen tap-to-continue instead of a button — see trueEndingTapReady below, set true
+  // only after the 8s "let the ending sit" timer elapses.
+  trueEndingOverlay.addEventListener('click', () => {
+    if (!trueEndingTapReady) return;
+    audioReady();
+    goToTitle();
+  });
 
   rematchBtn.addEventListener('click', () => {
     audioReady();
@@ -2409,7 +2419,21 @@
       } else if (trueEndingClear) {
         // Same "wait for the victory flash to auto-hide" deferral as the stage-clear branch
         // below — the true ending shouldn't appear stacked underneath/racing the flash.
-        if (bossVictoryOverlay.classList.contains('hidden')) trueEndingOverlay.classList.remove('hidden');
+        if (bossVictoryOverlay.classList.contains('hidden')) {
+          // This branch re-runs on every ~33ms broadcast while sitting in 'finished' — only
+          // start the 8s reveal timer once, on the actual hidden->visible transition, not on
+          // every tick after that.
+          if (trueEndingOverlay.classList.contains('hidden')) {
+            trueEndingTapReady = false;
+            if (trueEndingRevealTimer) clearTimeout(trueEndingRevealTimer);
+            trueEndingRevealTimer = setTimeout(() => {
+              trueEndingTapReady = true;
+              trueEndingOverlay.classList.add('ready');
+              trueEndingRevealTimer = null;
+            }, 8000);
+          }
+          trueEndingOverlay.classList.remove('hidden');
+        }
       } else if (finalStageClear) {
         if (bossVictoryOverlay.classList.contains('hidden')) storyEndingOverlay.classList.remove('hidden');
       } else if (waveCleared) {
