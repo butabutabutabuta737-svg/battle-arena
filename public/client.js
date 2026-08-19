@@ -835,6 +835,12 @@
   story2pBtn.addEventListener('click', () => {
     audioReady();
     playSelectSfx();
+    // Carry over whatever name was already typed on #storyIntro — story2pNameInput is a
+    // separate <input> (2P co-op has its own lobby screen/layout), so without this the name
+    // silently resets to blank and had to be retyped every time.
+    if (storyNameInput.value.trim() && !story2pNameInput.value.trim()) {
+      story2pNameInput.value = storyNameInput.value;
+    }
     storyIntro.classList.add('hidden');
     story2pLobby.classList.remove('hidden');
   });
