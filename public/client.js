@@ -2241,21 +2241,34 @@
   // was fine for a modestly-leveled player, but a 2P co-op boss's hp multiplier (up to 2.6x from
   // stage 1, see STORY_BOSSES_2P_TUNING's hpMult) blew the bar out to 2.6x its track's length
   // with nothing capping it, running the whole thing off the right edge of the screen on phones
-  // (confirmed via a live 2-connection repro). bonusEl's left is now set here alongside its
-  // width, anchored to wherever fillEl's rescaled edge actually lands, so the "no seam" overlap
-  // still holds at any scale. When maxHp is at the baseline (the overwhelmingly common case —
-  // arena mode, un-leveled/1P story, a boss with no multiplier), scale is exactly 1 and this
-  // renders pixel-identical to the original fixed-track version.
+  // (confirmed via a live 2-connection repro). When maxHp is at the baseline (the overwhelmingly
+  // common case — arena mode, un-leveled/1P story, a boss with no multiplier), scale is exactly
+  // 1 and this renders pixel-identical to the original fixed-track version.
+  //
+  // Bonus sits on the LEFT of the base segment (per explicit request — both player's and boss's
+  // bars), not the right: bonusEl is left:0, width bonusWidthPct%; fillEl starts 8px before
+  // bonus's right edge (overlapping it, hiding the seam under bonus's flat body — bonus is the
+  // later DOM sibling so it paints on top, same trick as before, just mirrored) and fills the
+  // rest of the track. Because fillEl's own left edge now depends on bonusWidthPct, taking
+  // damage while hp>100 (which only shrinks the bonus portion — see bonusHp below) visibly
+  // slides the base segment leftward to meet it, settling flush at the track's left edge once
+  // bonus reaches 0 — intentional, reads as the bonus "draining away" to reveal the base bar.
   function renderHpBar(fillEl, bonusEl, p) {
     const maxHp = (p && p.maxHp) || STORY_BASE_MAX_HP;
     const hp = Math.max(0, Math.min((p && p.hp) || 0, maxHp));
     const scale = STORY_BASE_MAX_HP / Math.max(STORY_BASE_MAX_HP, maxHp);
     const baseWidthPct = Math.min(hp, STORY_BASE_MAX_HP) * scale;
-    fillEl.style.width = `${baseWidthPct}%`;
-    if (!bonusEl) return;
+    if (!bonusEl) {
+      fillEl.style.left = '0%';
+      fillEl.style.width = `${baseWidthPct}%`;
+      return;
+    }
     const bonusHp = Math.max(0, hp - STORY_BASE_MAX_HP);
-    bonusEl.style.left = `calc(${baseWidthPct}% - 8px)`;
-    bonusEl.style.width = `${bonusHp * scale}%`;
+    const bonusWidthPct = bonusHp * scale;
+    bonusEl.style.left = '0%';
+    bonusEl.style.width = `${bonusWidthPct}%`;
+    fillEl.style.left = `calc(${bonusWidthPct}% - 8px)`;
+    fillEl.style.width = `${baseWidthPct}%`;
   }
 
   function updateHud(state) {

@@ -681,32 +681,34 @@ button:active {
   left: 0;
   height: 100%;
   border-radius: 6px;
-  transition: width 0.12s linear;
+  transition: left 0.12s linear, width 0.12s linear;
 }
 /* Story-mode level bonus, redesigned to visibly extend the bar rather than recolor part of
    a fixed-length one (see renderHpBar() in client.js): .hp-bar-fill only ever represents the
    un-leveled base 0-100 hp, scaled to the bg track's normal 100%-width scale exactly as
-   before. This element picks up starting just before the track's own right edge and extends
-   further right by however much hp exceeds that base 100 — a level-10 character at full
-   health ends up with a bar that's visibly ~2x the original track's length, and a boss
-   (whose maxHp never comes from story leveling) simply never gets a nonzero width here. Once
-   hp drops back to <=100 (whether from damage or simply not being leveled), width collapses
-   to 0 and the display reverts to exactly the plain original bar. left is deliberately
-   `100% - 8px`, not a flush `100%` — both segments independently have border-radius:6px on
-   all four corners, so butting them exactly edge-to-edge left a visible dip/seam where the
-   fill's rounded right corner met the bonus's rounded left corner instead of reading as one
-   continuous bar; overlapping the bonus back over the last few px of the fill (painting on
-   top, since it's the later sibling) hides that seam under the bonus's own flat body. */
+   before. Per explicit request, the bonus segment sits on the LEFT of the base segment (both
+   player's and boss's bars) — bonus is left:0, and fillEl's own left is set dynamically in
+   renderHpBar() to start 8px before bonus's right edge, so the two overlap instead of butting
+   edge-to-edge: both segments independently have border-radius:6px on all four corners, so a
+   flush seam would show a visible dip where fill's rounded left corner met bonus's rounded
+   right corner instead of reading as one continuous bar. bonus is the later DOM sibling
+   (paints on top), so the overlap disappears under its own flat body. A level-10 player at
+   full health (or a boss with an hp multiplier — see STORY_BOSSES_2P_TUNING) ends up with a
+   bar that's visibly ~2x the original track's length, all still within the track's own 100%
+   width (renderHpBar() rescales both segments to always sum to exactly that, never further —
+   letting it grow unscaled once let a 2P co-op boss's inflated bar run off the screen entirely
+   on phones). A boss with no multiplier (or any un-leveled player) simply never gets a nonzero
+   width here, and the display is pixel-identical to the plain original bar. */
 .hp-bar-bonus {
   position: absolute;
   top: 0;
-  left: calc(100% - 8px);
+  left: 0;
   width: 0;
   height: 100%;
   border-radius: 6px;
   background: linear-gradient(90deg, #ffd35b, #fff3b0);
   box-shadow: 0 0 10px rgba(255, 211, 91, 0.85);
-  transition: width 0.12s linear;
+  transition: left 0.12s linear, width 0.12s linear;
   pointer-events: none;
 }
 /* Color is a class, not a fixed per-id rule — which color a given HP bar slot needs depends
