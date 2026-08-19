@@ -1012,17 +1012,52 @@ button:active {
     padding: 12px;
   }
   .boss-intro-card {
-    gap: 5px;
+    gap: clamp(4px, 1vh, 8px);
   }
+  /* vh-relative instead of a single fixed size: the overlay's actual available height varies a
+     lot by device (it's pinned to the arena's own rendered height, which fitArena() computes
+     from real viewport space minus HUD/hint/button reservations) — a size safe on a short
+     phone left a lot of unused room on a taller one. width:auto + aspect-ratio keeps the same
+     140:175 crop as the base (non-touch) size above at any scale. */
   .boss-intro-portrait {
-    width: 92px;
-    height: 115px;
+    width: auto;
+    height: clamp(90px, 22vh, 175px);
+    aspect-ratio: 140 / 175;
+  }
+  .boss-intro-stage {
+    font-size: clamp(11px, 2vh, 13px);
   }
   .boss-intro-name {
-    font-size: 20px;
+    font-size: clamp(16px, 3vh, 24px);
   }
   .boss-intro-line {
-    padding: 8px 14px;
+    padding: clamp(6px, 1.2vh, 10px) 14px;
+  }
+}
+/* The vh-clamp rule above alone still overflowed on short-viewport phones (iPhone SE-class,
+   confirmed via Playwright: -57px slack even before this change) — its floor values were
+   still bigger than what those actually needed, so on a short device it never even reached
+   its own minimum. This is a separate, more specific override (max-height, not just
+   pointer:coarse) that wins on genuinely short screens regardless of the vh math above. */
+@media (pointer: coarse) and (max-height: 600px) {
+  .boss-intro-overlay {
+    padding: 8px;
+  }
+  .boss-intro-card {
+    gap: 3px;
+  }
+  .boss-intro-portrait {
+    height: 78px;
+  }
+  .boss-intro-stage {
+    font-size: 10px;
+  }
+  .boss-intro-name {
+    font-size: 15px;
+  }
+  .boss-intro-line {
+    padding: 5px 10px;
+    font-size: 11px;
   }
 }
 @keyframes boss-intro-fade {
