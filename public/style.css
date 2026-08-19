@@ -923,7 +923,14 @@ button:active {
   inset: 0;
   z-index: 30;
   display: flex;
-  align-items: center;
+  /* Was center — with the card's content now comfortably shorter than the overlay on typical
+     devices (see the earlier slack fixes), centering left a big empty gap above the card that
+     read as wasted space. flex-start pins the card near the top instead, using just the
+     overlay's own padding as the gap; it's also inherently overflow-safe on its own (unlike
+     center, flex-start never clips the START of overflowing content — it's already flush
+     against the scrollable area's top edge), so the margin:auto trick below is no longer
+     needed for that either. */
+  align-items: flex-start;
   justify-content: center;
   background: rgba(4, 5, 14, 0.8);
   backdrop-filter: blur(3px);
@@ -931,12 +938,6 @@ button:active {
   padding: 20px;
   text-align: center;
   animation: boss-intro-fade 0.3s ease;
-  /* This box's height is pinned to the rendered canvas's height (an absolutely-positioned
-     inset:0 child never grows its .arena-wrap parent) — on a short phone viewport that can be
-     shorter than a long narration paragraph needs. overflow-y:auto lets it scroll instead of
-     silently clipping; margin:auto on the card (below) is the standard fix for the flexbox
-     centering+overflow gotcha where align-items:center alone clips the START of overflowing
-     content instead of making it reachable by scrolling to it. */
   overflow-y: auto;
 }
 .boss-intro-card {
@@ -944,7 +945,10 @@ button:active {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  margin: auto;
+  /* Horizontal-only now (was margin:auto on all sides, which — per how flex auto-margins work
+     — would have silently overridden the parent's align-items:flex-start above and kept the
+     card vertically centered regardless). */
+  margin: 0 auto;
   /* align-items:center (not stretch) lets each child size to its own natural/intrinsic width
      — fine for short labels, but a wide single-line child (no max-width of its own) could
      render wider than the viewport with nothing forcing it to wrap, overflowing equally past
