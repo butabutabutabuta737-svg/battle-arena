@@ -62,6 +62,7 @@
   const shareHint = $('#shareHint');
   const muteBtn = $('#muteBtn');
   const homeBtn = $('#homeBtn');
+  const helpToggleBtn = $('#helpToggleBtn');
   const storyRetryBtn = $('#storyRetryBtn');
   const modeStoryBtn = $('#modeStoryBtn');
   const storyIntro = $('#storyIntro');
@@ -484,6 +485,7 @@
       story2pLobby.classList.add('hidden');
       gameScreen.classList.remove('hidden');
       homeBtn.classList.remove('hidden');
+      helpToggleBtn.classList.remove('hidden');
       roomLabel.textContent = room;
       roomLabel2.textContent = room;
       fitArenaSoon();
@@ -517,6 +519,7 @@
         ws.close();
         gameScreen.classList.add('hidden');
         homeBtn.classList.add('hidden');
+        helpToggleBtn.classList.add('hidden');
         lobby.classList.remove('hidden');
         if (window.GameAudio) window.GameAudio.startTitleBgm();
       } else if (data.type === 'state') {
@@ -598,6 +601,7 @@
     resetClientState();
     gameScreen.classList.add('hidden');
     homeBtn.classList.add('hidden');
+    helpToggleBtn.classList.add('hidden');
     lobby.classList.add('hidden');
     storyIntro.classList.add('hidden');
     story2pLobby.classList.add('hidden');
@@ -658,7 +662,31 @@
   const helpBtn = $('#helpBtn');
   const helpOverlay = $('#helpOverlay');
   const helpCloseBtn = $('#helpCloseBtn');
-  helpBtn.addEventListener('click', () => helpOverlay.classList.remove('hidden'));
+  const helpMenu = $('#helpMenu');
+  const helpSections = document.querySelectorAll('.help-section');
+  // Always reset to the topic list on open — otherwise reopening mid-battle (via
+  // helpToggleBtn) could land back on whatever detail page was open last time.
+  function showHelpMenu() {
+    helpMenu.classList.remove('hidden');
+    helpSections.forEach((el) => el.classList.add('hidden'));
+  }
+  function openHelp() {
+    showHelpMenu();
+    helpOverlay.classList.remove('hidden');
+  }
+  helpMenu.querySelectorAll('.help-menu-item').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      audioReady();
+      playSelectSfx();
+      helpMenu.classList.add('hidden');
+      helpSections.forEach((el) => el.classList.toggle('hidden', el.dataset.helpSection !== btn.dataset.help));
+    });
+  });
+  helpSections.forEach((el) => {
+    el.querySelector('.help-back-btn').addEventListener('click', () => { audioReady(); showHelpMenu(); });
+  });
+  helpBtn.addEventListener('click', () => { audioReady(); playSelectSfx(); openHelp(); });
+  helpToggleBtn.addEventListener('click', () => { audioReady(); openHelp(); });
   helpCloseBtn.addEventListener('click', () => helpOverlay.classList.add('hidden'));
   helpOverlay.addEventListener('click', (e) => { if (e.target === helpOverlay) helpOverlay.classList.add('hidden'); });
 

@@ -17,6 +17,7 @@
 
 <button class="mute-btn" id="muteBtn" title="サウンドのON/OFF">🔊</button>
 <button class="home-btn hidden" id="homeBtn" title="タイトルに戻る">🏠</button>
+<button class="help-toggle-btn hidden" id="helpToggleBtn" title="遊び方">❓</button>
 
 <div id="modeSelect" class="screen">
   <!-- No on-screen <h1> here on purpose — the title screen's background art (see style.css's
@@ -201,58 +202,85 @@
     <button class="modal-close" id="helpCloseBtn" title="閉じる">✕</button>
     <h2>📖 遊び方・ルール説明</h2>
 
-    <h3>操作方法</h3>
-    <ul>
-      <li>移動: <b>WASD/矢印キー</b>(PC) / <b>画面をドラッグ</b>(スマホ、指を動かした方向へ進む)</li>
-      <li>狙う方向: マウスの位置(PC) / ドラッグした方向(スマホ、移動と共通)</li>
-      <li>🔫 射撃: <b>クリックまたはスペース押しっぱなし</b>(PC) / <b>🔫ボタン押しっぱなし</b>(スマホ)</li>
-      <li>🗡️ 斬撃: <b>Qキー</b>(PC) / <b>🗡️ボタン</b>(スマホ) — 狙っている方向への近距離攻撃。射撃の1.5倍ダメージ、ブロックやモンスターも攻撃可能</li>
-      <li>💣 爆弾設置: <b>Eキー</b>(現在はPCのみ)</li>
-      <li>💥 爆弾起爆: <b>Fキー</b>(PC) / <b>💥ボタン</b>(スマホ)</li>
-    </ul>
+    <div class="help-menu" id="helpMenu">
+      <button class="help-menu-item" data-help="controls"><span class="help-menu-num">①</span> 操作方法</button>
+      <button class="help-menu-item" data-help="win"><span class="help-menu-num">②</span> 勝敗</button>
+      <button class="help-menu-item" data-help="items"><span class="help-menu-num">③</span> アイテム一覧</button>
+      <button class="help-menu-item" data-help="monsters"><span class="help-menu-num">④</span> モンスター</button>
+      <button class="help-menu-item" data-help="terrain"><span class="help-menu-num">⑤</span> 地形</button>
+      <button class="help-menu-item" data-help="roulette"><span class="help-menu-num">⑥</span> 🎰 ルーレット</button>
+    </div>
 
-    <h3>勝敗</h3>
-    <ul>
-      <li>相手のHPを0にするとそのラウンドの勝利</li>
-      <li><b>3本先取</b>すると試合(マッチ)勝利</li>
-    </ul>
+    <div class="help-section hidden" data-help-section="controls">
+      <button class="help-back-btn">← 一覧へ戻る</button>
+      <h3>操作方法</h3>
+      <ul>
+        <li>移動: <b>WASD/矢印キー</b>(PC) / <b>画面をドラッグ</b>(スマホ、指を動かした方向へ進む)</li>
+        <li>狙う方向: マウスの位置(PC) / ドラッグした方向(スマホ、移動と共通)</li>
+        <li>🔫 射撃: <b>クリックまたはスペース押しっぱなし</b>(PC) / <b>🔫ボタン押しっぱなし</b>(スマホ)</li>
+        <li>🗡️ 斬撃: <b>Qキー</b>(PC) / <b>🗡️ボタン</b>(スマホ) — 狙っている方向への近距離攻撃。射撃の1.5倍ダメージ、ブロックやモンスターも攻撃可能</li>
+        <li>💣 爆弾設置: <b>Eキー</b>(現在はPCのみ)</li>
+        <li>💥 爆弾起爆: <b>Fキー</b>(PC) / <b>💥ボタン</b>(スマホ)</li>
+      </ul>
+    </div>
 
-    <h3>アイテム一覧(フィールドに出現、触れると入手)</h3>
-    <ul class="help-item-list">
-      <li>⚡ <b>スピード</b> — 移動速度アップ</li>
-      <li>🔥 <b>連射</b> — 射撃の連射速度アップ</li>
-      <li>💥 <b>攻撃力</b> — 弾のダメージアップ</li>
-      <li>❤️ <b>回復</b> — その場でHP回復</li>
-      <li>🟣 <b>弾が巨大化</b> — 弾が大きくなり当てやすくダメージも上昇</li>
-      <li>🔴 <b>レーザー砲</b> — 壁を貫通する高威力レーザーに変化</li>
-      <li>💣 <b>爆弾</b> — 爆弾を1個入手(最大3個まで持てる)</li>
-      <li>🛡️ <b>シールド</b> — ダメージを一定量肩代わりする盾を張る</li>
-      <li>📏 <b>剣の間合い</b> — 斬撃の射程が伸びる</li>
-      <li>👥 <b>分身</b> — 少し透明で無敵の分身が横に現れ、本体と分身の<b>両方が同時に攻撃</b>するようになる(両方当たれば合計ダメージ2倍)</li>
-    </ul>
+    <div class="help-section hidden" data-help-section="win">
+      <button class="help-back-btn">← 一覧へ戻る</button>
+      <h3>勝敗</h3>
+      <ul>
+        <li>相手のHPを0にするとそのラウンドの勝利</li>
+        <li><b>3本先取</b>すると試合(マッチ)勝利</li>
+      </ul>
+    </div>
 
-    <h3>モンスター</h3>
-    <ul>
-      <li>🧟 時間経過で定期的に出現。ゆっくりこちらへ近づいてくる。触れるとダメージ、HPはプレイヤーの1/4ほど。倒すとアイテムを1つ落とす</li>
-      <li>👑 ごく稀に強化された<b>金色のモンスター</b>が出現。通常より頑丈で移動も速く、近くにいる全プレイヤーへ範囲攻撃してくる</li>
-      <li>🐔 たまに<b>金のニワトリ</b>が出現。プレイヤーから逃げ回るだけで攻撃してこない。HPは通常モンスターと同じだが素早く倒すのは大変。倒すと周囲に<b>3種類</b>のアイテムが出現</li>
-    </ul>
+    <div class="help-section hidden" data-help-section="items">
+      <button class="help-back-btn">← 一覧へ戻る</button>
+      <h3>アイテム一覧(フィールドに出現、触れると入手)</h3>
+      <ul class="help-item-list">
+        <li>⚡ <b>スピード</b> — 移動速度アップ</li>
+        <li>🔥 <b>連射</b> — 射撃の連射速度アップ</li>
+        <li>💥 <b>攻撃力</b> — 弾のダメージアップ</li>
+        <li>❤️ <b>回復</b> — その場でHP回復</li>
+        <li>🟣 <b>弾が巨大化</b> — 弾が大きくなり当てやすくダメージも上昇</li>
+        <li>🔴 <b>レーザー砲</b> — 壁を貫通する高威力レーザーに変化</li>
+        <li>💣 <b>爆弾</b> — 爆弾を1個入手(最大3個まで持てる)</li>
+        <li>🛡️ <b>シールド</b> — ダメージを一定量肩代わりする盾を張る</li>
+        <li>📏 <b>剣の間合い</b> — 斬撃の射程が伸びる</li>
+        <li>👥 <b>分身</b> — 少し透明で無敵の分身が横に現れ、本体と分身の<b>両方が同時に攻撃</b>するようになる(両方当たれば合計ダメージ2倍)</li>
+      </ul>
+    </div>
 
-    <h3>地形</h3>
-    <ul>
-      <li>壁 — 弾を防ぐ、破壊不可</li>
-      <li>ブロック — 攻撃(射撃・斬撃・爆弾)で破壊できる障害物。破壊すると約20%の確率でアイテムが出現</li>
-      <li>🔴 赤いブロック — まれに出現する強化ブロック。通常の2倍頑丈だが、破壊すると必ずアイテムが出現</li>
-      <li>🟡 金のブロック — ごく稀に出現する最強ブロック。通常の5倍頑丈な代わりに、破壊するとアイテムが3つランダムに出現</li>
-      <li>木・ビル — 下に隠れると見えなくなる(見た目だけで当たり判定はなし)</li>
-      <li>ビルの中 — 高確率でアイテムが隠れている。中に留まっていると少しずつHPが回復する</li>
-    </ul>
+    <div class="help-section hidden" data-help-section="monsters">
+      <button class="help-back-btn">← 一覧へ戻る</button>
+      <h3>モンスター</h3>
+      <ul>
+        <li>🧟 時間経過で定期的に出現。ゆっくりこちらへ近づいてくる。触れるとダメージ、HPはプレイヤーの1/4ほど。倒すとアイテムを1つ落とす</li>
+        <li>👑 ごく稀に強化された<b>金色のモンスター</b>が出現。通常より頑丈で移動も速く、近くにいる全プレイヤーへ範囲攻撃してくる</li>
+        <li>🐔 たまに<b>金のニワトリ</b>が出現。プレイヤーから逃げ回るだけで攻撃してこない。HPは通常モンスターと同じだが素早く倒すのは大変。倒すと周囲に<b>3種類</b>のアイテムが出現</li>
+      </ul>
+    </div>
 
-    <h3>🎰 ルーレット(部屋作成時に有効化した場合)</h3>
-    <ul>
-      <li>ラウンドに勝利すると自動抽選、50%の確率でランダムなアイテムを1つ獲得</li>
-      <li>獲得した効果は次のラウンド開始時に自動的に付与される</li>
-    </ul>
+    <div class="help-section hidden" data-help-section="terrain">
+      <button class="help-back-btn">← 一覧へ戻る</button>
+      <h3>地形</h3>
+      <ul>
+        <li>壁 — 弾を防ぐ、破壊不可</li>
+        <li>ブロック — 攻撃(射撃・斬撃・爆弾)で破壊できる障害物。破壊すると約20%の確率でアイテムが出現</li>
+        <li>🔴 赤いブロック — まれに出現する強化ブロック。通常の2倍頑丈だが、破壊すると必ずアイテムが出現</li>
+        <li>🟡 金のブロック — ごく稀に出現する最強ブロック。通常の5倍頑丈な代わりに、破壊するとアイテムが3つランダムに出現</li>
+        <li>木・ビル — 下に隠れると見えなくなる(見た目だけで当たり判定はなし)</li>
+        <li>ビルの中 — 高確率でアイテムが隠れている。中に留まっていると少しずつHPが回復する</li>
+      </ul>
+    </div>
+
+    <div class="help-section hidden" data-help-section="roulette">
+      <button class="help-back-btn">← 一覧へ戻る</button>
+      <h3>🎰 ルーレット(部屋作成時に有効化した場合)</h3>
+      <ul>
+        <li>ラウンドに勝利すると自動抽選、50%の確率でランダムなアイテムを1つ獲得</li>
+        <li>獲得した効果は次のラウンド開始時に自動的に付与される</li>
+      </ul>
+    </div>
   </div>
 </div>
 
