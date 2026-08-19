@@ -786,7 +786,7 @@ function detonateBombsFor(room, p) {
   const mine = room.bombs.filter((b) => b.ownerId === p.id);
   if (mine.length === 0) return;
   room.bombs = room.bombs.filter((b) => b.ownerId !== p.id);
-  const now = Date.now();
+  const now = gnow(room);
   for (const b of mine) explodeBomb(room, b, now);
 }
 
@@ -1342,10 +1342,27 @@ function getRoom(id) {
       rouletteResult: null,
       loop: null,
       lastTick: Date.now(),
+      paused: false, // either player can toggle — see the 'pause' message handler below;
+        // gnow()/pauseOffsetMs (below) keep every timer (spawns, buffs, cooldowns, the
+        // countdown) frozen for the whole room while paused, not just movement/combat.
+      pauseOffsetMs: 0,
+      pauseStartedAtVirtual: 0,
+      pauseStartedAtReal: 0,
     };
     rooms.set(id, room);
   }
   return room;
+}
+
+// Every timestamp in this file (buff/spawn/cooldown deadlines, the countdown, etc.) is
+// computed from this instead of a raw Date.now(), so pausing can freeze all of them at once
+// without hunting down and individually shifting each one. While paused, gnow() returns the
+// exact instant pause started, held constant no matter how long the pause actually lasts in
+// real time; resuming (see the 'pause' handler) folds the real elapsed pause duration into
+// pauseOffsetMs so gnow() picks up again right where it left off, seamlessly.
+function gnow(room) {
+  if (room.paused) return room.pauseStartedAtVirtual;
+  return Date.now() - room.pauseOffsetMs;
 }
 
 function resetPositions(room) {
@@ -1369,7 +1386,7 @@ function resetPositions(room) {
   });
   room.bullets = [];
   room.items = [];
-  room.nextItemSpawnAt = Date.now() + 3000;
+  room.nextItemSpawnAt = gnow(room) + 3000;
   const generated = generateWallsAndBlocks(room);
   room.walls = generated.walls;
   room.blocks = generated.blocks;
@@ -1390,7 +1407,7 @@ function resetPositions(room) {
   room.bombs = [];
   room.explosions = [];
   room.monsters = [];
-  room.nextMonsterSpawnAt = Date.now() + MONSTER_SPAWN_MIN_MS + Math.random() * (MONSTER_SPAWN_MAX_MS - MONSTER_SPAWN_MIN_MS);
+  room.nextMonsterSpawnAt = gnow(room) + MONSTER_SPAWN_MIN_MS + Math.random() * (MONSTER_SPAWN_MAX_MS - MONSTER_SPAWN_MIN_MS);
   for (const ws of room.buffs.keys()) {
     room.buffs.set(ws, freshBuffs());
   }
@@ -1400,7 +1417,7 @@ function resetPositions(room) {
   if (room.rouletteResult && room.rouletteResult.hit) {
     for (const [ws, p] of room.players) {
       if (p.id === room.rouletteResult.winnerId) {
-        applyItemEffect(room, ws, p, room.rouletteResult.itemType, Date.now());
+        applyItemEffect(room, ws, p, room.rouletteResult.itemType, gnow(room));
         break;
       }
     }
@@ -1430,7 +1447,7 @@ function startCountdown(room) {
   // human-vs-human rematch) keeps the normal countdown, matching the client's own "show the
   // narration card once per transition, not once per round" rule (introShownForStage).
   const waitMs = room.isCpuMatch && (room.pendingStoryIntro || room.pendingMobWaveIntro) ? STORY_INTRO_WAIT_MS : 3000;
-  room.countdownEndsAt = Date.now() + waitMs;
+  room.countdownEndsAt = gnow(room) + waitMs;
   room.pendingStoryIntro = false;
   room.pendingMobWaveIntro = false;
   resetPositions(room);
@@ -1439,7 +1456,7 @@ function startCountdown(room) {
 
 function ensureLoop(room) {
   if (room.loop) return;
-  room.lastTick = Date.now();
+  room.lastTick = gnow(room);
   // An uncaught exception thrown inside a setInterval callback crashes the entire Node
   // process by default — not just this one room — taking down every connected player's game
   // until someone notices and manually restarts the server. Catching here means a bug in one
@@ -1610,9 +1627,15 @@ function spawnWaveMob(room) {
 }
 
 function tick(room) {
-  const now = Date.now();
+  const now = gnow(room);
   const dt = Math.min(0.05, (now - room.lastTick) / 1000);
   room.lastTick = now;
+  // Skip every bit of simulation (movement, combat, spawns, buff/cooldown expiry, the
+  // countdown) while paused — gnow() already freezes `now` itself for the whole room, so
+  // nothing here needs its own separate pause check, and dt stays tiny (no catch-up jump)
+  // once resumed since lastTick was kept in lockstep with the frozen now above. Still
+  // broadcasts every tick so the paused state itself (and who's in the room) stays live.
+  if (room.paused) { broadcastState(room); return; }
 
   if (room.phase === 'countdown') {
     if (now >= room.countdownEndsAt) room.phase = 'playing';
@@ -1969,7 +1992,7 @@ function tick(room) {
 }
 
 function broadcastState(room) {
-  const now = Date.now();
+  const now = gnow(room); // frozen while paused, so buff-remaining-time display freezes too, not just the sim
   const players = [...room.players.entries()].map(([ws, p]) => {
     const b = room.buffs.get(ws) || freshBuffs();
     let clone = null;
@@ -1999,7 +2022,8 @@ function broadcastState(room) {
   const state = {
     type: 'state',
     phase: room.phase,
-    countdown: room.phase === 'countdown' ? Math.max(0, Math.ceil((room.countdownEndsAt - Date.now()) / 1000)) : 0,
+    paused: room.paused,
+    countdown: room.phase === 'countdown' ? Math.max(0, Math.ceil((room.countdownEndsAt - now) / 1000)) : 0,
     players,
     bullets: room.bullets,
     items: room.items,
@@ -2127,13 +2151,34 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
       inp.swording = !!data.swording;
     } else if (data.type === 'fireOnce') {
       const p = room.players.get(ws);
-      if (p && room.phase === 'playing') attemptFire(room, ws, p, Date.now());
+      if (p && room.phase === 'playing' && !room.paused) attemptFire(room, ws, p, gnow(room));
     } else if (data.type === 'placeBomb') {
       const p = room.players.get(ws);
-      if (p && room.phase === 'playing') placeBombFor(room, p);
+      if (p && room.phase === 'playing' && !room.paused) placeBombFor(room, p);
     } else if (data.type === 'detonateBomb') {
       const p = room.players.get(ws);
-      if (p && room.phase === 'playing') detonateBombsFor(room, p);
+      if (p && room.phase === 'playing' && !room.paused) detonateBombsFor(room, p);
+    } else if (data.type === 'pause') {
+      // Either player can toggle — shared, room-scoped state, so this naturally pauses/resumes
+      // for everyone in the room at once (per explicit request for 2P co-op), not just the
+      // sender. Only meaningful mid-round; ignored elsewhere (waiting/countdown/finished all
+      // have their own reasons nothing should be moving yet, and toggling paused there would
+      // just be confusing state to reason about for no benefit).
+      if (room.phase === 'playing') {
+        if (room.paused) {
+          room.paused = false;
+          room.pauseOffsetMs += Date.now() - room.pauseStartedAtReal;
+        } else {
+          // gnow() must be read *before* flipping the flag below — once room.paused is true,
+          // gnow() itself starts returning pauseStartedAtVirtual, so computing it after would
+          // just read back whatever was already there instead of the current real moment.
+          const virtualNow = gnow(room);
+          room.paused = true;
+          room.pauseStartedAtVirtual = virtualNow;
+          room.pauseStartedAtReal = Date.now();
+        }
+        broadcastState(room);
+      }
     } else if (data.type === 'rematch') {
       if (room.phase === 'finished' && room.players.size === (room.storyCoop ? 3 : 2)) {
         // A finished match (someone already reached MATCH_WIN_TARGET) starts a brand new

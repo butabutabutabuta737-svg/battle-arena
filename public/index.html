@@ -18,6 +18,7 @@
 <button class="mute-btn" id="muteBtn" title="サウンドのON/OFF">🔊</button>
 <button class="home-btn hidden" id="homeBtn" title="タイトルに戻る">🏠</button>
 <button class="help-toggle-btn hidden" id="helpToggleBtn" title="遊び方">❓</button>
+<button class="pause-toggle-btn hidden" id="pauseToggleBtn" title="一時停止">⏸️</button>
 
 <div id="modeSelect" class="screen">
   <!-- No on-screen <h1> here on purpose — the title screen's background art (see style.css's
@@ -331,6 +332,14 @@
     <div class="overlay" id="waitOverlay">
       <div class="status-big" id="statusLabel">相手を待っています…</div>
       <div id="shareHint" style="font-size:13px;color:#9aa3d1;">部屋コード「<b id="roomLabel2">----</b>」を相手に伝えてください</div>
+    </div>
+
+    <!-- Either player pausing pauses the whole room (server-authoritative, see game.js's
+         'pause' handler) — this shows on both screens at once, not just the one who pressed
+         it, so it needs its own resume control rather than assuming only the presser sees it. -->
+    <div class="overlay hidden" id="pauseOverlay">
+      <div class="status-big">⏸️ 一時停止中</div>
+      <button class="btn-primary" id="resumeBtn">▶ 再開する</button>
     </div>
 
     <div class="overlay hidden" id="resultOverlay">

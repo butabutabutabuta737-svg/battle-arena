@@ -909,6 +909,12 @@ button:active {
   text-shadow: 0 0 18px rgba(143, 176, 255, 0.6);
 }
 
+/* Above every other overlay (boss-intro's 30, story/true-ending's 35) — pausing mid-fight
+   should freeze/cover whatever's on screen, dramatic cards included, not sit behind them. */
+#pauseOverlay {
+  z-index: 50;
+}
+
 .overlay .result-banner {
   font-size: 34px;
   font-weight: 800;
@@ -1420,6 +1426,27 @@ button:active {
   border-radius: 50%;
   font-size: 15px;
   font-weight: 800;
+  line-height: 1;
+  background: rgba(20, 24, 48, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #eef1ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Stacked directly above .help-toggle-btn (same left offset, 8px gap) — mirrors how
+   .sword-btn stacks above .fire-btn on the right. */
+.pause-toggle-btn {
+  position: fixed;
+  bottom: calc(max(20px, env(safe-area-inset-bottom) + 14px) + 44px);
+  left: max(18px, env(safe-area-inset-left) + 10px);
+  z-index: 20;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 15px;
   line-height: 1;
   background: rgba(20, 24, 48, 0.75);
   border: 1px solid rgba(255, 255, 255, 0.15);

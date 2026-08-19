@@ -63,6 +63,9 @@
   const muteBtn = $('#muteBtn');
   const homeBtn = $('#homeBtn');
   const helpToggleBtn = $('#helpToggleBtn');
+  const pauseToggleBtn = $('#pauseToggleBtn');
+  const pauseOverlay = $('#pauseOverlay');
+  const resumeBtn = $('#resumeBtn');
   const storyRetryBtn = $('#storyRetryBtn');
   const modeStoryBtn = $('#modeStoryBtn');
   const storyIntro = $('#storyIntro');
@@ -486,6 +489,7 @@
       gameScreen.classList.remove('hidden');
       homeBtn.classList.remove('hidden');
       helpToggleBtn.classList.remove('hidden');
+      pauseToggleBtn.classList.remove('hidden');
       roomLabel.textContent = room;
       roomLabel2.textContent = room;
       fitArenaSoon();
@@ -520,6 +524,7 @@
         gameScreen.classList.add('hidden');
         homeBtn.classList.add('hidden');
         helpToggleBtn.classList.add('hidden');
+        pauseToggleBtn.classList.add('hidden');
         lobby.classList.remove('hidden');
         if (window.GameAudio) window.GameAudio.startTitleBgm();
       } else if (data.type === 'state') {
@@ -602,6 +607,7 @@
     gameScreen.classList.add('hidden');
     homeBtn.classList.add('hidden');
     helpToggleBtn.classList.add('hidden');
+    pauseToggleBtn.classList.add('hidden');
     lobby.classList.add('hidden');
     storyIntro.classList.add('hidden');
     story2pLobby.classList.add('hidden');
@@ -687,6 +693,16 @@
   });
   helpBtn.addEventListener('click', () => { audioReady(); playSelectSfx(); openHelp(); });
   helpToggleBtn.addEventListener('click', () => { audioReady(); openHelp(); });
+
+  // Sends a toggle request to the server — it decides whether that means pause or resume
+  // (room.paused is server-side, shared state), so both buttons just send the same message
+  // rather than each client tracking/guessing the current state itself.
+  function requestPauseToggle() {
+    audioReady();
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'pause' }));
+  }
+  pauseToggleBtn.addEventListener('click', requestPauseToggle);
+  resumeBtn.addEventListener('click', requestPauseToggle);
   helpCloseBtn.addEventListener('click', () => helpOverlay.classList.add('hidden'));
   helpOverlay.addEventListener('click', (e) => { if (e.target === helpOverlay) helpOverlay.classList.add('hidden'); });
 
@@ -2421,6 +2437,11 @@
     detonateBombBtn.classList.toggle('hidden', myPlacedBombs <= 0);
     bombStatusCount.textContent = myBombCount;
     bombStatus.classList.toggle('hidden', myBombCount <= 0);
+
+    // Independent of the phase dispatch below (server only ever sets paused during 'playing',
+    // but this reads the flag directly rather than assuming that) — either player's toggle
+    // affects state.paused for the whole room, so both screens show/hide this together.
+    pauseOverlay.classList.toggle('hidden', !state.paused);
 
     if (state.phase === 'waiting') {
       statusLabel.textContent = '相手を待っています…';
