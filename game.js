@@ -331,7 +331,11 @@ function generateWallsAndBlocks(room) {
   const spawnPoints = getSpawnPoints(room);
   const spawnBuffer = 95;
 
-  const pieceCount = 6 + Math.floor(Math.random() * 4); // 6-9 mirrored pieces total (walls+blocks)
+  // 12-18 (was 6-9, doubled per explicit request once the arena itself got taller/bigger —
+  // see ARENA_H — so the same piece count no longer filled the extra space) mirrored pieces
+  // total (walls+blocks), split via makePiece()'s fixed BLOCK_TO_WALL_RATIO, so this scales
+  // both proportionally rather than just blocks alone.
+  const pieceCount = (6 + Math.floor(Math.random() * 4)) * 2;
   const walls = [];
   const blocks = [];
   const allPlaced = [];
@@ -339,7 +343,7 @@ function generateWallsAndBlocks(room) {
   let placed = 0;
   let attempts = 0;
 
-  while (placed < pieceCount && attempts < 320) {
+  while (placed < pieceCount && attempts < 640) {
     attempts++;
     const piece = makePiece();
     const rects = piece.rects;
