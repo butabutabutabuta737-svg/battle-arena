@@ -165,15 +165,19 @@
   // game.js's STORY_BOSSES) since that's authoritative game data; this table only supplies
   // presentation the server has no reason to know about, same pattern as ITEM_META/BUFF_META.
   const BOSS_TIER_THEME = [
-    // facePos: object-position for the portrait <img> — the source crops are tall full-body
-    // shots with varying amounts of sky/background above each head, so "top" alone doesn't
-    // land on the face for all of them (calibrated by rendering each at actual display size
-    // and eyeballing it — boss2's crop has a raised flag over its head needing extra offset).
-    { uniform: '#8fae6b', icon: '🔰', image: 'images/bosses/boss1.jpg', facePos: 'center top' }, // stage1: rookie soldier, muted olive
-    { uniform: '#d98a3d', icon: '🗡️', image: 'images/bosses/boss2.jpg', facePos: 'center 22%' }, // stage2: veteran mercenary, bronze
-    { uniform: '#c0392b', icon: '🎖️', image: 'images/bosses/boss3.jpg', facePos: 'center top' }, // stage3: elite squad captain, deep red
-    { uniform: '#6b5b95', icon: '🔪', image: 'images/bosses/boss4.jpg', facePos: 'center top' }, // stage4: knife specialist, stealthy purple
-    { uniform: '#ffd35b', icon: '👑', image: 'images/bosses/boss5.jpg', facePos: 'center top' }, // stage5: battlefield champion, gold
+    // image: deliberately a *separate* set of files (boss*-face.jpg) from the plain boss*.jpg
+    // used elsewhere (.boss-portrait on #storyIntro's 5-boss row, .cert-portrait on the
+    // certificate) — those two still want the original tall full-body shot at their own
+    // narrower/taller display boxes, but this portrait (the pre-battle セリフ card) got a
+    // dedicated request to show more face and less background, without changing the card's
+    // own display size. Cropped tight on the face/shoulders specifically for this card's
+    // ~140x175 box, so plain "center top" reads well for all five without needing the
+    // per-boss offset the old wide-shot crops did.
+    { uniform: '#8fae6b', icon: '🔰', image: 'images/bosses/boss1-face.jpg', facePos: 'center top' }, // stage1: rookie soldier, muted olive
+    { uniform: '#d98a3d', icon: '🗡️', image: 'images/bosses/boss2-face.jpg', facePos: 'center top' }, // stage2: veteran mercenary, bronze
+    { uniform: '#c0392b', icon: '🎖️', image: 'images/bosses/boss3-face.jpg', facePos: 'center top' }, // stage3: elite squad captain, deep red
+    { uniform: '#6b5b95', icon: '🔪', image: 'images/bosses/boss4-face.jpg', facePos: 'center top' }, // stage4: knife specialist, stealthy purple
+    { uniform: '#ffd35b', icon: '👑', image: 'images/bosses/boss5-face.jpg', facePos: 'center top' }, // stage5: battlefield champion, gold
   ];
   // Flavor text for the between-boss grunt-wave mini-game, indexed by mobWaveIndex-1 (1-4,
   // matching game.js's MOB_WAVE_COLOR_WEIGHTS) — ties each wave to the boss just defeated and
