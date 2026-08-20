@@ -657,6 +657,18 @@ button:active {
   max-width: 320px;
   margin: 6px auto 0;
 }
+/* .hp-block's flex:1 (below) is correct inside .hud's flex *row* (splits width evenly with the
+   other hp-block there) — but #allyHpBlock is a direct child of #game, a column-direction flex
+   container, where flex:1 instead stretches it to fill ALL leftover vertical space (confirmed
+   live: it was rendering ~228px tall for what should be a compact name+bar+buffs row, visibly
+   shrinking the arena below it in 2P co-op specifically — same bug class as the earlier
+   resumeBtn fix, just a different element). An earlier attempt at this fix used the
+   .ally-hp-block class, same specificity as .hp-block's own rule below it — since that rule
+   comes later in the file, it won the cascade regardless; the ID selector here guarantees this
+   wins no matter the declaration order. */
+#allyHpBlock {
+  flex: none;
+}
 
 .hp-block {
   flex: 1;

@@ -59,9 +59,19 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocket.Server({ server });
 
+// Defense-in-depth alongside the client's own normalizeRoomCode() (public/client.js) — a
+// full-width room code ("ＡＢ１２") looks identical to its half-width form ("AB12") but is a
+// different string, and .toUpperCase() alone doesn't fix that (only affects case, not width).
+// Normalizing here too means any future/alternate client path still lands in the same room.
+function normalizeRoomId(raw) {
+  return raw
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .toUpperCase();
+}
+
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, 'http://localhost');
-  const roomId = (url.searchParams.get('room') || 'DEFAULT').toUpperCase().slice(0, 8);
+  const roomId = normalizeRoomId(url.searchParams.get('room') || 'DEFAULT').slice(0, 8);
   const name = url.searchParams.get('name') || 'プレイヤー';
   const cpu = url.searchParams.get('cpu');
   const roulette = url.searchParams.get('roulette') === '1';

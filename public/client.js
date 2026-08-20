@@ -474,6 +474,24 @@
     return s;
   }
 
+  // Room codes are only ever *typed* by the joining side — the creator's is always
+  // machine-generated half-width (randomRoomCode() above). A phone's default text-input
+  // keyboard commonly defaults to full-width (全角) characters for Japanese users, and
+  // "ＡＢ１２" LOOKS identical to "AB12" at a glance but is a completely different string —
+  // .toUpperCase() alone only affects case, not width, so it silently never matched. This
+  // exactly matches the reported symptom (both sides stuck "waiting for opponent", works only
+  // sometimes depending on which input mode happened to be active when typing) far better
+  // than the earlier cold-start theory alone did. Normalizes full-width alphanumerics (and
+  // the full-width space some IMEs insert) down to their half-width equivalents before the
+  // existing trim/uppercase/room-lookup.
+  function normalizeRoomCode(raw) {
+    return raw
+      .replace(/[Ａ-Ｚａ-ｚ０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+      .replace(/　/g, ' ')
+      .trim()
+      .toUpperCase();
+  }
+
   const connectingBanner = $('#connectingBanner');
   const connectingText = $('#connectingText');
   let connectRetryTimer = null;
@@ -813,7 +831,7 @@
 
   joinBtn.addEventListener('click', () => {
     audioReady();
-    const room = roomInput.value.trim().toUpperCase();
+    const room = normalizeRoomCode(roomInput.value);
     if (!room) {
       alert('部屋コードを入力してください');
       return;
@@ -980,7 +998,7 @@
   });
   story2pJoinBtn.addEventListener('click', () => {
     audioReady();
-    const room = story2pRoomInput.value.trim().toUpperCase();
+    const room = normalizeRoomCode(story2pRoomInput.value);
     if (!room) {
       alert('部屋コードを入力してください');
       return;
