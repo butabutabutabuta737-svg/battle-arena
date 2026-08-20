@@ -659,7 +659,14 @@ function attemptSword(room, ws, p, now) {
 
   const buffs = room.buffs.get(ws);
   const rangeActive = buffs && now < buffs.swordRange;
-  const range = rangeActive ? SWORD_RANGE * SWORD_RANGE_BUFF_MULT : SWORD_RANGE;
+  // Stage4's boss (血刃の暗殺者, a sword specialist — see its melee-focused preferredRange
+  // tuning elsewhere) always fights at the item's buffed reach, not just while it happens to
+  // hold the pickup — per explicit request. room.storyStage stays frozen at its pre-EX value
+  // during the EX fight (see EX boss handling elsewhere), so this naturally excludes EX
+  // without needing its own separate guard. Covers both 1P and 2P co-op, since both use the
+  // same room.storyStage numbering.
+  const stage4BossMelee = room.isCpuMatch && p.isBoss && room.storyStage === 4;
+  const range = (rangeActive || stage4BossMelee) ? SWORD_RANGE * SWORD_RANGE_BUFF_MULT : SWORD_RANGE;
 
   for (const origin of attackOrigins(room, ws, p, now)) {
     let hitTarget = null;
@@ -1084,9 +1091,13 @@ function updateCpuAI(room, now) {
   inp.angle = Math.atan2(human.y - cpu.y, human.x - cpu.x) + st.aimJitterVal;
   // Sword out-damages a bullet and needs no cooldown/buff bookkeeping, so once the human
   // is already point-blank (aim is already locked onto them above) just prefer it over
-  // shooting instead of running a whole separate decision cycle for it.
+  // shooting instead of running a whole separate decision cycle for it. Stage4's boss
+  // (always-extended reach — see attemptSword()) needs this threshold extended to match, or
+  // it would never actually attempt a swing from beyond the plain SWORD_RANGE despite being
+  // able to land one from further out.
   const distToHumanNow = Math.hypot(human.x - cpu.x, human.y - cpu.y);
-  inp.swording = distToHumanNow <= SWORD_RANGE + PLAYER_RADIUS;
+  const swordReach = room.storyStage === 4 ? SWORD_RANGE * SWORD_RANGE_BUFF_MULT : SWORD_RANGE;
+  inp.swording = distToHumanNow <= swordReach + PLAYER_RADIUS;
   inp.shooting = st.firing && !inp.swording;
 
   // Stage 1's rookie boss never bothers with bombs. Stage 2+ opportunistically drop one
@@ -1266,7 +1277,10 @@ function updateCpuAICoop(room, now) {
 
   inp.angle = Math.atan2(human.y - cpu.y, human.x - cpu.x) + st.aimJitterVal;
   const distToHumanNow = Math.hypot(human.y - cpu.y, human.x - cpu.x);
-  inp.swording = distToHumanNow <= SWORD_RANGE + PLAYER_RADIUS;
+  // Stage4's boss (always-extended reach — see attemptSword()) needs this threshold extended
+  // to match, same reasoning as updateCpuAI's 1P version above.
+  const swordReach = room.storyStage === 4 ? SWORD_RANGE * SWORD_RANGE_BUFF_MULT : SWORD_RANGE;
+  inp.swording = distToHumanNow <= swordReach + PLAYER_RADIUS;
   inp.shooting = st.firing && !inp.swording;
 
   if (room.storyStage >= 2) {
