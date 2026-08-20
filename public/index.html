@@ -20,6 +20,15 @@
 <button class="help-toggle-btn hidden" id="helpToggleBtn" title="遊び方">❓</button>
 <button class="pause-toggle-btn hidden" id="pauseToggleBtn" title="一時停止">⏸️</button>
 
+<!-- Shown while a WebSocket connection attempt is in flight but hasn't opened yet — most
+     visibly useful when the host (e.g. a free-tier Render server that went to sleep from
+     inactivity) takes 30-60s to wake up on the first request, during which connect() below
+     retries automatically rather than just failing silently/looking broken. -->
+<div class="connecting-banner hidden" id="connectingBanner">
+  <div class="connecting-spinner"></div>
+  <span id="connectingText">サーバーに接続中…</span>
+</div>
+
 <div id="modeSelect" class="screen">
   <!-- No on-screen <h1> here on purpose — the title screen's background art (see style.css's
        #modeSelect background-image) already has "戦場の狼達" baked into the artwork itself,

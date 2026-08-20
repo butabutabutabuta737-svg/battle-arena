@@ -1458,6 +1458,43 @@ button:active {
   justify-content: center;
 }
 
+/* ---- connecting/retry banner (see connect()'s retry loop in client.js) ---- */
+.connecting-banner {
+  position: fixed;
+  top: max(70px, env(safe-area-inset-top) + 60px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(20, 24, 48, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  color: #eef1ff;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  max-width: calc(100vw - 32px);
+}
+.connecting-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #8fb0ff;
+  animation: connecting-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes connecting-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .connecting-spinner { animation: none; }
+}
+
 /* Stacked directly above .help-toggle-btn (same left offset, 8px gap) — mirrors how
    .sword-btn stacks above .fire-btn on the right. */
 .pause-toggle-btn {

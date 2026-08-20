@@ -470,17 +470,51 @@
     return s;
   }
 
+  const connectingBanner = $('#connectingBanner');
+  const connectingText = $('#connectingText');
+  let connectRetryTimer = null;
+  let connectAttempt = 0;
+  const CONNECT_RETRY_MS = 4000;
+  // ~80s of retrying — comfortably covers a free-tier host (e.g. Render) waking from sleep
+  // after being idle, without retrying forever if the server is genuinely unreachable.
+  const CONNECT_MAX_ATTEMPTS = 20;
+
+  function hideConnectingBanner() {
+    connectingBanner.classList.add('hidden');
+  }
+  // Cancels any in-flight connection attempt/retry loop and closes whatever ws exists —
+  // needed on every "back" button reachable while a connect() might still be retrying (a
+  // cold-start retry can now take up to ~80s), so a user who gives up and navigates away
+  // doesn't get silently, jarringly dropped into gameScreen minutes later if the connection
+  // happens to succeed after they've already left.
+  function cancelPendingConnect() {
+    if (connectRetryTimer) { clearTimeout(connectRetryTimer); connectRetryTimer = null; }
+    hideConnectingBanner();
+    leavingIntentionally = true;
+    if (ws) { ws.close(); ws = null; }
+  }
+
   function connect(room, name, wantsStoryCpu, roulette, wantsCoop) {
     audioReady();
+    if (connectRetryTimer) { clearTimeout(connectRetryTimer); connectRetryTimer = null; }
+    connectAttempt = 0;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const cpuParam = wantsStoryCpu ? '&cpu=story' : '';
     const rouletteParam = roulette ? '&roulette=1' : '';
     const coopParam = wantsCoop ? '&coop=1' : '';
     const url = `${proto}://${location.host}/?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}${cpuParam}${rouletteParam}${coopParam}`;
+    leavingIntentionally = false;
+    attemptConnect(url, room);
+  }
+
+  function attemptConnect(url, room) {
+    let opened = false;
     ws = new WebSocket(url);
 
-    leavingIntentionally = false;
     ws.addEventListener('open', () => {
+      opened = true;
+      connectAttempt = 0;
+      hideConnectingBanner();
       if (window.GameAudio) window.GameAudio.stopTitleBgm();
       modeSelect.classList.add('hidden');
       lobby.classList.add('hidden');
@@ -537,12 +571,34 @@
 
     ws.addEventListener('close', () => {
       if (window.GameAudio) window.GameAudio.stopBgm();
-      // An intentional close (goToTitle()/a fresh connect()) already runs resetClientState(),
-      // which cancels this — but an unexpected drop (server hiccup, network loss) reaches
-      // this path without ever calling it, so a roulette spin still mid-flight would
+      // An intentional close (goToTitle()/a fresh connect()/cancelPendingConnect()) already
+      // sets this, which cancels everything below — but an unexpected drop (server hiccup,
+      // network loss) reaches this path without it, so a roulette spin still mid-flight would
       // otherwise keep ticking in the background under the "connection lost" message.
       if (rouletteSpinTimer) { clearTimeout(rouletteSpinTimer); rouletteSpinTimer = null; }
       if (leavingIntentionally) return;
+      if (!opened) {
+        // Never successfully connected. Most likely cause on this project's actual host: a
+        // free-tier server (e.g. Render) that went to sleep after being idle takes 30-60s to
+        // wake up on the next request, and can 502/503/hang during that window — which, with
+        // no handling, looked exactly like "the room just doesn't work" (confirmed live: a
+        // direct request to the production URL returned a 503 during this exact scenario).
+        // Retrying automatically (capped, see CONNECT_MAX_ATTEMPTS) turns that into "a few
+        // seconds of visible waiting" instead of a silent failure indistinguishable from a
+        // real bug.
+        connectAttempt++;
+        if (connectAttempt > CONNECT_MAX_ATTEMPTS) {
+          hideConnectingBanner();
+          alert('サーバーに接続できませんでした。しばらくしてからもう一度お試しください。');
+          return;
+        }
+        connectingBanner.classList.remove('hidden');
+        connectingText.textContent = connectAttempt <= 1
+          ? 'サーバーに接続中…'
+          : 'サーバーを起動しています。少々お待ちください…';
+        connectRetryTimer = setTimeout(() => attemptConnect(url, room), CONNECT_RETRY_MS);
+        return;
+      }
       statusLabel.textContent = '接続が切れました。ページを再読み込みしてください。';
       waitOverlay.classList.remove('hidden');
     });
@@ -597,11 +653,7 @@
   }
 
   function goToTitle() {
-    leavingIntentionally = true;
-    if (ws) {
-      ws.close();
-      ws = null;
-    }
+    cancelPendingConnect();
     if (window.GameAudio) window.GameAudio.stopBgm();
     resetClientState();
     gameScreen.classList.add('hidden');
@@ -629,6 +681,7 @@
 
   lobbyBackBtn.addEventListener('click', () => {
     audioReady();
+    cancelPendingConnect();
     lobby.classList.add('hidden');
     modeSelect.classList.remove('hidden');
   });
@@ -653,6 +706,7 @@
 
   storyIntroBackBtn.addEventListener('click', () => {
     audioReady();
+    cancelPendingConnect();
     storyIntro.classList.add('hidden');
     modeSelect.classList.remove('hidden');
   });
@@ -909,6 +963,7 @@
   });
   story2pBackBtn.addEventListener('click', () => {
     audioReady();
+    cancelPendingConnect();
     story2pLobby.classList.add('hidden');
     storyIntro.classList.remove('hidden');
   });
