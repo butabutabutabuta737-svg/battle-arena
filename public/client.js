@@ -438,8 +438,19 @@
     // smaller phones) the buttons crept upward into the hint text with nothing accounting for
     // it. Measuring the highest button's live position (rather than a guessed constant) also
     // naturally captures whatever safe-area-inset is actually in effect on this device.
-    const swordBtnEl = document.getElementById('swordBtn');
-    const buttonFootprint = swordBtnEl ? Math.max(0, viewportH - swordBtnEl.getBoundingClientRect().top) : 0;
+    // The fire/sword/bomb row and the pause/help stack (bottom-left) are two independent
+    // fixed-position clusters — since the action buttons moved into one row (was a 2-tier
+    // stack, taller than this), the bottom-left pause+help stack can now be the taller of the
+    // two on some layouts, so both are checked and whichever reaches higher up the screen
+    // wins, rather than assuming the sword button is always the tallest.
+    let topMostButtonY = viewportH;
+    for (const id of ['swordBtn', 'pauseToggleBtn']) {
+      const el = document.getElementById(id);
+      if (el && getComputedStyle(el).display !== 'none') {
+        topMostButtonY = Math.min(topMostButtonY, el.getBoundingClientRect().top);
+      }
+    }
+    const buttonFootprint = Math.max(0, viewportH - topMostButtonY);
     usedHeight += buttonFootprint;
     // Slightly larger safety margin than a bare 6px — OS/browser-chrome quirks (address bar
     // show/hide, safe-area insets not fully reflected in visualViewport on some browsers)
@@ -1111,7 +1122,19 @@
     // block native touch-scroll (not the CSS property alone), so a touch that never reaches
     // preventDefault (because it started on the excluded HUD) can still scroll the page
     // normally if fitArena()'s sizing is ever off by enough to matter on some OS/browser.
-    return !!(el && el.closest && (el.closest('button') || el.closest('.hud')));
+    // Also excludes every *-overlay element (game-over, boss-intro/-defeat/-victory, story-
+    // ending, wait/pause/result, the modal help/certificate overlays — all consistently named
+    // "...overlay" in index.html, matched by substring so a new one added later is covered for
+    // free) — these can be taller than the space they're shown in (see .game-over-overlay's
+    // overflow-y:auto) and rely on a real touch-scroll to bring a below-the-fold button (e.g.
+    // the retry button after dying) into reach; without this exclusion, a touch starting on the
+    // overlay's background instead got captured as a joystick drag with its own preventDefault,
+    // silently blocking that scroll and leaving the button visible-but-unreachable. Confirmed
+    // as the actual mechanism behind a real "the retry button is cut off and I can't press it"
+    // report, not just a theoretical concern.
+    return !!(el && el.closest && (
+      el.closest('button') || el.closest('.hud') || el.closest('[class*="overlay"]')
+    ));
   }
 
   function joystickUpdate(clientX, clientY) {
@@ -2356,49 +2379,31 @@
 
   const STORY_BASE_MAX_HP = 100; // must match game.js's MAX_HP — the un-leveled baseline
 
-  // fillEl+bonusEl (see .hp-bar-bonus in style.css) together always span exactly the track's
-  // own 100%-width box — never further. `scale` shrinks both proportionally once maxHp exceeds
-  // the un-leveled baseline, so a leveled player or a boss with an hp multiplier reads as "more
-  // of the track is the (differently-colored) bonus segment" rather than "the bar physically
-  // grows past the track". It used to be the latter (bonusEl extended past a fixed
-  // left:calc(100% - 8px) anchor, unscaled, by however much hp exceeded the baseline) — that
-  // was fine for a modestly-leveled player, but a 2P co-op boss's hp multiplier (up to 2.6x from
-  // stage 1, see STORY_BOSSES_2P_TUNING's hpMult) blew the bar out to 2.6x its track's length
-  // with nothing capping it, running the whole thing off the right edge of the screen on phones
-  // (confirmed via a live 2-connection repro). When maxHp is at the baseline (the overwhelmingly
-  // common case — arena mode, un-leveled/1P story, a boss with no multiplier), scale is exactly
-  // 1 and this renders pixel-identical to the original fixed-track version.
-  //
-  // Bonus sits on the LEFT of the base segment (per explicit request — both player's and boss's
-  // bars), not the right: bonusEl is left:0, width bonusWidthPct%; fillEl starts 8px before
-  // bonus's right edge (overlapping it, hiding the seam under bonus's flat body — bonus is the
-  // later DOM sibling so it paints on top, same trick as before, just mirrored) and fills the
-  // rest of the track. Because fillEl's own left edge now depends on bonusWidthPct, taking
-  // damage while hp>100 (which only shrinks the bonus portion — see bonusHp below) visibly
-  // slides the base segment leftward to meet it, settling flush at the track's left edge once
-  // bonus reaches 0 — intentional, reads as the bonus "draining away" to reveal the base bar.
+  // fillEl = the base 0-100 HP (the "real" bar). bonusEl = extra HP above that baseline (a
+  // leveled player, or a 2P co-op boss's hp multiplier — see STORY_BOSSES_2P_TUNING). Redesigned
+  // (was: both segments scaled down to share the track, shrinking together) per explicit
+  // complaint that watching them drain at the same time made no sense — "the front bar should
+  // completely disappear before the one behind it starts going down". Now bonusEl is a full-
+  // width shield painted OVER fillEl (later DOM sibling, so it paints on top): while any bonus
+  // HP remains, it fully covers fillEl — which itself sits at its permanent 0-100%-of-hp width,
+  // genuinely unaffected by damage while hp>100 — and bonusEl's own width shrinks toward 0 as a
+  // fraction of ITS OWN max (bonusHp/bonusMaxHp), revealing progressively more of the (still
+  // full) base bar underneath as it goes. Only once bonus is fully gone does further damage
+  // start visibly shrinking fillEl itself. No more `scale`/8px-overlap trick — with bonus always
+  // spanning the same 0-100% box as fillEl (not squeezed to share the track with it), there's no
+  // seam to hide.
   function renderHpBar(fillEl, bonusEl, p) {
     const maxHp = (p && p.maxHp) || STORY_BASE_MAX_HP;
     const hp = Math.max(0, Math.min((p && p.hp) || 0, maxHp));
-    const scale = STORY_BASE_MAX_HP / Math.max(STORY_BASE_MAX_HP, maxHp);
-    const baseWidthPct = Math.min(hp, STORY_BASE_MAX_HP) * scale;
-    if (!bonusEl) {
-      fillEl.style.left = '0%';
-      fillEl.style.width = `${baseWidthPct}%`;
-      return;
-    }
+    const baseWidthPct = Math.min(hp, STORY_BASE_MAX_HP);
+    fillEl.style.left = '0%';
+    fillEl.style.width = `${baseWidthPct}%`;
+    if (!bonusEl) return;
+    const bonusMaxHp = Math.max(0, maxHp - STORY_BASE_MAX_HP);
     const bonusHp = Math.max(0, hp - STORY_BASE_MAX_HP);
-    const bonusWidthPct = bonusHp * scale;
+    const bonusWidthPct = bonusMaxHp > 0 ? (bonusHp / bonusMaxHp) * 100 : 0;
     bonusEl.style.left = '0%';
     bonusEl.style.width = `${bonusWidthPct}%`;
-    // The -8px only makes sense as an overlap against an actual bonus segment (hiding the seam
-    // between the two rounded-corner pieces) — with no bonus (the common case: arena mode,
-    // un-leveled/1P story, a boss with no multiplier) it was shifting the base bar 8px left of
-    // the track's true left edge for no reason, making even a full-HP bar visibly fall 8px
-    // short of the track's right edge — looked exactly like starting the round already
-    // slightly damaged.
-    fillEl.style.left = bonusWidthPct > 0 ? `calc(${bonusWidthPct}% - 8px)` : '0%';
-    fillEl.style.width = `${baseWidthPct}%`;
   }
 
   function updateHud(state) {

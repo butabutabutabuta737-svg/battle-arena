@@ -597,7 +597,7 @@ button:active {
 #game {
   flex-direction: column;
   justify-content: flex-start;
-  gap: 14px;
+  gap: 10px;
   padding: 18px;
   /* Extra top-only padding, on top of the plain 18px above — some phone OS/browser
      combinations report a "safe" viewport that's actually still partly covered by floating
@@ -655,7 +655,10 @@ button:active {
 .ally-hp-block {
   width: 100%;
   max-width: 320px;
-  margin: 6px auto 0;
+  /* #game's own gap (above) already puts space above this row — this used to add 6px more
+     on top of that, per an explicit request to tighten this row up and give the arena below
+     it a bit more height in 2P co-op. */
+  margin: 0 auto;
 }
 /* .hp-block's flex:1 (below) is correct inside .hud's flex *row* (splits width evenly with the
    other hp-block there) — but #allyHpBlock is a direct child of #game, a column-direction flex
@@ -723,11 +726,6 @@ button:active {
   height: 11px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.1);
-  /* The bg track's own footprint is the "original HP meter" and never resizes — per explicit
-     request, it stays exactly as it always was. overflow:visible (was hidden) is what lets
-     .hp-bar-bonus (below) actually extend past its right edge instead of being invisibly
-     clipped there — a same-length recolored bar didn't read as "HP actually increased", so
-     the bonus now genuinely makes the total bar longer. */
   overflow: visible;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -739,22 +737,17 @@ button:active {
   border-radius: 6px;
   transition: left 0.12s linear, width 0.12s linear;
 }
-/* Story-mode level bonus, redesigned to visibly extend the bar rather than recolor part of
-   a fixed-length one (see renderHpBar() in client.js): .hp-bar-fill only ever represents the
-   un-leveled base 0-100 hp, scaled to the bg track's normal 100%-width scale exactly as
-   before. Per explicit request, the bonus segment sits on the LEFT of the base segment (both
-   player's and boss's bars) — bonus is left:0, and fillEl's own left is set dynamically in
-   renderHpBar() to start 8px before bonus's right edge, so the two overlap instead of butting
-   edge-to-edge: both segments independently have border-radius:6px on all four corners, so a
-   flush seam would show a visible dip where fill's rounded left corner met bonus's rounded
-   right corner instead of reading as one continuous bar. bonus is the later DOM sibling
-   (paints on top), so the overlap disappears under its own flat body. A level-10 player at
-   full health (or a boss with an hp multiplier — see STORY_BOSSES_2P_TUNING) ends up with a
-   bar that's visibly ~2x the original track's length, all still within the track's own 100%
-   width (renderHpBar() rescales both segments to always sum to exactly that, never further —
-   letting it grow unscaled once let a 2P co-op boss's inflated bar run off the screen entirely
-   on phones). A boss with no multiplier (or any un-leveled player) simply never gets a nonzero
-   width here, and the display is pixel-identical to the plain original bar. */
+/* Story-mode level bonus / a 2P co-op boss's hp multiplier (see STORY_BOSSES_2P_TUNING) — see
+   renderHpBar() in client.js for the up-to-date logic. .hp-bar-fill always represents the plain
+   0-100 base HP, at its natural 0-100%-of-track width, completely unaffected by damage while any
+   bonus HP remains. .hp-bar-bonus is a full-width shield painted OVER it (later DOM sibling, so
+   it paints on top, same track box, no scaling trick) that shrinks toward 0 as bonus HP is spent,
+   revealing more of the still-full base bar underneath — only once bonus reaches 0 does the base
+   bar itself start visibly shrinking. Redesigned from an earlier version that scaled both
+   segments down together to share the track (so they visibly drained at the same time, right
+   from the very first hit) after an explicit complaint that this read as pointless — the bonus
+   segment existing at all should mean the "real" bar stays put until it's gone. A player/boss
+   with no bonus HP simply never gets a nonzero width here, pixel-identical to the plain bar. */
 .hp-bar-bonus {
   position: absolute;
   top: 0;
@@ -1579,10 +1572,13 @@ button:active {
 
 .sword-btn {
   position: fixed;
-  /* stacked directly above the fire button (64px tall + 12px gap) so both stay reachable
-     with the same thumb without overlapping the centered bomb controls */
-  bottom: calc(max(20px, env(safe-area-inset-bottom) + 14px) + 76px);
-  right: max(18px, env(safe-area-inset-right) + 10px);
+  /* Same row as the fire button now (was stacked above it) — per explicit request, all
+     action buttons share one bottom row so the taller 2-tier stack isn't reserving extra
+     vertical clearance that could instead go to the arena (see fitArena()'s buttonFootprint
+     in client.js, which reads this row's live position). One slot (76px = 64px button +
+     12px gap) to the fire button's left. */
+  bottom: max(20px, env(safe-area-inset-bottom) + 14px);
+  right: calc(max(18px, env(safe-area-inset-right) + 10px) + 76px);
   width: 64px;
   height: 64px;
   border-radius: 50%;
@@ -1641,10 +1637,11 @@ button:active {
      the rest of the time so it's not clutter when there's nothing to place. Positioned
      at the exact same spot as .detonate-near-sword per user request — place and detonate
      are effectively never relevant at the same moment (you either haven't placed your
-     bomb yet, or you have), so sharing one screen slot instead of two is fine. */
+     bomb yet, or you have), so sharing one screen slot instead of two is fine. Same bottom
+     row as fire/sword now, one further slot to the left (152px = 2 × 76px). */
   position: fixed;
-  bottom: calc(max(20px, env(safe-area-inset-bottom) + 14px) + 76px);
-  right: calc(max(18px, env(safe-area-inset-right) + 10px) + 76px);
+  bottom: max(20px, env(safe-area-inset-bottom) + 14px);
+  right: calc(max(18px, env(safe-area-inset-right) + 10px) + 152px);
   display: flex;
   gap: 12px;
   z-index: 15;
@@ -1679,8 +1676,8 @@ button:active {
    taken while already in melee range */
 .detonate-near-sword {
   position: fixed;
-  bottom: calc(max(20px, env(safe-area-inset-bottom) + 14px) + 76px);
-  right: calc(max(18px, env(safe-area-inset-right) + 10px) + 76px);
+  bottom: max(20px, env(safe-area-inset-bottom) + 14px);
+  right: calc(max(18px, env(safe-area-inset-right) + 10px) + 152px);
   z-index: 15;
 }
 
