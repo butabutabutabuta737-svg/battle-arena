@@ -1703,10 +1703,12 @@ function tick(room) {
       }
       if (target) {
         // chicken runs from whoever's nearest instead of homing toward them — same
-        // nearest-player targeting, just the opposite direction. Story mode (isCpuMatch,
-        // covers both 1P and 2P co-op) is an explicit exception: every monster, chicken
-        // included, always approaches there — arena mode keeps the original flee behavior.
-        const fleeing = monster.chicken && !room.isCpuMatch;
+        // nearest-player targeting, just the opposite direction. Used to be arena-mode-only
+        // (story mode had every monster, chicken included, always approach) per an earlier
+        // request, but per explicit follow-up the chicken should flee in every mode — it was
+        // charging straight at the player in story mode instead, which doesn't match its own
+        // description ("プレイヤーから逃げ回るだけで攻撃してこない", no story-mode carve-out).
+        const fleeing = monster.chicken;
         const sign = fleeing ? -1 : 1;
         let dx = (target.x - monster.x) * sign;
         let dy = (target.y - monster.y) * sign;
@@ -1725,7 +1727,16 @@ function tick(room) {
           const toCenterY = ARENA_H / 2 - monster.y;
           const centerLen = Math.hypot(toCenterX, toCenterY) || 1;
           const edgeFactor = Math.max(Math.abs(monster.x - ARENA_W / 2) / (ARENA_W / 2), Math.abs(monster.y - ARENA_H / 2) / (ARENA_H / 2));
-          const centerBias = 0.45 + edgeFactor * 0.45; // 0.45 at dead-center, up to 0.9 near an edge
+          // Was a flat 0.45 minimum (up to 0.9 near an edge) — diluted the actual flee-from-
+          // player direction so heavily, even dead-center, that the chicken effectively just
+          // walked toward the arena's center regardless of the player, reading as "charging
+          // straight at" a player who happened to be standing between its spawn and the
+          // center (confirmed live: a chicken spawned near a Y-edge closed 115px of distance
+          // in 1.5s while the player stood still). Zero bias unless genuinely past the inner
+          // half of the arena, only then ramping up toward the edge itself, so the flee
+          // behavior actually dominates almost everywhere and the correction only kicks in
+          // close to actually getting stuck against a wall.
+          const centerBias = Math.max(0, edgeFactor - 0.5) * 0.9; // 0 until halfway to an edge, up to 0.45 right at the boundary
           dx = dx * (1 - centerBias) + (toCenterX / centerLen) * centerBias;
           dy = dy * (1 - centerBias) + (toCenterY / centerLen) * centerBias;
           len = Math.hypot(dx, dy) || 1;
