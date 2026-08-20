@@ -469,14 +469,51 @@
   // fire, especially in installed-PWA standalone mode.
   function fitArenaSoon() {
     fitArena();
-    setTimeout(fitArena, 60);
-    setTimeout(fitArena, 300);
-    setTimeout(fitArena, 1200); // catches slower devices/connections still settling fonts/layout well after the first two checks
+    fitAllBossIntroCards();
+    setTimeout(() => { fitArena(); fitAllBossIntroCards(); }, 60);
+    setTimeout(() => { fitArena(); fitAllBossIntroCards(); }, 300);
+    setTimeout(() => { fitArena(); fitAllBossIntroCards(); }, 1200); // catches slower devices/connections still settling fonts/layout well after the first two checks
   }
   window.addEventListener('resize', fitArenaSoon);
   window.addEventListener('orientationchange', fitArenaSoon);
   window.addEventListener('pageshow', fitArenaSoon);
   if (window.visualViewport) window.visualViewport.addEventListener('resize', fitArenaSoon);
+
+  // Boss-intro/-defeat/wave-intro cards (see showBossIntro/showBossDefeat/showWaveIntro below)
+  // used to rely purely on static CSS breakpoints (pointer:coarse, max-height:600px) to guess a
+  // size that keeps the セリフ text on screen on a "short phone" — real device viewports vary
+  // enough (per an explicit report that the line was still cut off on some phone OSes even after
+  // that tuning) that no fixed set of breakpoints reliably covers all of them. This instead
+  // measures the overlay's actual rendered space and the card's actual natural content height
+  // every time, and scales the whole card down (uniformly, via CSS transform so layout/centering
+  // is untouched) by exactly however much is needed to guarantee it fits — a real fit for the
+  // real device, not a guess. Floored at 0.55x so it never shrinks to unreadable; overflow-y:auto
+  // on the overlay (see style.css) remains as a last-resort escape hatch past that floor, and is
+  // itself now actually reachable via touch since isButtonTouch() excludes overlay elements.
+  function fitBossIntroCard(overlay) {
+    if (overlay.classList.contains('hidden')) return;
+    const card = overlay.querySelector('.boss-intro-card');
+    if (!card) return;
+    const cs = getComputedStyle(overlay);
+    const padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    const availableH = overlay.clientHeight - padV;
+    const neededH = card.scrollHeight;
+    const scale = neededH > 0 && availableH > 0 ? Math.min(1, Math.max(0.55, availableH / neededH)) : 1;
+    card.style.transform = scale < 0.999 ? `scale(${scale})` : '';
+  }
+  function fitAllBossIntroCards() {
+    fitBossIntroCard(bossIntroOverlay);
+    fitBossIntroCard(bossDefeatOverlay);
+    fitBossIntroCard(waveIntroOverlay);
+  }
+  // .boss-intro-card's own entrance animation (boss-intro-pop) drives `transform` itself for
+  // its ~0.45s duration and wins over an inline style set at the same moment — calling
+  // fitBossIntroCard() again once it's done (rather than only right at show-time) is what makes
+  // the scale-down actually stick once the pop-in settles.
+  function fitBossIntroCardSoon(overlay) {
+    fitBossIntroCard(overlay);
+    setTimeout(() => fitBossIntroCard(overlay), 500);
+  }
 
   function randomRoomCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -876,6 +913,7 @@
     bossIntroName.textContent = boss.name;
     bossIntroLine.textContent = boss.line ? `「${boss.line}」` : '';
     bossIntroOverlay.classList.remove('hidden');
+    fitBossIntroCardSoon(bossIntroOverlay);
     if (bossIntroHideTimer) clearTimeout(bossIntroHideTimer);
     bossIntroHideTimer = setTimeout(() => {
       bossIntroOverlay.classList.add('hidden');
@@ -893,6 +931,7 @@
     waveIntroTitle.textContent = '⚔️ ザコモンスター襲来！';
     waveIntroLine.textContent = MOB_WAVE_NARRATION[i];
     waveIntroOverlay.classList.remove('hidden');
+    fitBossIntroCardSoon(waveIntroOverlay);
     if (waveIntroHideTimer) clearTimeout(waveIntroHideTimer);
     waveIntroHideTimer = setTimeout(() => {
       waveIntroOverlay.classList.add('hidden');
@@ -942,6 +981,7 @@
     bossDefeatName.textContent = boss.name;
     bossDefeatLine.textContent = boss.defeatLine ? `「${boss.defeatLine}」` : '';
     bossDefeatOverlay.classList.remove('hidden');
+    fitBossIntroCardSoon(bossDefeatOverlay);
     if (bossDefeatHideTimer) clearTimeout(bossDefeatHideTimer);
     bossDefeatHideTimer = setTimeout(() => {
       bossDefeatOverlay.classList.add('hidden');
@@ -2533,6 +2573,24 @@
     // but this reads the flag directly rather than assuming that) — either player's toggle
     // affects state.paused for the whole room, so both screens show/hide this together.
     pauseOverlay.classList.toggle('hidden', !state.paused);
+
+    // storyEndingOverlay/trueEndingOverlay/gameOverOverlay are only ever shown from inside the
+    // 'finished' branch below, which only runs while state.phase === 'finished' — that branch
+    // hides them again at its own top on every re-run, but nothing previously hid them once
+    // phase actually left 'finished' for a NEW fight. That's invisible for a normal rematch
+    // (the next round's 'countdown'/'playing' already hides resultOverlay, which is the only
+    // overlay a normal round-clear uses), but the stage-5 "戦場の深部へ進む" button is the one
+    // path where a 'finished'-phase overlay (storyEndingOverlay) needs to go away for a
+    // *different* fight (the EX boss) that reuses the SAME phase cycle — without this, it sat
+    // there permanently on top of the arena (z-index above the boss-intro card, so even the EX
+    // boss's own portrait/セリフ rendered invisibly underneath it), visually blocking the fight
+    // and swallowing input. Confirmed as the actual mechanism behind "pressing the challenge
+    // button just leaves the ending screen up, can't fight, no EX boss portrait/line visible."
+    if (state.phase !== 'finished') {
+      storyEndingOverlay.classList.add('hidden');
+      trueEndingOverlay.classList.add('hidden');
+      gameOverOverlay.classList.add('hidden');
+    }
 
     if (state.phase === 'waiting') {
       statusLabel.textContent = '相手を待っています…';

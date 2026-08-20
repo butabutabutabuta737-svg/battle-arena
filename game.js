@@ -872,11 +872,16 @@ const EX_BOSS = {
 // (inherited as-is from STORY_BOSSES via the spread below) — per-hit damage against any one
 // ally doesn't need to go up just because there's a second ally elsewhere; HP/evasion are the
 // right levers for "harder because there are two of you," not raw hit damage.
+// hpMult starts at exactly 1.0 for stage 1 (per explicit request: the very first co-op boss
+// should read as a plain, single-segment HP bar just like every 1P boss — no "bonus" segment at
+// all — and only later bosses should visibly carry extra HP), then ramps up gradually and
+// linearly through stage 5 (was 1.7 -> 2.6, jumping straight to a big bonus bar from the very
+// first fight; now 1.0 -> 2.6, +0.4 per stage, same top-end toughness at the final stage).
 const STORY_BOSSES_2P_TUNING = [
-  { hpMult: 1.7, reactionMs: 520, aimJitter: 0.58, fireChance: 0.45, dodgeChance: 0.18, itemSeekChance: 0.25, preferredRange: 280, moveJitter: 0.55 },
-  { hpMult: 1.9, reactionMs: 380, aimJitter: 0.40, fireChance: 0.65, dodgeChance: 0.38, itemSeekChance: 0.42, preferredRange: 260, moveJitter: 0.38 },
-  { hpMult: 2.1, reactionMs: 260, aimJitter: 0.26, fireChance: 0.82, dodgeChance: 0.58, itemSeekChance: 0.60, preferredRange: 240, moveJitter: 0.25 },
-  { hpMult: 2.3, reactionMs: 170, aimJitter: 0.14, fireChance: 0.92, dodgeChance: 0.76, itemSeekChance: 0.78, preferredRange: 65, moveJitter: 0.14 }, // same melee-focus override as the 1P STORY_BOSSES entry — this table overrides preferredRange too, so it needed its own change
+  { hpMult: 1.0, reactionMs: 520, aimJitter: 0.58, fireChance: 0.45, dodgeChance: 0.18, itemSeekChance: 0.25, preferredRange: 280, moveJitter: 0.55 },
+  { hpMult: 1.4, reactionMs: 380, aimJitter: 0.40, fireChance: 0.65, dodgeChance: 0.38, itemSeekChance: 0.42, preferredRange: 260, moveJitter: 0.38 },
+  { hpMult: 1.8, reactionMs: 260, aimJitter: 0.26, fireChance: 0.82, dodgeChance: 0.58, itemSeekChance: 0.60, preferredRange: 240, moveJitter: 0.25 },
+  { hpMult: 2.2, reactionMs: 170, aimJitter: 0.14, fireChance: 0.92, dodgeChance: 0.76, itemSeekChance: 0.78, preferredRange: 65, moveJitter: 0.14 }, // same melee-focus override as the 1P STORY_BOSSES entry — this table overrides preferredRange too, so it needed its own change
   { hpMult: 2.6, reactionMs: 85, aimJitter: 0.04, fireChance: 1.00, dodgeChance: 0.95, itemSeekChance: 0.95, preferredRange: 214, moveJitter: 0.05 },
 ];
 const STORY_BOSSES_2P = STORY_BOSSES.map((b, i) => ({ ...b, ...STORY_BOSSES_2P_TUNING[i] }));
