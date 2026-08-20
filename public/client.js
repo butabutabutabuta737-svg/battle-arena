@@ -599,30 +599,33 @@
       // otherwise keep ticking in the background under the "connection lost" message.
       if (rouletteSpinTimer) { clearTimeout(rouletteSpinTimer); rouletteSpinTimer = null; }
       if (leavingIntentionally) return;
-      if (!opened) {
-        // Never successfully connected. Most likely cause on this project's actual host: a
-        // free-tier server (e.g. Render) that went to sleep after being idle takes 30-60s to
-        // wake up on the next request, and can 502/503/hang during that window — which, with
-        // no handling, looked exactly like "the room just doesn't work" (confirmed live: a
-        // direct request to the production URL returned a 503 during this exact scenario).
-        // Retrying automatically (capped, see CONNECT_MAX_ATTEMPTS) turns that into "a few
-        // seconds of visible waiting" instead of a silent failure indistinguishable from a
-        // real bug.
-        connectAttempt++;
-        if (connectAttempt > CONNECT_MAX_ATTEMPTS) {
-          hideConnectingBanner();
+      // Retry with the same room/url whether this connection never opened at all (cold-start —
+      // e.g. a sleeping free-tier host waking up, confirmed live via a direct 503) or it opened
+      // fine and then dropped mid-session (a flaky mobile network blip while sitting on "waiting
+      // for opponent" is common and was previously unrecoverable: this same 'close' path used to
+      // just tell the player to reload, silently losing the room). The server now also holds an
+      // empty room's code reserved for a short grace period after a disconnect (see
+      // EMPTY_ROOM_GRACE_MS in game.js) specifically so this reconnect has a room to come back to.
+      connectAttempt++;
+      if (connectAttempt > CONNECT_MAX_ATTEMPTS) {
+        hideConnectingBanner();
+        if (!opened) {
           alert('サーバーに接続できませんでした。しばらくしてからもう一度お試しください。');
-          return;
+        } else {
+          statusLabel.textContent = '接続が切れました。ページを再読み込みしてください。';
+          waitOverlay.classList.remove('hidden');
         }
-        connectingBanner.classList.remove('hidden');
+        return;
+      }
+      connectingBanner.classList.remove('hidden');
+      if (!opened) {
         connectingText.textContent = connectAttempt <= 1
           ? 'サーバーに接続中…'
           : 'サーバーを起動しています。少々お待ちください…';
-        connectRetryTimer = setTimeout(() => attemptConnect(url, room), CONNECT_RETRY_MS);
-        return;
+      } else {
+        connectingText.textContent = '接続が切れました。再接続しています…';
       }
-      statusLabel.textContent = '接続が切れました。ページを再読み込みしてください。';
-      waitOverlay.classList.remove('hidden');
+      connectRetryTimer = setTimeout(() => attemptConnect(url, room), CONNECT_RETRY_MS);
     });
   }
 

@@ -16,6 +16,13 @@ const BASE_FIRE_COOLDOWN_MS = 250;
 const MAX_HP = 100;
 const BASE_BULLET_DAMAGE = 12;
 const TICK_MS = 1000 / 30;
+// How long an empty room's code stays reserved after its last player disconnects, before it's
+// actually torn down — covers a brief mobile-network drop (WiFi hiccup, tab backgrounded, phone
+// locked) while someone sits alone on "waiting for opponent": without this, that room vanished
+// the instant the drop happened, so a friend typing in the still-correct-looking room code a few
+// seconds later silently created a brand new empty room instead of joining theirs, and both sides
+// were stuck waiting forever with no error shown. See the 'close' handler and joinRoom() below.
+const EMPTY_ROOM_GRACE_MS = 45000;
 
 // Melee sword attack: short-range, narrow forward cone in the direction the player is
 // currently aiming/firing (not a separate independent facing), higher single-hit damage
@@ -1359,6 +1366,7 @@ function getRoom(id) {
       rouletteEnabled: false,
       rouletteResult: null,
       loop: null,
+      emptyRoomTimer: null, // see EMPTY_ROOM_GRACE_MS — pending "actually delete this room" timeout
       lastTick: Date.now(),
       paused: false, // either player can toggle — see the 'pause' message handler below;
         // gnow()/pauseOffsetMs (below) keep every timer (spawns, buffs, cooldowns, the
@@ -2092,6 +2100,13 @@ function broadcastState(room) {
 
 function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
   const room = getRoom(roomId);
+  // A player is (re)joining — cancel any pending grace-period teardown from a previous
+  // occupant's disconnect (see EMPTY_ROOM_GRACE_MS) so this room doesn't get deleted out
+  // from under them moments after they arrive.
+  if (room.emptyRoomTimer) {
+    clearTimeout(room.emptyRoomTimer);
+    room.emptyRoomTimer = null;
+  }
   // Decided once, by the very first joiner, same pattern as rouletteEnabled below — must
   // happen before the capacity check right after it, since that check needs to already know
   // whether this room targets 2 players (arena/1P story) or 3 (2-human co-op story).
@@ -2342,10 +2357,20 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
       room.explosions = [];
     }
     broadcastState(room);
-    if (room.players.size === 0 && room.loop) {
-      clearInterval(room.loop);
-      room.loop = null;
-      rooms.delete(room.id);
+    if (room.players.size === 0) {
+      if (room.loop) {
+        clearInterval(room.loop);
+        room.loop = null;
+      }
+      // Don't delete the room immediately — hold the code reserved for EMPTY_ROOM_GRACE_MS
+      // in case this was just a brief drop and the same player (or a friend already holding
+      // this code) reconnects/joins shortly. joinRoom() cancels this if anyone does.
+      if (room.emptyRoomTimer) clearTimeout(room.emptyRoomTimer);
+      room.emptyRoomTimer = setTimeout(() => {
+        if (rooms.get(room.id) === room && room.players.size === 0) {
+          rooms.delete(room.id);
+        }
+      }, EMPTY_ROOM_GRACE_MS);
     }
   });
 }
