@@ -2419,19 +2419,23 @@
 
   const STORY_BASE_MAX_HP = 100; // must match game.js's MAX_HP — the un-leveled baseline
 
-  // fillEl = the base 0-100 HP (the "real" bar). bonusEl = extra HP above that baseline (a
-  // leveled player, or a 2P co-op boss's hp multiplier — see STORY_BOSSES_2P_TUNING). Redesigned
-  // (was: both segments scaled down to share the track, shrinking together) per explicit
-  // complaint that watching them drain at the same time made no sense — "the front bar should
-  // completely disappear before the one behind it starts going down". Now bonusEl is a full-
-  // width shield painted OVER fillEl (later DOM sibling, so it paints on top): while any bonus
-  // HP remains, it fully covers fillEl — which itself sits at its permanent 0-100%-of-hp width,
-  // genuinely unaffected by damage while hp>100 — and bonusEl's own width shrinks toward 0 as a
-  // fraction of ITS OWN max (bonusHp/bonusMaxHp), revealing progressively more of the (still
-  // full) base bar underneath as it goes. Only once bonus is fully gone does further damage
-  // start visibly shrinking fillEl itself. No more `scale`/8px-overlap trick — with bonus always
-  // spanning the same 0-100% box as fillEl (not squeezed to share the track with it), there's no
-  // seam to hide.
+  // Two stacked 0-100 tiers, not one bar rescaled to fit: fillEl is exactly the first 100 HP,
+  // bonusEl exactly the next 100 HP above that (a leveled player — storyLevelHpMult now goes
+  // 110 at level1 up to 200 at level10, +10/level — or a 2P co-op boss's hp multiplier). Per
+  // explicit request, this is deliberately NOT a percentage-of-current-max fill (that would
+  // always render bonusEl as "100% full" at full HP regardless of level, which never visually
+  // reads as "the 2nd bar is still small at low levels and only reaches full at level 10") —
+  // bonusEl's width is bonusHp itself (capped at 100), so at level1 (bonusMaxHp=10) even a
+  // full-HP bar only fills the 2nd row 10% of the way, and only a maxed-out level10 character
+  // (or boss) shows it genuinely full. bonusEl is a later DOM sibling (paints on top of fillEl,
+  // same 0-100%-of-track box) — while any bonus HP remains it covers fillEl, which itself is
+  // permanently just `min(hp,100)` and genuinely unaffected by damage while hp>100 — so the
+  // front (bonus) bar visibly drains first, and only once it's fully gone does the base bar
+  // start moving (same "front bar must fully deplete before the back one moves" behavior as
+  // before, just derived from a formula that also makes the *idle* fill level mean something).
+  // The min(100, bonusHp) cap matters for a boss whose bonus can exceed 100 (a stage-5 2P boss's
+  // hpMult goes up to 2.6x = 160 bonus HP) — that extra amount just keeps the 2nd row reading as
+  // "full" a little longer before it starts visibly draining, rather than overflowing the track.
   function renderHpBar(fillEl, bonusEl, p) {
     const maxHp = (p && p.maxHp) || STORY_BASE_MAX_HP;
     const hp = Math.max(0, Math.min((p && p.hp) || 0, maxHp));
@@ -2439,9 +2443,8 @@
     fillEl.style.left = '0%';
     fillEl.style.width = `${baseWidthPct}%`;
     if (!bonusEl) return;
-    const bonusMaxHp = Math.max(0, maxHp - STORY_BASE_MAX_HP);
     const bonusHp = Math.max(0, hp - STORY_BASE_MAX_HP);
-    const bonusWidthPct = bonusMaxHp > 0 ? (bonusHp / bonusMaxHp) * 100 : 0;
+    const bonusWidthPct = Math.min(STORY_BASE_MAX_HP, bonusHp);
     bonusEl.style.left = '0%';
     bonusEl.style.width = `${bonusWidthPct}%`;
   }

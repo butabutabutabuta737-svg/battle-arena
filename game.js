@@ -161,9 +161,15 @@ function bossKillXp(stage) {
   const s = Math.min(Math.max(1, stage || 1), STORY_BOSSES.length);
   return 10 + (s - 1) * 5; // stage1=10 ... stage5=30
 }
+// Per explicit request for clean, easy-to-read numbers: max HP = 100 + level*10 (level1=110 ...
+// level10=200), a flat +10 per level rather than the previous fractional linear-to-2x curve
+// (which technically also spanned 100->200 across the same 10 levels, just via uneven ~11.1/
+// level steps that never round to clean tens). Expressed as a *mult* (not a flat add) since the
+// two call sites already do `Math.round(MAX_HP * storyLevelHpMult(level))` — MAX_HP is always
+// 100 in practice, so this reduces to exactly `100 + level*10` either way.
 function storyLevelHpMult(level) {
   const l = Math.min(Math.max(1, level), STORY_LEVEL_CAP);
-  return 1 + (l - 1) / (STORY_LEVEL_CAP - 1); // level1 -> 1x, level10 -> 2x, linear between
+  return (100 + l * 10) / 100;
 }
 function addStoryXp(room, amount) {
   room.storyXp += amount;
