@@ -2370,7 +2370,13 @@
     const bonusWidthPct = bonusHp * scale;
     bonusEl.style.left = '0%';
     bonusEl.style.width = `${bonusWidthPct}%`;
-    fillEl.style.left = `calc(${bonusWidthPct}% - 8px)`;
+    // The -8px only makes sense as an overlap against an actual bonus segment (hiding the seam
+    // between the two rounded-corner pieces) — with no bonus (the common case: arena mode,
+    // un-leveled/1P story, a boss with no multiplier) it was shifting the base bar 8px left of
+    // the track's true left edge for no reason, making even a full-HP bar visibly fall 8px
+    // short of the track's right edge — looked exactly like starting the round already
+    // slightly damaged.
+    fillEl.style.left = bonusWidthPct > 0 ? `calc(${bonusWidthPct}% - 8px)` : '0%';
     fillEl.style.width = `${baseWidthPct}%`;
   }
 
