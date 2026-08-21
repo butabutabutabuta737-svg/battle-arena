@@ -1069,7 +1069,17 @@ button:active {
   text-shadow: 0 0 20px var(--boss-color, #ffd35b);
 }
 .boss-intro-line {
-  max-width: 480px;
+  /* min(480px, 100%), not a bare 480px — same fix already proven for .wave-intro-title below
+     (see its own comment): a flex child under .boss-intro-card's align-items:center has
+     nothing forcing it to respect its parent's actual width on its own, and on some phone
+     browsers specifically (reported as this same セリフ text getting cut off on both left and
+     right edges, inconsistently by device) the browser lets a flex item's own intrinsic/
+     min-content sizing win over max-width entirely, rendering at its natural single-line width
+     regardless of viewport. min-width:0 overrides a flex item's default min-width:auto (which
+     is "the width of its longest unbreakable run," not 0) — the other half of the same bug,
+     since that default alone can keep the box wide even with max-width/wrapping set correctly. */
+  max-width: min(480px, 100%);
+  min-width: 0;
   font-size: clamp(12px, 3.6vw, 15px);
   color: #e7e9f5;
   background: rgba(255, 255, 255, 0.06);
@@ -1079,10 +1089,12 @@ button:active {
   line-height: 1.5;
   /* Japanese has no spaces to hint good break points, so the default per-character wrap can
      split a word (e.g. a katakana term) right down the middle. keep-all tells the browser to
-     treat runs of CJK characters as one unbreakable unit where possible; break-word is only
-     the last-resort fallback so an unusually long run still can't overflow the box. */
+     treat runs of CJK characters as one unbreakable unit where possible; overflow-wrap:anywhere
+     (stronger than break-word — allowed to break literally anywhere, including mid-CJK-run) is
+     the last-resort fallback so an unusually long run still can't overflow the box regardless
+     of how conservatively any given mobile browser applies that fallback. */
   word-break: keep-all;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 /* On phones, .boss-intro-overlay's height is pinned to the arena canvas's rendered height,
    which on a typical portrait phone is much shorter than the card's natural content height
@@ -1190,12 +1202,16 @@ button:active {
   font-size: clamp(20px, 6.5vw, 32px);
   line-height: 1.3;
   word-break: keep-all;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
   /* Without an explicit width cap, a flex child with align-items:center has nothing forcing
      it to wrap at all — it just renders at its natural single-line width, which on a narrow
      phone can exceed the viewport, with the excess split invisibly past both the left and
-     right screen edges (reported as the wave banner's edge text being unreadable). */
+     right screen edges (reported as the wave banner's edge text being unreadable). min-width:0
+     overrides the flex item's default min-width:auto, which is itself enough to keep the box
+     wide on some phone browsers even with max-width set correctly (see .boss-intro-line's own
+     comment — same underlying bug, hit again on the same セリフ text this was meant to fix). */
   max-width: 100%;
+  min-width: 0;
   filter: drop-shadow(0 0 18px rgba(255, 122, 74, 0.7));
   animation: boss-intro-icon-pulse 1.2s ease-in-out infinite;
 }
