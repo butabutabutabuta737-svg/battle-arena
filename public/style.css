@@ -1388,31 +1388,30 @@ button:active {
   object-fit: cover;
   animation: boss-intro-pop 0.6s cubic-bezier(.2,1.4,.4,1);
 }
-.true-ending-tap-hint {
+/* position:absolute (not part of the overlay's own flex layout) specifically so it doesn't
+   inherit .btn-primary's flex:1 sizing (designed for a horizontal .btn-row) the way an earlier
+   button-in-a-flex-column did — see #resumeBtn's own history — flex:1 inside a column-flex
+   parent stretches a button to fill all remaining height instead of sizing to its label. */
+.true-ending-title-btn {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 50%;
   bottom: max(22px, env(safe-area-inset-bottom) + 14px);
-  text-align: center;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: #ffe9a8;
-  text-shadow: 0 0 12px rgba(0, 0, 0, 0.9), 0 0 20px rgba(255, 233, 168, 0.7);
+  transform: translateX(-50%);
   opacity: 0;
-  transition: opacity 0.6s ease;
   pointer-events: none;
+  transition: opacity 0.6s ease;
 }
-.true-ending-overlay.ready .true-ending-tap-hint {
+.true-ending-overlay.ready .true-ending-title-btn {
   opacity: 1;
+  pointer-events: auto;
   animation: true-ending-hint-pulse 1.6s ease-in-out infinite;
 }
 @keyframes true-ending-hint-pulse {
-  0%, 100% { opacity: 0.7; }
+  0%, 100% { opacity: 0.85; }
   50% { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .true-ending-overlay.ready .true-ending-tap-hint { animation: none; }
+  .true-ending-overlay.ready .true-ending-title-btn { animation: none; }
 }
 
 /* ---- mute toggle ---- */

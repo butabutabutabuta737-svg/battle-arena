@@ -86,6 +86,7 @@
   const storyEndingTitleBtn = $('#storyEndingTitleBtn');
   const challengeExBtn = $('#challengeExBtn');
   const trueEndingOverlay = $('#trueEndingOverlay');
+  const trueEndingTitleBtn = $('#trueEndingTitleBtn');
   const gameOverOverlay = $('#gameOverOverlay');
   const bossIntroOverlay = $('#bossIntroOverlay');
   const bossIntroStage = $('#bossIntroStage');
@@ -991,7 +992,7 @@
     bossDefeatHideTimer = setTimeout(() => {
       bossDefeatOverlay.classList.add('hidden');
       bossDefeatHideTimer = null;
-    }, 4500);
+    }, 5000); // per explicit request (was 4.5s)
   }
 
   // ---- story mode: a single button starts a fresh 5-stage boss-rush campaign; the same
@@ -1070,8 +1071,15 @@
     audioReady();
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'startExStage' }));
   });
-  // Whole-screen tap-to-continue instead of a button — see trueEndingTapReady below, set true
-  // only after the 8s "let the ending sit" timer elapses.
+  // Explicit タイトルへ戻る button (per explicit request — was a whole-screen tap-anywhere
+  // hint with no visible button) — see trueEndingTapReady below, set true only after the 10s
+  // "let the ending sit" timer elapses. The whole overlay stays clickable too as a convenience,
+  // same guard.
+  trueEndingTitleBtn.addEventListener('click', () => {
+    if (!trueEndingTapReady) return;
+    audioReady();
+    goToTitle();
+  });
   trueEndingOverlay.addEventListener('click', () => {
     if (!trueEndingTapReady) return;
     audioReady();
@@ -2639,6 +2647,25 @@
       trueEndingOverlay.classList.add('hidden');
       gameOverOverlay.classList.add('hidden');
     }
+    // Same idea, one step further: bossIntroOverlay/bossVictoryOverlay/bossDefeatOverlay/
+    // waveIntroOverlay are all "pre-battle or between-round" narration cards, each with its own
+    // independent auto-hide timer (5s/1.6s/5s/5s) — every one of them should always be long
+    // gone by the time the round actually reaches 'playing'. Per an explicit "the battle
+    // sometimes becomes invisible behind a conversation screen" report, this force-clears all
+    // four (and their pending timers, so a stray one firing later can't re-trigger anything)
+    // the instant real combat starts, as a hard guarantee independent of whether each one's own
+    // timer actually fired correctly — the same class of bug as the storyEndingOverlay fix
+    // above, applied to every remaining "narration overlay that outlives its own phase" case.
+    if (state.phase === 'playing') {
+      if (bossIntroHideTimer) { clearTimeout(bossIntroHideTimer); bossIntroHideTimer = null; }
+      bossIntroOverlay.classList.add('hidden');
+      if (bossVictoryHideTimer) { clearTimeout(bossVictoryHideTimer); bossVictoryHideTimer = null; }
+      bossVictoryOverlay.classList.add('hidden');
+      if (bossDefeatHideTimer) { clearTimeout(bossDefeatHideTimer); bossDefeatHideTimer = null; }
+      bossDefeatOverlay.classList.add('hidden');
+      if (waveIntroHideTimer) { clearTimeout(waveIntroHideTimer); waveIntroHideTimer = null; }
+      waveIntroOverlay.classList.add('hidden');
+    }
 
     if (state.phase === 'waiting') {
       statusLabel.textContent = '相手を待っています…';
@@ -2704,7 +2731,7 @@
               trueEndingTapReady = true;
               trueEndingOverlay.classList.add('ready');
               trueEndingRevealTimer = null;
-            }, 8000);
+            }, 10000); // per explicit request (was 8s)
           }
           trueEndingOverlay.classList.remove('hidden');
         }

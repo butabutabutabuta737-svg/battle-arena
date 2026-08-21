@@ -389,11 +389,12 @@
 
     <!-- True ending — shown only after the hidden EX boss falls. A single full-bleed
          pre-rendered splash image (title/text already baked in) instead of a text card —
-         non-interactive for the first 8s (see trueEndingTapReady in client.js) so it reads as
-         a deliberate cinematic beat, then a tap anywhere dismisses it back to the title. -->
+         non-interactive for the first 10s (see trueEndingTapReady in client.js) so it reads as
+         a deliberate cinematic beat, then an explicit button returns to the title (also still
+         tappable anywhere on the image itself, per the existing overlay click handler). -->
     <div class="true-ending-overlay hidden" id="trueEndingOverlay">
       <img class="true-ending-img" src="images/ending_true.jpg" alt="THE END" />
-      <div class="true-ending-tap-hint" id="trueEndingTapHint">タップして続ける</div>
+      <button class="btn-primary true-ending-title-btn" id="trueEndingTitleBtn">タイトルへ戻る</button>
     </div>
 
     <div class="boss-intro-overlay hidden" id="bossIntroOverlay">

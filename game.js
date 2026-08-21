@@ -868,28 +868,31 @@ const EX_BOSS = {
   preferredRange: 200, moveJitter: 0.03, atkMult: 1.35, swordMult: 1.35,
 };
 
+// Boss max HP by stage, per explicit request — a flat +20/stage curve shared by 1P AND 2P
+// co-op alike (1P bosses previously had no HP scaling at all, always a flat MAX_HP regardless
+// of stage; 2P co-op previously used a separate hpMult curve on top of MAX_HP — both replaced
+// by this single absolute-HP table). Index 0-4 = stages 1-5; the hidden EX boss (stage "6")
+// isn't part of this array since it's not counted in STORY_BOSSES.length anywhere — see
+// EX_BOSS_HP below and its own application in the 'startExStage' handler.
+const STORY_BOSS_HP = [100, 120, 140, 160, 180];
+const EX_BOSS_HP = 200;
+
 // ---- 2-player co-op story mode ----
 // Same 5 named bosses/story text as 1P (name/line/defeatLine reused verbatim from
 // STORY_BOSSES so the certificate/narrative stay unified — this is the same campaign, not a
 // different one), but with freshly-designed AI behavior for facing 2 humans at once instead
-// of 1: a per-stage HP multiplier (a boss with only MAX_HP would fall in seconds against
-// double the firepower, so it needs a genuinely bigger health pool, not just tougher AI) plus
-// somewhat sharper reflexes/evasion than the 1P curve at the same stage number, reflecting
-// "juggling two attackers demands it." atkMult/swordMult are deliberately NOT overridden here
-// (inherited as-is from STORY_BOSSES via the spread below) — per-hit damage against any one
-// ally doesn't need to go up just because there's a second ally elsewhere; HP/evasion are the
-// right levers for "harder because there are two of you," not raw hit damage.
-// hpMult starts at exactly 1.0 for stage 1 (per explicit request: the very first co-op boss
-// should read as a plain, single-segment HP bar just like every 1P boss — no "bonus" segment at
-// all — and only later bosses should visibly carry extra HP), then ramps up gradually and
-// linearly through stage 5 (was 1.7 -> 2.6, jumping straight to a big bonus bar from the very
-// first fight; now 1.0 -> 2.6, +0.4 per stage, same top-end toughness at the final stage).
+// of 1: somewhat sharper reflexes/evasion than the 1P curve at the same stage number,
+// reflecting "juggling two attackers demands it." HP no longer differs from 1P at all (see
+// STORY_BOSS_HP above) — evasion/reaction speed are the levers for "harder because there are
+// two of you" now, not a bigger health pool. atkMult/swordMult are deliberately NOT overridden
+// here either (inherited as-is from STORY_BOSSES via the spread below) — per-hit damage
+// against any one ally doesn't need to go up just because there's a second ally elsewhere.
 const STORY_BOSSES_2P_TUNING = [
-  { hpMult: 1.0, reactionMs: 520, aimJitter: 0.58, fireChance: 0.45, dodgeChance: 0.18, itemSeekChance: 0.25, preferredRange: 280, moveJitter: 0.55 },
-  { hpMult: 1.4, reactionMs: 380, aimJitter: 0.40, fireChance: 0.65, dodgeChance: 0.38, itemSeekChance: 0.42, preferredRange: 260, moveJitter: 0.38 },
-  { hpMult: 1.8, reactionMs: 260, aimJitter: 0.26, fireChance: 0.82, dodgeChance: 0.58, itemSeekChance: 0.60, preferredRange: 240, moveJitter: 0.25 },
-  { hpMult: 2.2, reactionMs: 170, aimJitter: 0.14, fireChance: 0.92, dodgeChance: 0.76, itemSeekChance: 0.78, preferredRange: 65, moveJitter: 0.14 }, // same melee-focus override as the 1P STORY_BOSSES entry — this table overrides preferredRange too, so it needed its own change
-  { hpMult: 2.6, reactionMs: 85, aimJitter: 0.04, fireChance: 1.00, dodgeChance: 0.95, itemSeekChance: 0.95, preferredRange: 214, moveJitter: 0.05 },
+  { reactionMs: 520, aimJitter: 0.58, fireChance: 0.45, dodgeChance: 0.18, itemSeekChance: 0.25, preferredRange: 280, moveJitter: 0.55 },
+  { reactionMs: 380, aimJitter: 0.40, fireChance: 0.65, dodgeChance: 0.38, itemSeekChance: 0.42, preferredRange: 260, moveJitter: 0.38 },
+  { reactionMs: 260, aimJitter: 0.26, fireChance: 0.82, dodgeChance: 0.58, itemSeekChance: 0.60, preferredRange: 240, moveJitter: 0.25 },
+  { reactionMs: 170, aimJitter: 0.14, fireChance: 0.92, dodgeChance: 0.76, itemSeekChance: 0.78, preferredRange: 65, moveJitter: 0.14 }, // same melee-focus override as the 1P STORY_BOSSES entry — this table overrides preferredRange too, so it needed its own change
+  { reactionMs: 85, aimJitter: 0.04, fireChance: 1.00, dodgeChance: 0.95, itemSeekChance: 0.95, preferredRange: 214, moveJitter: 0.05 },
 ];
 const STORY_BOSSES_2P = STORY_BOSSES.map((b, i) => ({ ...b, ...STORY_BOSSES_2P_TUNING[i] }));
 
@@ -930,10 +933,10 @@ function addCpuPlayer(room, stage) {
   const cpuToken = { cpu: true };
   const idx = room.players.size;
   const sp = getSpawnPoints(room)[idx] || { x: ARENA_W - 120, y: ARENA_H / 2 };
-  // Co-op boss gets a bigger health pool (see STORY_BOSSES_2P_TUNING's comment for why) —
-  // maxHp is tracked per-player (not just the flat MAX_HP constant) so resetPositions()/the
-  // heal item/house-heal caps all respect it instead of clamping a boosted-HP boss back down.
-  const maxHp = room.storyCoop ? Math.round(MAX_HP * STORY_BOSSES_2P_TUNING[s - 1].hpMult) : MAX_HP;
+  // Same per-stage HP for 1P and 2P alike now (STORY_BOSS_HP) — maxHp is tracked per-player
+  // (not just the flat MAX_HP constant) so resetPositions()/the heal item/house-heal caps all
+  // respect it instead of clamping a boosted-HP boss back down to the flat 100.
+  const maxHp = STORY_BOSS_HP[s - 1];
   const player = {
     id: 'cpu-' + Math.random().toString(36).slice(2, 8),
     name: bossNameForStage(s),
@@ -2191,15 +2194,17 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
     // case and a real fix for the reconnect case (was silently restarting the whole campaign
     // from stage 1 every time, per an explicit "reconnecting shouldn't be a do-over" report).
     addCpuPlayer(room, room.storyStage);
-    // Reconnecting mid-EX-fight needs its identity re-applied — addCpuPlayer() only knows
-    // about the numbered STORY_BOSSES, not the hidden EX boss (which reuses stage 5's stats/HP
-    // verbatim, see startExStage's own handler below, just swapping name/line/defeatLine).
+    // Reconnecting mid-EX-fight needs its identity (and its own EX_BOSS_HP, not whatever
+    // addCpuPlayer() just set it to from STORY_BOSS_HP) re-applied — addCpuPlayer() only knows
+    // about the numbered STORY_BOSSES, not the hidden EX boss.
     if (room.exBossActive) {
       const cpuPlayer = room.players.get(room.cpuToken);
       if (cpuPlayer) {
         cpuPlayer.name = EX_BOSS.name;
         cpuPlayer.line = EX_BOSS.line;
         cpuPlayer.defeatLine = EX_BOSS.defeatLine;
+        cpuPlayer.maxHp = EX_BOSS_HP;
+        cpuPlayer.hp = EX_BOSS_HP;
       }
     }
   }
@@ -2366,6 +2371,10 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
             cpuPlayer.name = EX_BOSS.name;
             cpuPlayer.line = EX_BOSS.line;
             cpuPlayer.defeatLine = EX_BOSS.defeatLine;
+            // Per explicit request, the EX boss gets its own HP (200) instead of just
+            // inheriting whatever stage 5 last had it at (180, per STORY_BOSS_HP).
+            cpuPlayer.maxHp = EX_BOSS_HP;
+            cpuPlayer.hp = EX_BOSS_HP;
           }
           room.cpuState = null;
           room.storyComplete = false;
