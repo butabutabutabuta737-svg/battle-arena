@@ -2543,14 +2543,14 @@
     }
 
     const wins = state.matchWins || {};
-    // Co-op: room.matchWins is keyed by a single stable representative id per side (see
-    // game.js's win-condition comment) — could be either ally's id, so sum across both
-    // rather than reading myId/boss.id directly (only one of the two ever holds a nonzero
-    // value, so summing is safe and doesn't need to know which one it is).
-    const myWins = isCoop
-      ? state.players.filter((p) => !p.isBoss).reduce((sum, p) => sum + (wins[p.id] || 0), 0)
-      : me ? wins[me.id] || 0 : 0;
-    const oppWins = boss ? wins[boss.id] || 0 : 0;
+    // CPU matches (1P story and 2P co-op alike) key room.matchWins by the stable 'ally'/'boss'
+    // strings, not a player id — ids are volatile (a reconnect regenerates both the human's and
+    // the boss's, see game.js's win-check comment), so reading by id here would silently show
+    // 0 for whichever side just reconnected mid-series even though the server-side tally is
+    // still intact. Arena PvP has no ally/boss concept, so it still reads by the (there, stable
+    // enough for now) raw player id.
+    const myWins = isCpuMatch ? (wins.ally || 0) : (me ? wins[me.id] || 0 : 0);
+    const oppWins = isCpuMatch ? (wins.boss || 0) : (boss ? wins[boss.id] || 0 : 0);
     matchScoreEl.textContent = `${myWins} - ${oppWins}`;
     // The mob-wave mini-game isn't part of the best-of-MATCH_WIN_TARGET series at all (see
     // game.js's mobWaveActive win-check, which deliberately never touches room.matchWins) —

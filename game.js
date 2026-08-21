@@ -1990,8 +1990,15 @@ function tick(room) {
         const winnerId = bossDead ? (allies[0] ? allies[0].id : null) : (boss ? boss.id : null);
         room.winnerId = winnerId;
         if (winnerId) {
-          room.matchWins[winnerId] = (room.matchWins[winnerId] || 0) + 1;
-          if (room.matchWins[winnerId] >= MATCH_WIN_TARGET) {
+          // 'ally'/'boss', not the volatile winnerId itself — a reconnect regenerates every
+          // player's id (a fresh human pid, and a fresh cpuToken since the close handler always
+          // drops the boss token too — see its own comment), which would otherwise silently
+          // orphan the accumulated score under a since-deleted id the very next time either
+          // side reconnects mid-series. Per explicit request that a reconnect keep the current
+          // win/loss tally, not reset it.
+          const winsKey = bossDead ? 'ally' : 'boss';
+          room.matchWins[winsKey] = (room.matchWins[winsKey] || 0) + 1;
+          if (room.matchWins[winsKey] >= MATCH_WIN_TARGET) {
             room.matchOver = true;
             room.matchWinnerId = winnerId;
           }
@@ -2008,8 +2015,12 @@ function tick(room) {
         const winner = alive.find((p) => p.alive);
         room.winnerId = winner ? winner.id : null;
         if (winner) {
-          room.matchWins[winner.id] = (room.matchWins[winner.id] || 0) + 1;
-          if (room.matchWins[winner.id] >= MATCH_WIN_TARGET) {
+          // Same reconnect-safe stable key as the storyCoop branch above — arena PvP has no
+          // isBoss concept at all, so it keeps using the raw (still volatile) id there; that
+          // mode's own reconnect-preserves-score behavior isn't part of what's fixed here.
+          const winsKey = room.isCpuMatch ? (winner.isBoss ? 'boss' : 'ally') : winner.id;
+          room.matchWins[winsKey] = (room.matchWins[winsKey] || 0) + 1;
+          if (room.matchWins[winsKey] >= MATCH_WIN_TARGET) {
             room.matchOver = true;
             room.matchWinnerId = winner.id;
           }
