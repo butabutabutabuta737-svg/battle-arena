@@ -1188,6 +1188,25 @@ button:active {
   text-shadow: none;
 }
 
+/* ---- EX boss ("戦神") crumble effect — see crumbleImage()/showExBossDefeat() in client.js.
+   Tiles are appended straight to <body>, not inside any overlay card (a transformed ancestor
+   would break their viewport-relative `position:fixed` coordinates — see that function's own
+   comment), so they need their own z-index high enough to sit above bossDefeatOverlay (30). */
+.crumble-tile {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  transition: transform 1.1s cubic-bezier(.5, 0, .9, 1), opacity 1.1s ease;
+  will-change: transform, opacity;
+}
+@media (prefers-reduced-motion: reduce) {
+  .crumble-tile {
+    transition-duration: 0.01s !important;
+    transition-delay: 0s !important;
+  }
+}
+
 /* ---- mob wave narration: reuses .boss-intro-overlay/.boss-intro-card, tinted a hostile
    red-orange (no per-boss --boss-color to inherit here, so the color is set directly) —
    deliberately distinct from any single boss's signature color since this is about a swarm,

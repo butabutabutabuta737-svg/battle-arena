@@ -94,6 +94,7 @@
   const bossIntroName = $('#bossIntroName');
   const bossIntroLine = $('#bossIntroLine');
   const bossDefeatOverlay = $('#bossDefeatOverlay');
+  const bossDefeatStage = $('#bossDefeatStage');
   const bossDefeatPortrait = $('#bossDefeatPortrait');
   const bossDefeatName = $('#bossDefeatName');
   const bossDefeatLine = $('#bossDefeatLine');
@@ -296,6 +297,10 @@
   let gameOverTimer = null;
   let trueEndingTapReady = false; // flips true (and reveals the "tap to continue" hint) only after trueEndingRevealTimer elapses — same "let it sit" beat as gameOverRetryReady above
   let trueEndingRevealTimer = null;
+  // Gates trueEndingOverlay behind the EX boss's own defeat-quote-then-crumble beat (see
+  // showExBossDefeat) — reset false at the start of each EX-boss-kill sequence, flipped true
+  // once that sequence's onDone actually fires, checked by updateHud()'s trueEndingClear branch.
+  let exBossDefeatSequenceDone = false;
   let lastStoryLevel = 1; // last storyLevel we've shown a level-up toast for
   let lastArenaFitSignature = ''; // re-run fitArena() only when something HUD-height-affecting actually changes, not every ~33ms updateHud() tick
   let levelUpHideTimer = null;
@@ -695,6 +700,11 @@
     trueEndingOverlay.classList.remove('ready');
     trueEndingTapReady = false;
     if (trueEndingRevealTimer) { clearTimeout(trueEndingRevealTimer); trueEndingRevealTimer = null; }
+    exBossDefeatSequenceDone = false;
+    // Stray crumble tiles (see crumbleImage()) if the player navigated away mid-animation —
+    // they're appended to <body> directly (not inside anything this function already hides),
+    // so they'd otherwise keep floating over whatever screen comes next for up to ~2s.
+    document.querySelectorAll('.crumble-tile').forEach((el) => el.remove());
     gameOverRetryReady = false;
     if (gameOverTimer) { clearTimeout(gameOverTimer); gameOverTimer = null; }
     gameOverOverlay.classList.add('hidden');
@@ -966,6 +976,7 @@
   function showBossDefeat(stage, boss) {
     const theme = BOSS_TIER_THEME[Math.min(Math.max(1, stage), BOSS_TIER_THEME.length) - 1];
     bossDefeatOverlay.style.setProperty('--boss-color', theme.uniform);
+    bossDefeatPortrait.style.filter = ''; // in case showExBossDefeat() last set this to 'none' — falls back to the normal dulled-grayscale CSS rule
     bossDefeatPortrait.src = theme.image;
     bossDefeatPortrait.style.objectPosition = theme.facePos;
     bossDefeatName.textContent = boss.name;
@@ -977,6 +988,98 @@
       bossDefeatOverlay.classList.add('hidden');
       bossDefeatHideTimer = null;
     }, 5000); // per explicit request (was 4.5s)
+  }
+
+  // Slices an <img> into a grid of small tiles (each a div with the same background-image,
+  // offset to show just its own slice — a classic CSS sprite trick, no canvas needed) and
+  // animates them tumbling away with a per-tile random delay/direction/rotation, revealing
+  // the dark card behind as they fall and fade — reads as the portrait crumbling apart. Tiles
+  // are positioned `fixed` at the image's own live on-screen rect (viewport-relative) and
+  // appended straight to <body> — NOT to the boss-defeat card itself, which fitBossIntroCard()
+  // can give an inline `transform:scale(...)` on short viewports, and any transformed ancestor
+  // becomes the containing block for `position:fixed` descendants, silently making these
+  // coordinates wrong relative to the real viewport.
+  function crumbleImage(imgEl, onDone) {
+    const rect = imgEl.getBoundingClientRect();
+    const cols = 8;
+    const rows = 10;
+    const tileW = rect.width / cols;
+    const tileH = rect.height / rows;
+    const container = document.createElement('div');
+    container.className = 'crumble-container';
+    const tiles = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const tile = document.createElement('div');
+        tile.className = 'crumble-tile';
+        tile.style.left = `${rect.left + c * tileW}px`;
+        tile.style.top = `${rect.top + r * tileH}px`;
+        tile.style.width = `${tileW + 0.5}px`;
+        tile.style.height = `${tileH + 0.5}px`;
+        tile.style.backgroundImage = `url("${imgEl.src}")`;
+        tile.style.backgroundSize = `${rect.width}px ${rect.height}px`;
+        tile.style.backgroundPosition = `-${c * tileW}px -${r * tileH}px`;
+        tile.style.transitionDelay = `${Math.random() * 0.4}s`;
+        container.appendChild(tile);
+        tiles.push(tile);
+      }
+    }
+    imgEl.style.visibility = 'hidden';
+    document.body.appendChild(container);
+    // Two rAFs (not one) so the tiles' initial position/opacity is actually painted before the
+    // transitioned end-state is applied — with only one, browsers can coalesce both into the
+    // same frame and the "fall" never visibly plays, jumping straight to the end state.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        tiles.forEach((tile) => {
+          const dx = (Math.random() - 0.5) * 150;
+          const dy = 70 + Math.random() * 170;
+          const rot = (Math.random() - 0.5) * 300;
+          tile.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
+          tile.style.opacity = '0';
+        });
+      });
+    });
+    setTimeout(() => {
+      container.remove();
+      imgEl.style.visibility = 'visible'; // restored hidden so a later reuse of this <img> starts clean
+      if (onDone) onDone();
+    }, 1900); // longest per-tile transition (1.1s) + longest random delay (0.4s) + margin
+  }
+
+  // The hidden EX boss's own defeat beat — distinct from showBossDefeat() above (which every
+  // other boss uses): holds on the intact portrait+セリフ long enough to read, THEN crumbles
+  // the portrait apart via crumbleImage() before calling onDone (the true ending overlay),
+  // per explicit request for "a proper final line, and a wait while the boss's image collapses"
+  // rather than the plain fade every other boss gets. Reuses bossDefeatOverlay's elements
+  // (same card, no separate overlay needed) — EX_BOSS.defeatLine (game.js) already existed but
+  // was never actually shown anywhere, since showBossDefeat() is deliberately never called for
+  // the EX fight (see its own caller's comment); this is what finally displays it.
+  function showExBossDefeat(boss, onDone) {
+    bossDefeatOverlay.style.setProperty('--boss-color', '#ffe9a8');
+    bossDefeatStage.textContent = '撃破！';
+    bossDefeatPortrait.src = 'images/bosses/boss6-face.jpg';
+    bossDefeatPortrait.style.objectPosition = 'center top';
+    bossDefeatPortrait.style.visibility = 'visible';
+    // Full color, not the usual dulled grayscale every other boss's defeat card applies (see
+    // .boss-defeat-overlay .boss-intro-portrait) — this one's about to visibly crumble apart,
+    // which reads better against its real colors than an already-desaturated image.
+    bossDefeatPortrait.style.filter = 'none';
+    bossDefeatName.textContent = boss.name;
+    bossDefeatLine.textContent = boss.defeatLine ? `「${boss.defeatLine}」` : '';
+    bossDefeatOverlay.classList.remove('hidden');
+    fitBossIntroCardSoon(bossDefeatOverlay);
+    if (bossDefeatHideTimer) { clearTimeout(bossDefeatHideTimer); bossDefeatHideTimer = null; }
+    setTimeout(() => {
+      crumbleImage(bossDefeatPortrait, () => {
+        // A beat on the now-empty frame before the card itself goes away, so the crumble's
+        // last falling tile doesn't cut straight into the true-ending overlay appearing.
+        setTimeout(() => {
+          bossDefeatOverlay.classList.add('hidden');
+          if (onDone) onDone();
+        }, 500);
+      });
+    }, 3000);
   }
 
   // ---- story mode: a single button starts a fresh 5-stage boss-rush campaign; the same
@@ -1339,22 +1442,28 @@
           // skip the boss's defeat-quote card below (there's no boss on screen to have said it).
           if (!state.mobWaveActive) recordBossDefeated(storyStage, !!state.storyCoop);
           if (state.exBossActive) recordExBossDefeated();
+          if (state.exBossActive) exBossDefeatSequenceDone = false; // reset for this kill — flipped true once showExBossDefeat's onDone fires below
           // The boss's whole dramatic presentation (fanfare + "勝利！！" flash + defeat-quote
           // card) per explicit request must wait for the roulette to fully finish first — the
           // flash/card overlays sit at a much higher z-index than `.roulette-block` and used to
           // fire in parallel with it, effectively covering the spin for its whole duration.
           // storyStage < storyStageCount here means there's a next stage to advance to —
           // storyStageCount reflects the freshly-received state, same as everywhere else.
-          // Never true for the EX fight (storyStage stays frozen at 5 === storyStageCount
-          // throughout it), so this naturally skips the "before advancing" defeat-line pause
-          // for the EX win — that ending gets its own dedicated overlay instead (see
-          // trueEndingClear in updateHud()), not a "next stage" pause with nothing to advance to.
           // Chained through showBossVictory's onDone rather than fired in parallel, so the
           // two dramatic pauses play out one after another, not stacked/racing.
           const playBossVictorySequence = () => {
             if (audio) audio.playBossVictory();
             showBossVictory(() => {
-              if (!state.mobWaveActive && storyStage < storyStageCount) {
+              if (state.exBossActive) {
+                // The true ending (trueEndingClear in updateHud()) waits on
+                // exBossDefeatSequenceDone specifically so it can't appear before this finishes.
+                const boss = state.players.find((p) => p.isBoss);
+                if (boss) {
+                  showExBossDefeat(boss, () => { exBossDefeatSequenceDone = true; });
+                } else {
+                  exBossDefeatSequenceDone = true;
+                }
+              } else if (!state.mobWaveActive && storyStage < storyStageCount) {
                 const boss = state.players.find((p) => p.isBoss);
                 if (boss) showBossDefeat(storyStage, boss);
               }
@@ -2702,9 +2811,10 @@
         // deferring to that flag rather than unhiding the button unconditionally every tick.
         if (gameOverRetryReady) storyRetryBtn.classList.remove('hidden');
       } else if (trueEndingClear) {
-        // Same "wait for the victory flash to auto-hide" deferral as the stage-clear branch
-        // below — the true ending shouldn't appear stacked underneath/racing the flash.
-        if (bossVictoryOverlay.classList.contains('hidden')) {
+        // Waits on both the victory flash AND the EX boss's own defeat-quote-then-crumble beat
+        // (showExBossDefeat, chained from showBossVictory's onDone above) — the true ending
+        // shouldn't appear stacked underneath/racing either of them.
+        if (bossVictoryOverlay.classList.contains('hidden') && exBossDefeatSequenceDone) {
           // This branch re-runs on every ~33ms broadcast while sitting in 'finished' — only
           // start the 8s reveal timer once, on the actual hidden->visible transition, not on
           // every tick after that.
