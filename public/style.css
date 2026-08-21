@@ -1645,11 +1645,12 @@ button:active {
   /* was permanently display:none (removed entirely) per an earlier request, but that
      broke mobile bomb placement outright — now shown/hidden dynamically by client.js
      instead: visible only while the player actually holds a bomb (bombs>0), invisible
-     the rest of the time so it's not clutter when there's nothing to place. Positioned
-     at the exact same spot as .detonate-near-sword per user request — place and detonate
-     are effectively never relevant at the same moment (you either haven't placed your
-     bomb yet, or you have), so sharing one screen slot instead of two is fine. Same bottom
-     row as fire/sword now, one further slot to the left (152px = 2 × 76px). */
+     the rest of the time so it's not clutter when there's nothing to place. Same bottom
+     row as fire/sword, one further slot to the left (152px = 2 × 76px). Used to share this
+     exact slot with .detonate-near-sword on the (wrong) assumption that holding an unplaced
+     bomb and having one already placed were mutually exclusive — not true once a player can
+     hold up to MAX_BOMBS_HELD at once (game.js), so both buttons now get their own slot and
+     can be shown together. */
   position: fixed;
   bottom: max(20px, env(safe-area-inset-bottom) + 14px);
   right: calc(max(18px, env(safe-area-inset-right) + 10px) + 152px);
@@ -1682,13 +1683,14 @@ button:active {
   filter: grayscale(0.6);
 }
 
-/* detonate sits right next to the sword button (same row, one slot to its left) instead
-   of paired with the place-bomb button, since it's conceptually another "attack" action
-   taken while already in melee range */
+/* Its own slot, one further left of the place-bomb button (228px = 3 × 76px) — per explicit
+   request, placing a bomb no longer hides the place button if more are still held (up to
+   MAX_BOMBS_HELD, game.js), so both need to be visible and tappable at once rather than
+   sharing one spot. */
 .detonate-near-sword {
   position: fixed;
   bottom: max(20px, env(safe-area-inset-bottom) + 14px);
-  right: calc(max(18px, env(safe-area-inset-right) + 10px) + 152px);
+  right: calc(max(18px, env(safe-area-inset-right) + 10px) + 228px);
   z-index: 15;
 }
 
