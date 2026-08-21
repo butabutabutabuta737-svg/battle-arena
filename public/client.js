@@ -280,22 +280,6 @@
     try { localStorage.setItem(EX_STORAGE_KEY, '1'); } catch (e) { /* localStorage unavailable — certificate just won't persist */ }
   }
 
-  // Drawn placeholder for the EX boss's portrait slots (boss-intro/defeat cards, certificate)
-  // — there's no source photo for it (all 5 real photos are already claimed by the numbered
-  // bosses), so a radiant golden eye/sigil stands in, fitting a mysterious "god of the
-  // battlefield" reveal better than reusing an already-identified character's face anyway.
-  const EX_BOSS_SIGIL_SRC = 'data:image/svg+xml,' + encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
-    '<defs><radialGradient id="g" cx="50%" cy="50%" r="60%">' +
-    '<stop offset="0%" stop-color="#fff6d0"/><stop offset="35%" stop-color="#ffd35b"/><stop offset="100%" stop-color="#1a0800"/>' +
-    '</radialGradient></defs>' +
-    '<rect width="100" height="100" fill="#05030a"/>' +
-    '<circle cx="50" cy="50" r="42" fill="url(#g)"/>' +
-    '<ellipse cx="50" cy="50" rx="26" ry="12" fill="#0a0400"/>' +
-    '<circle cx="50" cy="50" r="7" fill="#ffefc2"/>' +
-    '</svg>'
-  );
-
   let ws = null;
   let myId = null;
   let isCpuMatch = false;
@@ -851,7 +835,7 @@
   const certSilhouetteEls = Array.from($('#certSilhouetteRow').querySelectorAll('.cert-portrait:not(#certPortraitEx)'));
   const certModeBadgeEls = Array.from($('#certSilhouetteRow').querySelectorAll('.cert-mode-badge'));
   const certPortraitEx = $('#certPortraitEx');
-  certPortraitEx.src = EX_BOSS_SIGIL_SRC;
+  certPortraitEx.src = 'images/bosses/boss6-face.jpg';
   function renderCertificate() {
     // Display tier is 0-6: 0-5 mirror bestBossDefeated exactly, 6 only once the hidden EX
     // boss has also fallen (which requires bestBossDefeated===5 already, so this can't be
@@ -907,8 +891,8 @@
     if (isEx) {
       bossIntroOverlay.style.setProperty('--boss-color', '#ffe9a8');
       bossIntroStage.textContent = 'EX';
-      bossIntroPortrait.src = EX_BOSS_SIGIL_SRC;
-      bossIntroPortrait.style.objectPosition = 'center';
+      bossIntroPortrait.src = 'images/bosses/boss6-face.jpg';
+      bossIntroPortrait.style.objectPosition = 'center top';
     } else {
       const theme = BOSS_TIER_THEME[Math.min(Math.max(1, stage), BOSS_TIER_THEME.length) - 1];
       bossIntroOverlay.style.setProperty('--boss-color', theme.uniform);
