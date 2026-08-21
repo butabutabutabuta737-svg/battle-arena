@@ -1890,16 +1890,31 @@
 
   function drawBullet(b) {
     const r = b.radius || 5;
+    // EX boss bullets: a fixed color per bullet (picked by id, not time) from the same
+    // RAINBOW_RING_COLORS palette as its ship's aura rings — many bullets on screen at once
+    // read as a rainbow *spread* this way, consistent with the ship's own rainbow (a static
+    // multi-color design, explicitly not a per-object color-cycling animation).
+    let fillColor, glowColor, strokeAlpha;
+    if (b.ownerIsEx) {
+      fillColor = glowColor = RAINBOW_RING_COLORS[b.id % RAINBOW_RING_COLORS.length];
+      strokeAlpha = 0.6;
+    } else if (b.big) {
+      fillColor = '#e4d4ff'; glowColor = '#c9a8ff'; strokeAlpha = 0.6;
+    } else {
+      fillColor = '#ffe28a'; glowColor = '#ffd35b'; strokeAlpha = 0.55;
+    }
     ctx.save();
-    ctx.shadowColor = b.big ? '#c9a8ff' : '#ffd35b';
-    ctx.shadowBlur = b.big ? 22 : 14;
-    ctx.strokeStyle = b.big ? 'rgba(201,168,255,0.6)' : 'rgba(255,211,91,0.55)';
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = b.ownerIsEx ? 24 : (b.big ? 22 : 14);
+    ctx.globalAlpha = strokeAlpha;
+    ctx.strokeStyle = glowColor;
     ctx.lineWidth = Math.max(3, r * 0.8);
     ctx.beginPath();
     ctx.moveTo(b.x, b.y);
     ctx.lineTo(b.x - b.vx * 0.02, b.y - b.vy * 0.02);
     ctx.stroke();
-    ctx.fillStyle = b.big ? '#e4d4ff' : '#ffe28a';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = fillColor;
     ctx.beginPath();
     ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
     ctx.fill();

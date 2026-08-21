@@ -629,7 +629,17 @@ function attemptFire(room, ws, p, now) {
   const buffs = room.buffs.get(ws);
   const fireCooldown = buffs && now < buffs.rapid ? BASE_FIRE_COOLDOWN_MS / RAPID_BUFF_DIVISOR : BASE_FIRE_COOLDOWN_MS;
   const dmgMult = buffs && now < buffs.power ? POWER_BUFF_MULT : 1;
-  const bigMult = buffs && now < buffs.big ? BIG_BULLET_MULT : 1;
+  // The hidden EX boss's own bullets are always the "big" size, per explicit request — not
+  // just while it happens to be holding the same timed buff a human would need to pick up.
+  // Math.max (not an outright override) so a genuinely-held big buff on top of it doesn't
+  // shrink anything back down; in practice the two never stack to more than BIG_BULLET_MULT
+  // itself since neither multiplier ever exceeds it, but max is the correct, obviously-safe
+  // combination regardless.
+  const isExShooter = room.exBossActive && ws === room.cpuToken;
+  const bigMult = Math.max(
+    buffs && now < buffs.big ? BIG_BULLET_MULT : 1,
+    isExShooter ? BIG_BULLET_MULT : 1
+  );
   const laserActive = buffs && now < buffs.laser;
   const atkMult = ws === room.cpuToken ? cpuAttackMult(room) : 1;
 
@@ -650,6 +660,7 @@ function attemptFire(room, ws, p, now) {
         ownerIsBoss: !!p.isBoss, // embedded at creation, not looked up per-tick — see the
           // bullet-vs-player collision loop in tick() for why (bullets outlive the shooter's
           // own live player-object lookup by many ticks, but this is a plain snapshot).
+        ownerIsEx: isExShooter, // client-only: picks the rainbow render instead of the plain gold/big-purple bullet look
         x: origin.x + Math.cos(p.angle) * PLAYER_RADIUS,
         y: origin.y + Math.sin(p.angle) * PLAYER_RADIUS,
         vx: Math.cos(p.angle) * BULLET_SPEED,
