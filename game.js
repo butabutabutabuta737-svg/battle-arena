@@ -2171,7 +2171,26 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
   // up with just one ally and an already-active boss.
   const humanTargetForCpu = room.storyCoop ? 2 : 1;
   if (wantsStoryCpu && room.players.size === humanTargetForCpu) {
-    addCpuPlayer(room, 1); // story mode always starts at stage 1
+    // room.storyStage (not a hardcoded 1) — this same trigger also fires on a RECONNECT: a
+    // disconnect mid-fight removes the CPU token too (see the isCpuMatch branch in the 'close'
+    // handler below), so the human rejoining a room that already has real progress hits this
+    // exact "add the boss" path again. room.storyStage is never reset by a disconnect (only the
+    // in-progress round's bullets/items are), so it's already sitting at the correct current
+    // stage — a fresh room simply has it at its default 1, so this is a no-op change for that
+    // case and a real fix for the reconnect case (was silently restarting the whole campaign
+    // from stage 1 every time, per an explicit "reconnecting shouldn't be a do-over" report).
+    addCpuPlayer(room, room.storyStage);
+    // Reconnecting mid-EX-fight needs its identity re-applied — addCpuPlayer() only knows
+    // about the numbered STORY_BOSSES, not the hidden EX boss (which reuses stage 5's stats/HP
+    // verbatim, see startExStage's own handler below, just swapping name/line/defeatLine).
+    if (room.exBossActive) {
+      const cpuPlayer = room.players.get(room.cpuToken);
+      if (cpuPlayer) {
+        cpuPlayer.name = EX_BOSS.name;
+        cpuPlayer.line = EX_BOSS.line;
+        cpuPlayer.defeatLine = EX_BOSS.defeatLine;
+      }
+    }
   }
 
   ws.send(JSON.stringify({

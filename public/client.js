@@ -1330,11 +1330,6 @@
         if (audio) {
           if (humanSideWon(state, state.winnerId)) audio.playWin(); else audio.playLose();
         }
-        if (state.rouletteEnabled && state.rouletteResult) {
-          runRoulette(state.rouletteResult, state);
-        } else {
-          rouletteBlock.classList.add('hidden');
-        }
         // storyStage still holds the just-cleared stage number here (the server only
         // increments it once a 'rematch' is actually sent, same timing this file's other
         // finalStageClear logic already relies on) — fires exactly once per real boss kill
@@ -1347,13 +1342,10 @@
           // skip the boss's defeat-quote card below (there's no boss on screen to have said it).
           if (!state.mobWaveActive) recordBossDefeated(storyStage, !!state.storyCoop);
           if (state.exBossActive) recordExBossDefeated();
-          // The "勝利！！" flash always plays first, before anything stage-specific — its own
-          // fanfare sfx overrides the plain playWin() played just above for this same
-          // 'finished' transition (both fire, but the fanfare is the one that's actually
-          // audible/felt here; playWin() still matters for non-boss round wins, e.g. mid-
-          // series rounds against a story boss that don't reach matchOver, or a human-vs-
-          // human arena win, neither of which reach this branch at all).
-          if (audio) audio.playBossVictory();
+          // The boss's whole dramatic presentation (fanfare + "勝利！！" flash + defeat-quote
+          // card) per explicit request must wait for the roulette to fully finish first — the
+          // flash/card overlays sit at a much higher z-index than `.roulette-block` and used to
+          // fire in parallel with it, effectively covering the spin for its whole duration.
           // storyStage < storyStageCount here means there's a next stage to advance to —
           // storyStageCount reflects the freshly-received state, same as everywhere else.
           // Never true for the EX fight (storyStage stays frozen at 5 === storyStageCount
@@ -1362,12 +1354,29 @@
           // trueEndingClear in updateHud()), not a "next stage" pause with nothing to advance to.
           // Chained through showBossVictory's onDone rather than fired in parallel, so the
           // two dramatic pauses play out one after another, not stacked/racing.
-          showBossVictory(() => {
-            if (!state.mobWaveActive && storyStage < storyStageCount) {
-              const boss = state.players.find((p) => p.isBoss);
-              if (boss) showBossDefeat(storyStage, boss);
-            }
-          });
+          const playBossVictorySequence = () => {
+            if (audio) audio.playBossVictory();
+            showBossVictory(() => {
+              if (!state.mobWaveActive && storyStage < storyStageCount) {
+                const boss = state.players.find((p) => p.isBoss);
+                if (boss) showBossDefeat(storyStage, boss);
+              }
+            });
+          };
+          if (state.rouletteEnabled && state.rouletteResult) {
+            runRoulette(state.rouletteResult, state, () => {
+              setTimeout(playBossVictorySequence, 1000); // explicit 1s breathing room after the roulette settles
+            });
+          } else {
+            rouletteBlock.classList.add('hidden');
+            playBossVictorySequence();
+          }
+        } else if (state.rouletteEnabled && state.rouletteResult) {
+          // No boss-victory sequence to wait for this round (mid-series round, arena PvP, etc.)
+          // — the roulette just runs on its own, same as before.
+          runRoulette(state.rouletteResult, state);
+        } else {
+          rouletteBlock.classList.add('hidden');
         }
         // Boss won the whole series — let the "GAME OVER" moment sit for a few seconds
         // before the retry button appears (see gameOverRetryReady), rather than offering
@@ -2370,7 +2379,12 @@
   // this only plays a slot-machine-style reveal of that predetermined result, it never
   // rolls anything client-side.
   let rouletteSpinTimer = null;
-  function runRoulette(result, state) {
+  // onDone fires once the reel has actually settled on its result (not before) — callers use
+  // this to hold off anything that would visually compete with the roulette (the boss-victory
+  // flash/defeat-quote card are a much higher z-index than `.roulette-block` and used to fire in
+  // parallel, effectively covering the spin for its whole ~6s combined duration; per explicit
+  // request the boss's セリフ now always waits for the roulette to fully finish first).
+  function runRoulette(result, state, onDone) {
     if (rouletteSpinTimer) {
       clearTimeout(rouletteSpinTimer);
       rouletteSpinTimer = null;
@@ -2402,6 +2416,7 @@
           if (window.GameAudio) window.GameAudio.playRouletteMiss();
         }
         rouletteSpinTimer = null;
+        if (onDone) onDone();
         return;
       }
       rouletteReel.textContent = icons[Math.floor(Math.random() * icons.length)];
