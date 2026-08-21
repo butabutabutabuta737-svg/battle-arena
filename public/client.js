@@ -179,6 +179,11 @@
     { uniform: '#6b5b95', icon: '🔪', image: 'images/bosses/boss4-face.jpg', facePos: 'center top' }, // stage4: knife specialist, stealthy purple
     { uniform: '#ffd35b', icon: '👑', image: 'images/bosses/boss5-face.jpg', facePos: 'center top' }, // stage5: battlefield champion, gold
   ];
+  // Hidden EX boss ("戦神") aura — a fixed set of differently-colored rings (not a color-
+  // cycling animation, which was tried first and explicitly rejected: "切り替わりではなく1つの
+  // デザインで色々な色の枠がある状態に") drawn concentrically around it, see drawShip()'s
+  // isExBoss branch below.
+  const RAINBOW_RING_COLORS = ['#ff4d4d', '#ff9d3d', '#ffe14d', '#4dff88', '#4dc8ff', '#b34dff'];
   // Flavor text for the between-boss grunt-wave mini-game, indexed by mobWaveIndex-1 (1-4,
   // matching game.js's MOB_WAVE_COLOR_WEIGHTS) — ties each wave to the boss just defeated and
   // hints at the escalating threat of the next one. Purely client-side display text (the
@@ -2013,31 +2018,26 @@
     // get the boss's escalating tier look. isAlly can't misfire in 1P story (there the one
     // non-me player always IS the boss) or in arena mode (isCpuMatch is false there).
     const isBoss = !!p.isBoss;
-    const isCoop = !!(latestState && latestState.storyCoop);
     const isAlly = !isMe && !isBoss && isCpuMatch;
     const tier = isBoss && isCpuMatch ? Math.min(Math.max(1, storyStage), BOSS_TIER_THEME.length) : 0;
     const theme = tier > 0 ? BOSS_TIER_THEME[tier - 1] : null;
-    // In 2P co-op specifically, the boss is forced to a fixed enemy-red instead of its
-    // per-stage BOSS_TIER_THEME color — some stages' tier colors (stage1's muted olive in
-    // particular) read too close to the ally's green, undermining the clean 3-way me/ally/
-    // boss split this mode needs. 1P story keeps the per-stage tier color as before (no
-    // ally to be confused with there). Scale/glow escalation still always comes from the
-    // theme regardless — only the color itself is overridden.
-    const themeColor = isBoss && isCoop ? '#c9524a' : (theme ? theme.uniform : null);
+    // 2P co-op bosses now use the same per-stage BOSS_TIER_THEME color as 1P (per explicit
+    // request) — this used to be forced to a fixed red instead, back when stage1's color was
+    // a muted olive too close to the ally's green; stage1 is white now, so that clash no
+    // longer exists and the per-stage color can just be used everywhere uniformly.
+    const themeColor = theme ? theme.uniform : null;
     let uniform = themeColor || (isMe ? '#4d78d9' : isAlly ? '#3fb36e' : '#c9524a');
     let uniformDark = themeColor ? shadeColor(themeColor, 0.45) : (isMe ? '#2b4a94' : isAlly ? '#1f6b40' : '#8a2e2a');
     let helmet = themeColor ? shadeColor(themeColor, 0.28) : (isMe ? '#25396b' : isAlly ? '#164f2f' : '#5c211e');
-    // Hidden EX boss ("戦神") gets a continuously cycling rainbow instead of any fixed
-    // BOSS_TIER_THEME color, per explicit request — overrides even the 2P forced-red rule
-    // above, since this is a one-off identity for a specific boss, not a per-stage color that
-    // needs to stay clear of the ally's green. HSL makes the darker torso/helmet shades trivial
-    // (just drop lightness — same idea as shadeColor, but that helper only accepts hex).
+    // Hidden EX boss ("戦神") — a fixed pale gold-white body (not a per-stage BOSS_TIER_THEME
+    // color, and not a color-cycling animation either — that was tried first and explicitly
+    // rejected in favor of a single static design with multiple differently-colored rings, see
+    // RAINBOW_RING_COLORS and the aura section below).
     const isExBoss = isBoss && isCpuMatch && !!(latestState && latestState.exBossActive);
     if (isExBoss) {
-      const hue = (Date.now() / 20) % 360;
-      uniform = `hsl(${hue}, 85%, 60%)`;
-      uniformDark = `hsl(${hue}, 85%, 27%)`;
-      helmet = `hsl(${hue}, 85%, 17%)`;
+      uniform = '#f5e6b8';
+      uniformDark = shadeColor(uniform, 0.45);
+      helmet = shadeColor(uniform, 0.28);
     }
     const scale = theme ? [1, 1.06, 1.12, 1.18, 1.26][tier - 1] : 1;
     const glowBlur = theme ? [14, 17, 20, 24, 30][tier - 1] : 14;
@@ -2116,9 +2116,27 @@
 
     ctx.restore();
 
-    // Boss aura: escalating ring count (1 at tier3 up to 3 at tier5) — the visual "this
-    // one's dangerous" cue that plain color/scale alone doesn't convey as clearly.
-    if (tier >= 3) {
+    // Boss aura. EX boss: one ring per RAINBOW_RING_COLORS entry, each its own fixed color —
+    // the "色々な色の枠がある" design the user asked for in place of the color-cycling body.
+    // Every other CPU-match boss: escalating same-color ring count (1 at tier3 up to 3 at
+    // tier5) — the visual "this one's dangerous" cue that plain color/scale alone doesn't
+    // convey as clearly.
+    if (isExBoss) {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      const pulse = 1 + Math.sin(performance.now() / 220) * 0.05;
+      RAINBOW_RING_COLORS.forEach((color, i) => {
+        ctx.beginPath();
+        ctx.arc(0, 0, (16 + i * 6) * pulse, 0, Math.PI * 2);
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = 0.8;
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+      });
+      ctx.restore();
+    } else if (tier >= 3) {
       ctx.save();
       ctx.translate(p.x, p.y);
       const pulse = 1 + Math.sin(performance.now() / 220) * 0.05;
