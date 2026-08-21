@@ -1465,12 +1465,20 @@ function resetPositions(room) {
   }
   // A pending roulette win from the round that just ended is granted now, at the start of
   // the round it actually gets to be used in — applied after the buffs reset above so it
-  // isn't immediately wiped by it.
+  // isn't immediately wiped by it. In 2P co-op, room.rouletteResult.winnerId is always a
+  // single *representative* ally id (see the win-condition comment elsewhere in this file —
+  // same reason room.matchWins/winnerId use one stable id rather than "whichever ally is
+  // alive"), so matching only that exact id gave the item to just one of the two humans even
+  // though the whole team won it together. Per explicit request, an ally-side win in co-op
+  // now grants it to both allies; a boss win (or non-coop) still grants it to the single
+  // actual winner, unchanged.
   if (room.rouletteResult && room.rouletteResult.hit) {
+    const rouletteWinner = [...room.players.values()].find((p) => p.id === room.rouletteResult.winnerId);
+    const grantToAllAllies = room.storyCoop && rouletteWinner && !rouletteWinner.isBoss;
     for (const [ws, p] of room.players) {
-      if (p.id === room.rouletteResult.winnerId) {
+      if (grantToAllAllies ? !p.isBoss : p.id === room.rouletteResult.winnerId) {
         applyItemEffect(room, ws, p, room.rouletteResult.itemType, gnow(room));
-        break;
+        if (!grantToAllAllies) break;
       }
     }
   }
@@ -2307,6 +2315,13 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
                   cpuPlayer.name = bossNameForStage(room.storyStage);
                   cpuPlayer.line = bossLineForStage(room.storyStage);
                   cpuPlayer.defeatLine = bossDefeatLineForStage(room.storyStage);
+                  // Per explicit request ("ボスのHPが少ない") — this rename-in-place never
+                  // touched maxHp/hp, so every boss past stage 1 was silently keeping
+                  // whichever earlier stage's HP the cpu token happened to start with (always
+                  // stage 1's 100, since addCpuPlayer() — the only place that ever set it from
+                  // STORY_BOSS_HP — only runs once per room, at the very first join).
+                  cpuPlayer.maxHp = STORY_BOSS_HP[room.storyStage - 1];
+                  cpuPlayer.hp = cpuPlayer.maxHp;
                 }
                 room.cpuState = null;
                 room.pendingStoryIntro = true;
@@ -2318,6 +2333,8 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
                   cpuPlayer.name = bossNameForStage(1);
                   cpuPlayer.line = bossLineForStage(1);
                   cpuPlayer.defeatLine = bossDefeatLineForStage(1);
+                  cpuPlayer.maxHp = STORY_BOSS_HP[0];
+                  cpuPlayer.hp = cpuPlayer.maxHp;
                 }
                 room.cpuState = null;
                 room.storyComplete = false;
@@ -2351,6 +2368,8 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
                 cpuPlayer.name = bossNameForStage(1);
                 cpuPlayer.line = bossLineForStage(1);
                 cpuPlayer.defeatLine = bossDefeatLineForStage(1);
+                cpuPlayer.maxHp = STORY_BOSS_HP[0];
+                cpuPlayer.hp = cpuPlayer.maxHp;
               }
               room.cpuState = null;
               room.storyComplete = false;

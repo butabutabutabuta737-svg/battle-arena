@@ -917,6 +917,25 @@ button:active {
   text-shadow: 0 0 18px rgba(143, 176, 255, 0.6);
 }
 
+/* Room code while waiting for the other 2P player to join — per explicit request, made large
+   and prominent (was a plain 13px inline-text line) since this is the one moment the code
+   actually needs to be read aloud or typed elsewhere, not just glanced at. */
+.share-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #9aa3d1;
+}
+.share-hint-code {
+  font-size: clamp(40px, 12vw, 56px);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: #ffd35b;
+  text-shadow: 0 0 20px rgba(255, 211, 91, 0.7), 0 0 40px rgba(255, 211, 91, 0.35);
+}
+
 /* .btn-primary/.btn-secondary's flex:1 (see their own rules) was designed for .btn-row's
    *horizontal* flex layout, where it splits width evenly between buttons. .overlay is a
    *column*-direction flex container, so that same flex:1 was instead stretching any such

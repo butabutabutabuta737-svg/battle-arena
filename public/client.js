@@ -297,10 +297,17 @@
   let gameOverTimer = null;
   let trueEndingTapReady = false; // flips true (and reveals the "tap to continue" hint) only after trueEndingRevealTimer elapses — same "let it sit" beat as gameOverRetryReady above
   let trueEndingRevealTimer = null;
-  // Gates trueEndingOverlay behind the EX boss's own defeat-quote-then-crumble beat (see
-  // showExBossDefeat) — reset false at the start of each EX-boss-kill sequence, flipped true
-  // once that sequence's onDone actually fires, checked by updateHud()'s trueEndingClear branch.
-  let exBossDefeatSequenceDone = false;
+  // Gates rematchBtn/trueEndingOverlay behind the WHOLE post-victory dramatic sequence for
+  // this kill (roulette wait, if any -> "勝利！！" flash -> optional defeat-quote card or
+  // crumble) actually finishing — reset false right when that sequence is kicked off, flipped
+  // true only once its last step's own onDone fires. Deliberately NOT inferred from "is
+  // bossVictoryOverlay/bossDefeatOverlay currently hidden" (the previous approach) — with the
+  // roulette wait in front of it, both overlays are ALSO hidden for the first ~1-2.6s while the
+  // sequence hasn't even started yet, which let rematchBtn appear (and the wave mini-game get
+  // triggered) while the flash/defeat-quote were still queued behind it — confirmed live via a
+  // timing test showing waveIntroOverlay and bossVictoryOverlay visible at the same time,
+  // matching an explicit "画面がめちゃくちゃ" report.
+  let bossPresentationDone = false;
   let lastStoryLevel = 1; // last storyLevel we've shown a level-up toast for
   let lastArenaFitSignature = ''; // re-run fitArena() only when something HUD-height-affecting actually changes, not every ~33ms updateHud() tick
   let levelUpHideTimer = null;
@@ -700,7 +707,7 @@
     trueEndingOverlay.classList.remove('ready');
     trueEndingTapReady = false;
     if (trueEndingRevealTimer) { clearTimeout(trueEndingRevealTimer); trueEndingRevealTimer = null; }
-    exBossDefeatSequenceDone = false;
+    bossPresentationDone = false;
     // Stray crumble tiles (see crumbleImage()) if the player navigated away mid-animation —
     // they're appended to <body> directly (not inside anything this function already hides),
     // so they'd otherwise keep floating over whatever screen comes next for up to ~2s.
@@ -971,9 +978,10 @@
   // "次の面へ" button appears. Called once, on the 'finished' phase-transition edge (see
   // handleState()) — stage/boss here are the JUST-CLEARED stage's, since the server only
   // advances room.storyStage once the player actually clicks that button and sends 'rematch'.
-  // updateHud() defers showing rematchBtn (for the stageAdvance case only) until this overlay
-  // hides itself, so there's no separate ready-flag to keep in sync with this timer.
-  function showBossDefeat(stage, boss) {
+  // `onDone` (added alongside bossPresentationDone below) fires once this card actually hides
+  // itself, so callers have a real completion signal instead of inferring "done" from current
+  // visibility.
+  function showBossDefeat(stage, boss, onDone) {
     const theme = BOSS_TIER_THEME[Math.min(Math.max(1, stage), BOSS_TIER_THEME.length) - 1];
     bossDefeatOverlay.style.setProperty('--boss-color', theme.uniform);
     bossDefeatPortrait.style.filter = ''; // in case showExBossDefeat() last set this to 'none' — falls back to the normal dulled-grayscale CSS rule
@@ -987,6 +995,7 @@
     bossDefeatHideTimer = setTimeout(() => {
       bossDefeatOverlay.classList.add('hidden');
       bossDefeatHideTimer = null;
+      if (onDone) onDone();
     }, 5000); // per explicit request (was 4.5s)
   }
 
@@ -1442,7 +1451,7 @@
           // skip the boss's defeat-quote card below (there's no boss on screen to have said it).
           if (!state.mobWaveActive) recordBossDefeated(storyStage, !!state.storyCoop);
           if (state.exBossActive) recordExBossDefeated();
-          if (state.exBossActive) exBossDefeatSequenceDone = false; // reset for this kill — flipped true once showExBossDefeat's onDone fires below
+          bossPresentationDone = false; // reset for this kill — flipped true once whichever branch below actually finishes
           // The boss's whole dramatic presentation (fanfare + "勝利！！" flash + defeat-quote
           // card) per explicit request must wait for the roulette to fully finish first — the
           // flash/card overlays sit at a much higher z-index than `.roulette-block` and used to
@@ -1456,16 +1465,26 @@
             showBossVictory(() => {
               if (state.exBossActive) {
                 // The true ending (trueEndingClear in updateHud()) waits on
-                // exBossDefeatSequenceDone specifically so it can't appear before this finishes.
+                // bossPresentationDone specifically so it can't appear before this finishes.
                 const boss = state.players.find((p) => p.isBoss);
                 if (boss) {
-                  showExBossDefeat(boss, () => { exBossDefeatSequenceDone = true; });
+                  showExBossDefeat(boss, () => { bossPresentationDone = true; });
                 } else {
-                  exBossDefeatSequenceDone = true;
+                  bossPresentationDone = true;
                 }
               } else if (!state.mobWaveActive && storyStage < storyStageCount) {
                 const boss = state.players.find((p) => p.isBoss);
-                if (boss) showBossDefeat(storyStage, boss);
+                if (boss) {
+                  showBossDefeat(storyStage, boss, () => { bossPresentationDone = true; });
+                } else {
+                  bossPresentationDone = true;
+                }
+              } else {
+                // waveCleared (no defeat-quote card for a wave-clear — see the guard above),
+                // or finalStageClear (storyEndingOverlay handles its own reveal timing off
+                // bossVictoryOverlay directly, doesn't read this flag) — either way, the
+                // dramatic sequence for THIS kill is done the instant the flash itself ends.
+                bossPresentationDone = true;
               }
             });
           };
@@ -2537,8 +2556,15 @@
     }
     const winner = state.players.find((p) => p.id === result.winnerId);
     const winnerName = winner ? winner.name : '相手';
+    // A co-op ally-side win now grants the roulette to BOTH allies (see game.js's
+    // resetPositions — winnerId there is always one *representative* ally, matching
+    // room.matchWins' own single-stable-id convention, but the actual item now goes to
+    // whoever isn't the boss) — "仲間全員" reads correctly for both allies at once, instead
+    // of naming just the representative one while silently leaving the other guessing why
+    // they also got an item they weren't "the winner" of.
+    const isCoopAllyWin = !!(state.storyCoop && winner && !winner.isBoss);
     const amIWinner = result.winnerId === myId;
-    const who = amIWinner ? 'あなた' : winnerName;
+    const who = isCoopAllyWin ? '仲間全員' : (amIWinner ? 'あなた' : winnerName);
 
     rouletteBlock.classList.remove('hidden');
     rouletteReel.classList.remove('settled');
@@ -2829,7 +2855,7 @@
         // Waits on both the victory flash AND the EX boss's own defeat-quote-then-crumble beat
         // (showExBossDefeat, chained from showBossVictory's onDone above) — the true ending
         // shouldn't appear stacked underneath/racing either of them.
-        if (bossVictoryOverlay.classList.contains('hidden') && exBossDefeatSequenceDone) {
+        if (bossPresentationDone) {
           // This branch re-runs on every ~33ms broadcast while sitting in 'finished' — only
           // start the 8s reveal timer once, on the actual hidden->visible transition, not on
           // every tick after that.
@@ -2847,17 +2873,21 @@
       } else if (finalStageClear) {
         if (bossVictoryOverlay.classList.contains('hidden')) storyEndingOverlay.classList.remove('hidden');
       } else if (waveCleared) {
-        // No boss-defeat-quote card plays for a wave-clear (see handleState's guard), so this
-        // only needs to wait on the "勝利！！" flash itself, not bossDefeatOverlay too.
-        if (bossVictoryOverlay.classList.contains('hidden')) rematchBtn.classList.remove('hidden');
+        // No boss-defeat-quote card plays for a wave-clear (see handleState's guard), so
+        // bossPresentationDone flips true right as the "勝利！！" flash itself ends.
+        if (bossPresentationDone) rematchBtn.classList.remove('hidden');
         rematchBtn.textContent = 'ボスへ進む';
       } else {
-        // For a stage-clear specifically, keep rematchBtn hidden until both the "勝利！！"
-        // flash AND (chained after it) the boss's defeat line (see showBossDefeat) have each
-        // finished their own dramatic-pause auto-hide — same "defer to a one-time-started
-        // timer, re-checked every tick" pattern as gameOverReady above, just read directly
-        // off each overlay's own hidden state instead of a separate flag.
-        const waitingOnDefeatLine = stageAdvance && (!bossVictoryOverlay.classList.contains('hidden') || !bossDefeatOverlay.classList.contains('hidden'));
+        // For a stage-clear specifically, keep rematchBtn hidden until the WHOLE post-victory
+        // sequence (roulette wait if any -> "勝利！！" flash -> boss's defeat line) has
+        // genuinely finished — bossPresentationDone (set in handleState's phase-transition
+        // edge, above) is a real completion signal, not an inference from current overlay
+        // visibility. That inference used to be wrong: with a roulette wait queued in front of
+        // the flash/defeat-quote, both overlays read "currently hidden" for the ~1-2.6s before
+        // the sequence even starts, which let rematchBtn (and so the next mob-wave mini-game)
+        // appear while the flash/defeat-quote were still queued behind it — confirmed live via
+        // a timing test, matching an explicit "画面がめちゃくちゃ" report.
+        const waitingOnDefeatLine = stageAdvance && !bossPresentationDone;
         if (!waitingOnDefeatLine) rematchBtn.classList.remove('hidden');
         rematchBtn.textContent = stageAdvance ? '次の面へ' : (isCpuMatch ? '次のラウンドへ' : 'もう一度対戦する');
       }
