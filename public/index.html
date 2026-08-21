@@ -450,7 +450,21 @@
          another button), rather than a fixed-position pad -->
     <div class="floating-joystick hidden" id="floatJoystick"><div class="floating-joystick-knob" id="floatJoystickKnob"></div></div>
 
-    <button class="fire-btn" id="fireBtn" title="押し続けると連射 (Space)">🔫</button>
+    <!-- Custom silhouette icon instead of the 🔫 emoji — on most platforms (Apple/Google/
+         Samsung all switched years ago) that emoji renders as a bright green toy/water pistol,
+         which reads as silly rather than "cool" for a combat game; a flat SVG side-profile
+         pistol avoids relying on the OS's own (inconsistent, occasionally cartoonish) emoji
+         art entirely. fill="currentColor" so it inherits this button's existing text color. -->
+    <button class="fire-btn" id="fireBtn" title="押し続けると連射 (Space)">
+      <svg class="gun-icon" viewBox="0 0 100 60" aria-hidden="true">
+        <rect x="23" y="2" width="6" height="9" rx="1.5" />
+        <rect x="25" y="10" width="53" height="14" rx="3" />
+        <rect x="74" y="5" width="4" height="6" rx="1" />
+        <rect x="25" y="24" width="24" height="9" rx="1.5" />
+        <polygon points="27,24 41,24 33,54 19,54" />
+        <circle cx="29" cy="35" r="7" fill="none" stroke="currentColor" stroke-width="4" />
+      </svg>
+    </button>
     <button class="sword-btn" id="swordBtn" title="狙っている方向への近距離斬撃、射撃の1.5倍ダメージ (Q)">🗡️</button>
     <button class="bomb-btn detonate detonate-near-sword" id="detonateBombBtn" title="爆弾を起爆 (Fキー)">💥</button>
 

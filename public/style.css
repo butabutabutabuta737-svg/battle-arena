@@ -1572,6 +1572,13 @@ button:active {
   justify-content: center;
   z-index: 15;
 }
+.gun-icon {
+  width: 34px;
+  height: auto;
+  fill: currentColor;
+  filter: drop-shadow(0 0 4px rgba(255, 91, 91, 0.55));
+  transform: rotate(-8deg); /* a slight forward-leaning tilt reads more dynamic than dead-flat */
+}
 
 .sword-btn {
   position: fixed;

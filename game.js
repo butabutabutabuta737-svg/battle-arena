@@ -1605,7 +1605,13 @@ function spawnMonster(room) {
   // Mutually exclusive: a spawn is chicken, or (failing that) gold, or (failing both) a
   // regular monster — never more than one variant at once.
   const chicken = Math.random() < GOLDEN_CHICKEN_CHANCE;
-  const gold = !chicken && Math.random() < GOLD_MONSTER_CHANCE;
+  // Gold ambient monsters (not the separate wave-mob gold *tier* — see spawnWaveMob/
+  // pickMobWaveColorTier, deliberately untouched) are only allowed from stage 5 onward in
+  // story mode, per explicit request — arena/PvP mode (not isCpuMatch) is unaffected, and
+  // room.storyStage stays frozen at 5 during the EX boss fight too, so "5面以降" naturally
+  // covers that as well.
+  const goldAllowed = !room.isCpuMatch || room.storyStage >= 5;
+  const gold = !chicken && goldAllowed && Math.random() < GOLD_MONSTER_CHANCE;
   const radius = chicken ? GOLDEN_CHICKEN_RADIUS : gold ? GOLD_MONSTER_RADIUS : MONSTER_RADIUS;
   const hp = gold ? MONSTER_MAX_HP * GOLD_MONSTER_HP_MULT : MONSTER_MAX_HP; // chicken uses the plain MONSTER_MAX_HP too — "HPはモンスターと同じ"
   const spawnPoints = getSpawnPoints(room);
