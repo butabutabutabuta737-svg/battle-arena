@@ -173,7 +173,7 @@
     // own display size. Cropped tight on the face/shoulders specifically for this card's
     // ~140x175 box, so plain "center top" reads well for all five without needing the
     // per-boss offset the old wide-shot crops did.
-    { uniform: '#8fae6b', icon: '🔰', image: 'images/bosses/boss1-face.jpg', facePos: 'center top' }, // stage1: rookie soldier, muted olive
+    { uniform: '#ffffff', icon: '🔰', image: 'images/bosses/boss1-face.jpg', facePos: 'center top' }, // stage1: rookie soldier, white
     { uniform: '#d98a3d', icon: '🗡️', image: 'images/bosses/boss2-face.jpg', facePos: 'center top' }, // stage2: veteran mercenary, bronze
     { uniform: '#c0392b', icon: '🎖️', image: 'images/bosses/boss3-face.jpg', facePos: 'center top' }, // stage3: elite squad captain, deep red
     { uniform: '#6b5b95', icon: '🔪', image: 'images/bosses/boss4-face.jpg', facePos: 'center top' }, // stage4: knife specialist, stealthy purple
@@ -2024,9 +2024,21 @@
     // ally to be confused with there). Scale/glow escalation still always comes from the
     // theme regardless — only the color itself is overridden.
     const themeColor = isBoss && isCoop ? '#c9524a' : (theme ? theme.uniform : null);
-    const uniform = themeColor || (isMe ? '#4d78d9' : isAlly ? '#3fb36e' : '#c9524a');
-    const uniformDark = themeColor ? shadeColor(themeColor, 0.45) : (isMe ? '#2b4a94' : isAlly ? '#1f6b40' : '#8a2e2a');
-    const helmet = themeColor ? shadeColor(themeColor, 0.28) : (isMe ? '#25396b' : isAlly ? '#164f2f' : '#5c211e');
+    let uniform = themeColor || (isMe ? '#4d78d9' : isAlly ? '#3fb36e' : '#c9524a');
+    let uniformDark = themeColor ? shadeColor(themeColor, 0.45) : (isMe ? '#2b4a94' : isAlly ? '#1f6b40' : '#8a2e2a');
+    let helmet = themeColor ? shadeColor(themeColor, 0.28) : (isMe ? '#25396b' : isAlly ? '#164f2f' : '#5c211e');
+    // Hidden EX boss ("戦神") gets a continuously cycling rainbow instead of any fixed
+    // BOSS_TIER_THEME color, per explicit request — overrides even the 2P forced-red rule
+    // above, since this is a one-off identity for a specific boss, not a per-stage color that
+    // needs to stay clear of the ally's green. HSL makes the darker torso/helmet shades trivial
+    // (just drop lightness — same idea as shadeColor, but that helper only accepts hex).
+    const isExBoss = isBoss && isCpuMatch && !!(latestState && latestState.exBossActive);
+    if (isExBoss) {
+      const hue = (Date.now() / 20) % 360;
+      uniform = `hsl(${hue}, 85%, 60%)`;
+      uniformDark = `hsl(${hue}, 85%, 27%)`;
+      helmet = `hsl(${hue}, 85%, 17%)`;
+    }
     const scale = theme ? [1, 1.06, 1.12, 1.18, 1.26][tier - 1] : 1;
     const glowBlur = theme ? [14, 17, 20, 24, 30][tier - 1] : 14;
 
