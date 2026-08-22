@@ -1333,6 +1333,25 @@ button:active {
   line-height: 1.9;
   color: #d7b4b4;
 }
+/* Mini-game result line on the GAME OVER card — only shown when the run ended by failing the
+   ザコ戦, where "how far did we get" is the one number the player actually wants. */
+.game-over-score {
+  margin-top: 14px;
+  padding: 8px 18px;
+  align-self: center;
+  border: 1px solid rgba(255, 140, 110, 0.45);
+  border-radius: 10px;
+  background: rgba(60, 18, 14, 0.55);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #ffd0b0;
+}
+.game-over-score b {
+  font-size: 21px;
+  color: #ff8a6a;
+  margin: 0 2px;
+}
 @keyframes game-over-fade {
   0% { opacity: 0; }
   100% { opacity: 1; }

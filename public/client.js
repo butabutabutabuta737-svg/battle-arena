@@ -67,6 +67,8 @@
   const pauseOverlay = $('#pauseOverlay');
   const resumeBtn = $('#resumeBtn');
   const storyRetryBtn = $('#storyRetryBtn');
+  const gameOverText = $('#gameOverText');
+  const gameOverScore = $('#gameOverScore');
   const modeStoryBtn = $('#modeStoryBtn');
   const storyIntro = $('#storyIntro');
   const storyIntroBackBtn = $('#storyIntroBackBtn');
@@ -756,6 +758,7 @@
     gameOverRetryReady = false;
     if (gameOverTimer) { clearTimeout(gameOverTimer); gameOverTimer = null; }
     gameOverOverlay.classList.add('hidden');
+    gameOverScore.classList.add('hidden'); // wave-specific line; must not carry into a boss-loss card later
     downedMine.classList.add('hidden');
     downedTheirs.classList.add('hidden');
     downedBanner.classList.add('hidden');
@@ -3204,6 +3207,21 @@
       storyRetryBtn.classList.add('hidden');
       gameOverOverlay.classList.add('hidden');
       if (bossWon) {
+        // A boss series loss and a failed ザコ戦 both end the run here, and used to show the
+        // exact same card — so a player wiped out by the mini-game got a generic "力尽きた"
+        // with no sign of which fight had just ended, and the only number left on screen was
+        // the HUD's "残りザコ N/10" (how many were LEFT, not how far they got). The wave gets
+        // its own wording plus a 撃破 tally, which is the mini-game's real score.
+        if (state.mobWaveActive) {
+          gameOverText.innerHTML = 'ザコの群れに飲み込まれた――。<br />ボスの元へ辿り着くことは、叶わなかった。';
+          const total = state.mobWaveCount || 0;
+          const killed = Math.min(total, state.mobWaveKilled || 0);
+          gameOverScore.innerHTML = `ザコ戦 撃破 <b>${killed}</b> / ${total}`;
+          gameOverScore.classList.remove('hidden');
+        } else {
+          gameOverText.innerHTML = '力尽き、戦場に崩れ落ちた――。<br />ここが、あなたの物語の終着点となった。';
+          gameOverScore.classList.add('hidden');
+        }
         gameOverOverlay.classList.remove('hidden');
         // Only reveal the retry button once the dramatic-pause timer (started once, on the
         // 'finished' phase-transition edge above) has actually elapsed — this branch itself

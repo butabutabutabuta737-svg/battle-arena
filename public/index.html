@@ -363,10 +363,14 @@
     <div class="game-over-overlay hidden" id="gameOverOverlay">
       <div class="game-over-card">
         <div class="game-over-title">GAME OVER</div>
-        <div class="game-over-text">
+        <!-- Text is set from JS (see updateHud's bossWon branch): losing the mob-wave
+             mini-game and losing a boss series both land here, and they used to be
+             indistinguishable to the player. -->
+        <div class="game-over-text" id="gameOverText">
           力尽き、戦場に崩れ落ちた――。<br />
           ここが、あなたの物語の終着点となった。
         </div>
+        <div class="game-over-score hidden" id="gameOverScore"></div>
         <button class="btn-primary hidden" id="storyRetryBtn">もう一度挑戦する</button>
       </div>
     </div>
