@@ -627,7 +627,20 @@ function fireLaser(room, shooterWs, shooter, now, originX, originY) {
 function attemptFire(room, ws, p, now) {
   if (!p.alive) return;
   const buffs = room.buffs.get(ws);
-  const fireCooldown = buffs && now < buffs.rapid ? BASE_FIRE_COOLDOWN_MS / RAPID_BUFF_DIVISOR : BASE_FIRE_COOLDOWN_MS;
+  // The final-stage boss (and the hidden EX boss past it, which is meant to be strictly harder
+  // and would otherwise end up firing SLOWER than the stage it follows) always shoots at the
+  // 連射 powerup's rate, per explicit request — an intrinsic property of those fights rather
+  // than a buff they have to pick up off the field. Same "embed it in the shooter, don't grant
+  // a timed buff" approach as isExShooter/bigMult just below, and likewise combined rather than
+  // overridden: Math.min so a genuinely-held rapid buff on top can never come out slower than
+  // this floor. Note the stage-5 boss already had fireChance 1.0 (it always *wants* to shoot),
+  // so the cooldown was the only thing actually rate-limiting it.
+  const isAlwaysRapidBoss = ws === room.cpuToken && (room.exBossActive || room.storyStage === STORY_BOSSES.length);
+  const rapidCooldown = BASE_FIRE_COOLDOWN_MS / RAPID_BUFF_DIVISOR;
+  const fireCooldown = Math.min(
+    buffs && now < buffs.rapid ? rapidCooldown : BASE_FIRE_COOLDOWN_MS,
+    isAlwaysRapidBoss ? rapidCooldown : Infinity
+  );
   const dmgMult = buffs && now < buffs.power ? POWER_BUFF_MULT : 1;
   // The hidden EX boss's own bullets are always the "big" size, per explicit request — not
   // just while it happens to be holding the same timed buff a human would need to pick up.
