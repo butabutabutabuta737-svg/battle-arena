@@ -9,9 +9,13 @@ const ARENA_W = 800;
 // (all X-axis) is unaffected.
 const ARENA_H = 1000;
 const BASE_PLAYER_SPEED = 220; // px/sec
-const PLAYER_RADIUS = 16;
+// Player/boss and ordinary bullets were both scaled up 1.2x per explicit request — hitbox
+// included, not just the drawing (client.js's BODY_SCALE carries the matching visual change).
+// Every collision, spawn-clamp, dodge-prediction and melee-reach check reads these constants
+// rather than hardcoding a size, so the whole simulation follows from these two numbers.
+const PLAYER_RADIUS = 19.2; // was 16
 const BULLET_SPEED = 480; // px/sec
-const BULLET_RADIUS = 5;
+const BULLET_RADIUS = 6; // was 5
 const BASE_FIRE_COOLDOWN_MS = 250;
 const MAX_HP = 100;
 const BASE_BULLET_DAMAGE = 12;
@@ -55,8 +59,13 @@ const BOMB_RADIUS = 220;
 const BOMB_DAMAGE = 45;
 const MATCH_WIN_TARGET = 3; // first to this many round-wins takes the whole match
 const HOUSE_MAX_COUNT = 2;
-const HOUSE_SIZE_MIN = 80;
-const HOUSE_SIZE_MAX = 120;
+// Scaled 1.2x alongside PLAYER_RADIUS. A house's "opening" side is a whole missing wall, so
+// its doorway width is size - 2*HOUSE_WALL_THICKNESS = 44px at the old minimum — against the
+// new 38.4px player diameter that left only 5.6px of total clearance to walk through (and to
+// move around in once inside, which matters because houses passively heal). Keeping the houses
+// at their old size would have made the smallest ones effectively impassable.
+const HOUSE_SIZE_MIN = 96; // was 80
+const HOUSE_SIZE_MAX = 144; // was 120
 const HOUSE_WALL_THICKNESS = 18;
 const HOUSE_ITEM_CHANCE = 0.8; // each house independently has an 80% chance of a hidden item at round start
 const BLOCK_HP = 20; // ~2 base-damage bullets, or 1 power-buffed shot
@@ -362,8 +371,13 @@ function generateWallsAndBlocks(room) {
     const piece = makePiece();
     const rects = piece.rects;
 
+    // 376, not 380: left-half pieces are mirrored to the right half, so this cap sets the
+    // narrowest possible corridor straight up the middle of the arena at ARENA_W - 2*cap. At
+    // 380 that corridor is 40px, which left only 1.6px of clearance once the player diameter
+    // went from 32 to 38.4 — a squeeze tight enough to read as getting stuck. 376 puts it back
+    // to a comfortable ~9.6px, matching the clearance the layout was originally tuned around.
     const inBounds = rects.every(
-      (r) => r.x >= 20 && r.x + r.w <= 380 && r.y >= 20 && r.y + r.h <= ARENA_H - 20
+      (r) => r.x >= 20 && r.x + r.w <= 376 && r.y >= 20 && r.y + r.h <= ARENA_H - 20
     );
     if (!inBounds) continue;
 

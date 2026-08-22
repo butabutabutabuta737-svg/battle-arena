@@ -1810,9 +1810,12 @@
   // resetClientState() rather than being trusted to stay valid across rounds.
   const shipMotion = new Map();
   const MUZZLE_FLASH_MS = 70;
-  // Soldiers are drawn nearer their true 16px collision radius (game.js's PLAYER_RADIUS) than
-  // the ~10px torso this used to use — purely a rendering change, no hitbox moves.
-  const BODY_SCALE = 1.25;
+  // Per explicit request, characters (and their hitbox — see game.js's PLAYER_RADIUS, raised
+  // 16 -> 19.2 to match) are 1.2x bigger. Kept as `1.25 * SIZE_UP` rather than folded into one
+  // number so the two factors stay readable: 1.25 is the original "draw the soldier nearer its
+  // true collision radius than the old ~10px torso" figure, SIZE_UP is this request.
+  const SIZE_UP = 1.2;
+  const BODY_SCALE = 1.25 * SIZE_UP;
   const STRIDE_LENGTH = 26; // px travelled per full two-step gait cycle
   const GAIT_FULL_SPEED = 200; // ~BASE_PLAYER_SPEED(220) — the speed at which the run animation is at full amplitude
 
@@ -2071,7 +2074,7 @@
   }
 
   function drawBullet(b) {
-    const r = b.radius || 5;
+    const r = b.radius || 6; // fallback mirrors game.js's BULLET_RADIUS (raised 5 -> 6 with the 1.2x size pass)
     // EX boss bullets: a fixed color per bullet (picked by id, not time) from the same
     // RAINBOW_RING_COLORS palette as its ship's aura rings — many bullets on screen at once
     // read as a rainbow *spread* this way, consistent with the ship's own rainbow (a static
@@ -2346,6 +2349,7 @@
       ctx.globalAlpha = 0.35;
       ctx.translate(p.x, p.y);
       ctx.rotate(p.angle);
+      ctx.scale(SIZE_UP, SIZE_UP); // matches the living body's 1.2x, so a soldier doesn't shrink as they fall
       ctx.fillStyle = uniformDark;
       ctx.beginPath();
       ctx.ellipse(0, 0, 13, 6, 0, 0, Math.PI * 2);
@@ -2386,7 +2390,9 @@
     ctx.beginPath();
     // Shadow stretches slightly along the facing axis and tightens as the body rises in the
     // bounce, so the soldier reads as actually lifting off the ground rather than sliding.
-    ctx.ellipse(p.x, p.y + 4, 12.5 - bob * 0.5, 6 - bob * 0.35, p.angle, 0, Math.PI * 2);
+    // Drawn in UNSCALED space (this block runs before the body's own ctx.scale), so it needs
+    // SIZE_UP applied by hand or it would stay puddled under a now-larger soldier.
+    ctx.ellipse(p.x, p.y + 4 * SIZE_UP, (12.5 - bob * 0.5) * SIZE_UP, (6 - bob * 0.35) * SIZE_UP, p.angle, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
@@ -2604,6 +2610,10 @@
     if (isExBoss) {
       ctx.save();
       ctx.translate(p.x, p.y);
+      // The aura/shield rings below all live in UNSCALED space (drawn after the body's own
+      // transform is restored), so they need SIZE_UP applied here too — otherwise they'd stay
+      // at their old radii and cut straight through the now-larger body.
+      ctx.scale(SIZE_UP, SIZE_UP);
       const pulse = 1 + Math.sin(performance.now() / 220) * 0.05;
       RAINBOW_RING_COLORS.forEach((color, i) => {
         ctx.beginPath();
@@ -2619,6 +2629,7 @@
     } else if (tier >= 3) {
       ctx.save();
       ctx.translate(p.x, p.y);
+      ctx.scale(SIZE_UP, SIZE_UP); // same unscaled-space reason as the EX aura above
       const pulse = 1 + Math.sin(performance.now() / 220) * 0.05;
       const ringCount = tier - 2;
       for (let i = 0; i < ringCount; i++) {
@@ -2637,6 +2648,7 @@
     if (p.buffs && p.buffs.shield > 0 && p.shieldAmount > 0) {
       ctx.save();
       ctx.translate(p.x, p.y);
+      ctx.scale(SIZE_UP, SIZE_UP); // shield bubble, same unscaled-space reason as the aura rings
       const pulse = 1 + Math.sin(performance.now() / 180) * 0.04;
       ctx.beginPath();
       ctx.arc(0, 0, 17 * pulse, 0, Math.PI * 2);
@@ -2663,7 +2675,9 @@
     // legibly above the character during battle, so just the bare name goes here. EX_BOSS's
     // name ('戦神') was never wrapped this way and passes through the replace() untouched.
     const floatingName = isBoss ? p.name.replace(/^\d+面ボス「(.+)」$/, '$1') : p.name;
-    ctx.fillText(floatingName, p.x, p.y - 26 - tier * 1.5);
+    // Lifted by SIZE_UP so the label clears the taller body instead of sitting on its shoulders
+    // (the font itself is deliberately NOT scaled — it's a readability element, not anatomy).
+    ctx.fillText(floatingName, p.x, p.y - (26 + tier * 1.5) * SIZE_UP);
     ctx.restore();
   }
 
