@@ -706,6 +706,20 @@
   }
 
   function resetClientState() {
+    // The battle BGM is a self-rescheduling setInterval, and the ONLY thing that ever stopped
+    // it was the `lastPhase === 'playing' -> something else` transition edge a few hundred
+    // lines down. Every teardown path here (the game-over retry button, the 2P co-op connect,
+    // any fresh connection) nulls `lastPhase` two lines below — destroying that edge — while
+    // leaving the scheduler running, so the battle music kept playing forever underneath the
+    // next screen with nothing able to stop it, and `startBgm()`'s own `if (bgmPlaying) return`
+    // guard then meant the next match never got clean music either. Reported as "負けたときの
+    // 音が永遠に続く". Stopping it here covers every teardown path at once, and is idempotent.
+    if (window.GameAudio) window.GameAudio.stopBgm();
+    // Screen-shake/hit-flash are pure view state driven by frame-to-frame hp diffs; they were
+    // never cleared on teardown, so a shake in flight when a match ended carried across into
+    // whatever screen came next.
+    shakeMag = 0;
+    hitFlash = 0;
     myId = null;
     isCpuMatch = false;
     lastArenaFitSignature = '';
@@ -1137,7 +1151,25 @@
     connect(room, name, true, storyRouletteToggle.checked);
   }
   story1pBtn.addEventListener('click', () => { audioReady(); playSelectSfx(); startStoryMode(); });
-  storyRetryBtn.addEventListener('click', () => { audioReady(); startStoryMode(); });
+  // In 2P co-op, retrying must restart the co-op story IN THE SAME ROOM for both players.
+  // startStoryMode() always builds a fresh 'CPU'+randomRoomCode() room and connects WITHOUT
+  // wantsCoop, so using it here silently dumped the clicker into a solo 1P campaign and
+  // stranded their partner alone in the old room — co-op quietly became two separate games the
+  // moment anyone lost. The server's 'rematch' handler already has the correct behaviour for a
+  // lost story (reset to stage 1, clear matchWins/matchOver, re-intro the boss); it just needs
+  // the room to still hold all three participants, which is exactly the case when nobody has
+  // dropped. If the room ISN'T intact (partner already gone) co-op is impossible anyway, so
+  // fall back to the original solo restart rather than leaving the button doing nothing.
+  storyRetryBtn.addEventListener('click', () => {
+    audioReady();
+    const st = latestState;
+    const coopIntact = !!(st && st.storyCoop && st.players && st.players.length === 3);
+    if (coopIntact && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'rematch' }));
+    } else {
+      startStoryMode();
+    }
+  });
   storyEndingTitleBtn.addEventListener('click', () => { audioReady(); goToTitle(); });
 
   // ---- story mode, 2-player co-op: same overall connect flow as startStoryMode(), just

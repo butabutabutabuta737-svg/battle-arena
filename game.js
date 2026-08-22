@@ -2253,7 +2253,10 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
   }));
   broadcastState(room);
 
-  if (room.players.size === maxPlayers && room.phase === 'waiting') startCountdown(room);
+  // `!room.matchOver` belt-and-braces alongside the close handler's matching guard: a decided
+  // series must never be auto-continued by the room simply refilling. Without this, a rejoin
+  // after a lost match started a phantom extra round on top of the game-over state.
+  if (room.players.size === maxPlayers && room.phase === 'waiting' && !room.matchOver) startCountdown(room);
   ensureLoop(room);
 
   ws.on('message', (raw) => {
@@ -2449,12 +2452,25 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
       room.buffs.delete(room.cpuToken);
     }
     if (room.players.size < 2) {
-      room.phase = 'waiting';
-      room.winnerId = null;
+      // A DECIDED match (someone already reached MATCH_WIN_TARGET) must stay decided. This
+      // used to unconditionally revert the phase to 'waiting', which combined with joinRoom()'s
+      // "room is full and waiting -> startCountdown" auto-start to produce a real, repeatedly
+      // reported bug: lose the series, someone drops (in 2P co-op ANY human leaving also tears
+      // out the boss token just above, so the room always falls under 2), then the moment the
+      // room refills a brand-new round silently begins on top of an already-lost match — the
+      // client's own "hide the finished-phase overlays once phase leaves 'finished'" sweep
+      // pulls the GAME OVER screen away and play just resumes. Keeping the phase at 'finished'
+      // preserves the game-over state across the drop, so the rejoining player still sees the
+      // result and restarts deliberately via the retry button instead of being thrown into a
+      // phantom extra round. matchOver/matchWins are deliberately NOT cleared here either —
+      // reconnecting mid-series must keep the running tally (explicit earlier request).
+      if (!room.matchOver) room.phase = 'waiting';
+      room.winnerId = null; // the game-over screen reads matchWinnerId, not this, so clearing it is safe
       room.bullets = [];
       room.items = [];
       room.bombs = [];
       room.explosions = [];
+      room.monsters = [];
     }
     broadcastState(room);
     if (room.players.size === 0) {
