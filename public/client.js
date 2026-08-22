@@ -95,6 +95,7 @@
   const bossIntroPortrait = $('#bossIntroPortrait');
   const bossIntroName = $('#bossIntroName');
   const bossIntroLine = $('#bossIntroLine');
+  const bossIntroRule = $('#bossIntroRule');
   const bossDefeatOverlay = $('#bossDefeatOverlay');
   const bossDefeatStage = $('#bossDefeatStage');
   const bossDefeatPortrait = $('#bossDefeatPortrait');
@@ -963,6 +964,11 @@
     }
     bossIntroName.textContent = boss.name;
     bossIntroLine.textContent = boss.line ? `「${boss.line}」` : '';
+    // Per explicit request: state the win condition right before the fight. Nothing in-game ever
+    // said a boss is a best-of-N — the score badge just counted up silently — so losing one round
+    // looked like it could be the end of the run. Built from MATCH_WIN_TARGET rather than a fixed
+    // "3" so the wording can't drift from the rule if that constant is ever retuned.
+    bossIntroRule.textContent = `⚔️ ${MATCH_WIN_TARGET}本先取で勝利`;
     bossIntroOverlay.classList.remove('hidden');
     fitBossIntroCardSoon(bossIntroOverlay);
     if (bossIntroHideTimer) clearTimeout(bossIntroHideTimer);

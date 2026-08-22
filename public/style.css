@@ -1151,6 +1151,9 @@ button:active {
   .boss-intro-line {
     padding: clamp(6px, 1.2vh, 10px) 14px;
   }
+  .boss-intro-rule {
+    padding: 2px 10px;
+  }
 }
 /* The vh-clamp rule above alone still overflowed on short-viewport phones (iPhone SE-class,
    confirmed via Playwright: -57px slack even before this change) — its floor values were
@@ -1177,6 +1180,27 @@ button:active {
     padding: 5px 10px;
     font-size: 11px;
   }
+  .boss-intro-rule {
+    padding: 1px 8px;
+    font-size: 10px;
+  }
+}
+/* One-line reminder of the win condition, shown on the boss-intro card. The best-of-N rule was
+   never stated anywhere in-game — the score badge just silently counted up — so a player had no
+   way to know a single round loss wasn't the end of the run. Styled as a compact rule badge
+   rather than more prose so it reads as game information, not as part of the boss's dialogue.
+   max-width/min-width mirror .boss-intro-line's: same flex-item sizing trap on phone browsers. */
+.boss-intro-rule {
+  max-width: min(480px, 100%);
+  min-width: 0;
+  padding: 3px 13px;
+  border: 1px solid rgba(255, 211, 91, 0.42);
+  border-radius: 999px;
+  background: rgba(255, 211, 91, 0.1);
+  font-size: clamp(11px, 3vw, 13px);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #ffd35b;
 }
 @keyframes boss-intro-fade {
   0% { opacity: 0; }
