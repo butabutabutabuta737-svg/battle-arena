@@ -218,6 +218,32 @@
     return `rgb(${r},${g},${b})`;
   }
 
+  // shadeColor() above only parses '#rrggbb'. Several colors in drawShip() are already the
+  // `rgb(r,g,b)` *output* of shadeColor (a boss's uniformDark/helmet are derived from its tier
+  // theme), and re-shading one of those would parse to NaN and silently yield an invalid
+  // fillStyle — canvas ignores those, so it fails by drawing the previous colour rather than by
+  // throwing. This accepts either form.
+  function shadeAnyColor(color, factor) {
+    if (typeof color === 'string' && color.startsWith('#')) return shadeColor(color, factor);
+    const parts = String(color).match(/-?\d+(\.\d+)?/g);
+    if (!parts || parts.length < 3) return color;
+    const [r, g, b] = parts.map((v) => Math.round(Math.min(255, Math.max(0, parseFloat(v) * factor))));
+    return `rgb(${r},${g},${b})`;
+  }
+
+  // Same both-formats tolerance as shadeAnyColor, for gradient stops that need a real alpha.
+  function withAlpha(color, alpha) {
+    let r = 255, g = 255, b = 255;
+    if (typeof color === 'string' && color.startsWith('#')) {
+      const n = parseInt(color.slice(1), 16);
+      r = (n >> 16) & 0xff; g = (n >> 8) & 0xff; b = n & 0xff;
+    } else {
+      const parts = String(color).match(/-?\d+(\.\d+)?/g);
+      if (parts && parts.length >= 3) [r, g, b] = parts.map((v) => Math.round(parseFloat(v)));
+    }
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
   // ---- story-mode kill certificate: the only persistent client-side state in this whole
   // project (everything else is server-authoritative/in-memory only) — tracks the highest
   // story-mode boss stage the player has ever defeated, in localStorage, so it survives page
@@ -689,6 +715,7 @@
     lastCountdown = null;
     seenBulletIds = new Set();
     bulletPos.clear();
+    shipMotion.clear(); // keyed by player id, and ids are regenerated on reconnect — stale entries would carry a dead soldier's gait/recoil onto whoever inherits the id
     particles = [];
     laserBeams = [];
     shockwaves = [];
@@ -1537,6 +1564,7 @@
         const owner = state.players.find((p) => p.id === b.ownerId);
         const color = sideColor(owner, '#9dbaff', '#7dffb0', '#ffd35b');
         spawnParticles(b.x, b.y, 5, color, 90, 0.22, 4);
+        triggerShotRecoil(owner); // rifle kick + muzzle flash + ejected casing on the shooter
       }
     }
     // prune seen bullet ids that are gone, to avoid unbounded growth
@@ -1723,16 +1751,119 @@
     for (const p of latestState.players) {
       if (!p.alive) continue;
       const last = trailLast.get(p.id);
-      if (!last || Math.hypot(p.x - last.x, p.y - last.y) > 5) {
+      // Sparser and much smaller than it used to be (every 9px instead of 5, size 3 instead of
+      // 6, ~half the alpha). At the old weight this read as a string of soft bubbles following
+      // each soldier, which fought the grounded battlefield look the rest of the character work
+      // is going for — and the footfall dust in updateShipMotion() now covers "something is
+      // moving here" far better. Kept, at a whisper, purely for the side-colour identity cue
+      // that matters in 2P co-op.
+      if (!last || Math.hypot(p.x - last.x, p.y - last.y) > 9) {
         particles.push({
           x: p.x, y: p.y, vx: 0, vy: 0,
           life: 0.3, maxLife: 0.3,
-          color: sideColor(p, 'rgba(91,140,255,0.5)', 'rgba(125,255,176,0.5)', 'rgba(255,91,122,0.5)'),
-          size: 6,
+          color: sideColor(p, 'rgba(91,140,255,0.26)', 'rgba(125,255,176,0.26)', 'rgba(255,91,122,0.26)'),
+          size: 3,
         });
         trailLast.set(p.id, { x: p.x, y: p.y });
       }
     }
+  }
+
+  // ---- per-soldier animation state (client-only, derived purely from the state stream) ----
+  // The server sends only position + aim angle per player. Everything that makes a soldier read
+  // as *human* — the walk cycle, which way they're actually stepping, lean, rifle recoil, muzzle
+  // flash — is derived here from how those two numbers change between frames, so none of it
+  // needs a protocol change or costs any bandwidth. Keyed by player id, and since ids are
+  // regenerated on reconnect (see the reconnect notes elsewhere in this file) this is swept in
+  // resetClientState() rather than being trusted to stay valid across rounds.
+  const shipMotion = new Map();
+  const MUZZLE_FLASH_MS = 70;
+  // Soldiers are drawn nearer their true 16px collision radius (game.js's PLAYER_RADIUS) than
+  // the ~10px torso this used to use — purely a rendering change, no hitbox moves.
+  const BODY_SCALE = 1.25;
+  const STRIDE_LENGTH = 26; // px travelled per full two-step gait cycle
+  const GAIT_FULL_SPEED = 200; // ~BASE_PLAYER_SPEED(220) — the speed at which the run animation is at full amplitude
+
+  function getShipMotion(id) {
+    let m = shipMotion.get(id);
+    if (!m) {
+      m = {
+        x: null, y: null, // last seen position, for the per-frame delta
+        mx: 1, my: 0, // unit movement direction in world space (kept from the last real move, so it doesn't snap on stop)
+        speed: 0, // smoothed px/sec
+        stride: 0, // radians; advanced by DISTANCE, not time, so feet never slide
+        lastFootfall: 0,
+        recoil: 0, // 1 right as a shot leaves, decaying to 0 — set by triggerShotRecoil()
+        lastFireAt: -1e9,
+      };
+      shipMotion.set(id, m);
+    }
+    return m;
+  }
+
+  function updateShipMotion(dt, now) {
+    if (!latestState) return;
+    for (const p of latestState.players) {
+      const m = getShipMotion(p.id);
+      if (m.x === null) { m.x = p.x; m.y = p.y; }
+      const dx = p.x - m.x;
+      const dy = p.y - m.y;
+      const dist = Math.hypot(dx, dy);
+      m.x = p.x;
+      m.y = p.y;
+
+      if (dist > 0.01) {
+        m.stride += (dist / STRIDE_LENGTH) * Math.PI * 2;
+        m.mx = dx / dist;
+        m.my = dy / dist;
+      }
+      const instSpeed = dt > 0 ? dist / dt : 0;
+      // Smoothed so one dropped or duplicated state frame doesn't visibly hitch the gait — the
+      // state stream is ~30Hz while this runs at display rate, so raw per-frame deltas are lumpy.
+      m.speed += (instSpeed - m.speed) * Math.min(1, dt * 12);
+      m.recoil = Math.max(0, m.recoil - dt * 7);
+
+      // One dust puff per footfall (half a stride cycle) while genuinely running, kicked up
+      // behind the soldier — the cheapest possible "these boots are on dirt" cue.
+      if (p.alive && m.speed > 45) {
+        const half = Math.floor(m.stride / Math.PI);
+        if (half !== m.lastFootfall) {
+          m.lastFootfall = half;
+          particles.push({
+            x: p.x - m.mx * 8 + (Math.random() - 0.5) * 4,
+            y: p.y - m.my * 8 + (Math.random() - 0.5) * 4,
+            vx: -m.mx * 14 + (Math.random() - 0.5) * 12,
+            vy: -m.my * 14 + (Math.random() - 0.5) * 12,
+            life: 0.42, maxLife: 0.42,
+            color: 'rgba(150,128,92,0.5)',
+            size: 3.4,
+          });
+        }
+      }
+    }
+  }
+
+  // Kicks the shooter's rifle back, lights the muzzle flash drawn in drawShip(), and flicks a
+  // brass casing out of the ejection port. Driven from handleState()'s existing "this bullet id
+  // is new" pass (which already owns the shoot sfx and muzzle sparks) rather than from a second
+  // id-diffing pass of its own — that loop fires exactly once per bullet and already prunes
+  // itself, so it's the one true "a shot was just taken" edge on the client.
+  function triggerShotRecoil(p) {
+    if (!p) return;
+    const m = getShipMotion(p.id);
+    m.recoil = 1;
+    m.lastFireAt = performance.now();
+    const rightX = -Math.sin(p.angle);
+    const rightY = Math.cos(p.angle);
+    particles.push({
+      x: p.x + Math.cos(p.angle) * 8 + rightX * 2,
+      y: p.y + Math.sin(p.angle) * 8 + rightY * 2,
+      vx: rightX * 55 + (Math.random() - 0.5) * 25,
+      vy: rightY * 55 + (Math.random() - 0.5) * 25,
+      life: 0.32, maxLife: 0.32,
+      color: 'rgba(226,182,88,0.95)',
+      size: 1.9,
+    });
   }
 
   // ---- battlefield decoration: scattered craters/rubble, regenerated whenever the wall
@@ -2195,60 +2326,242 @@
       return;
     }
 
+    // ---- gait / recoil, derived per frame in updateShipMotion() ----
+    const now = performance.now();
+    const m = shipMotion.get(p.id);
+    const gait = m ? Math.min(1, m.speed / GAIT_FULL_SPEED) : 0;
+    const stride = m ? m.stride : 0;
+    const recoil = m ? m.recoil : 0;
+    // Movement direction expressed in the soldier's OWN frame (+x = where they're aiming), by
+    // rotating the world-space direction by -p.angle. This is what separates a person from a
+    // sprite here: aim and movement are independent server-side (see game.js — `inp.angle` is
+    // set from the aim/target, movement from the direction keys), so a soldier can advance,
+    // backpedal or strafe while keeping the rifle on target, and the legs need to show which.
+    const ca = Math.cos(p.angle);
+    const sa = Math.sin(p.angle);
+    const moveF = m ? m.mx * ca + m.my * sa : 0; // +1 advancing, -1 backpedalling
+    const moveR = m ? -m.mx * sa + m.my * ca : 0; // +1 strafing to their right
+
+    // Breathing when still, a heavier bounce when running — one number driving several parts
+    // below so they stay in phase with each other instead of looking independently animated.
+    const bob = gait > 0.05
+      ? Math.sin(stride * 2) * 0.9 * gait
+      : Math.sin(now / 900) * 0.35;
+
     ctx.save();
     ctx.globalAlpha = 0.35;
     ctx.fillStyle = '#000';
     ctx.beginPath();
-    ctx.ellipse(p.x, p.y + 4, 12, 6, 0, 0, Math.PI * 2);
+    // Shadow stretches slightly along the facing axis and tightens as the body rises in the
+    // bounce, so the soldier reads as actually lifting off the ground rather than sliding.
+    ctx.ellipse(p.x, p.y + 4, 12.5 - bob * 0.5, 6 - bob * 0.35, p.angle, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.rotate(p.angle);
-    if (scale !== 1) ctx.scale(scale, scale);
-    ctx.shadowColor = uniform;
-    ctx.shadowBlur = glowBlur;
+    // The collision radius is 16 (game.js's PLAYER_RADIUS) but the body used to be drawn at
+    // roughly a 10px torso, so a soldier occupied about half the space it actually takes up and
+    // limbs had nowhere to read at phone size. Drawing nearer the true hitbox is free — no
+    // gameplay value moves — and is most of what makes the anatomy legible at all here.
+    ctx.scale(scale * BODY_SCALE, scale * BODY_SCALE);
 
-    // boots (trailing behind facing direction)
-    ctx.fillStyle = uniformDark;
+    // Glow as an underlay rather than a per-shape shadow. Canvas shadows are painted around
+    // each filled shape *as it is drawn*, so the old "shadowBlur on every part" approach laid
+    // fresh haze over the parts drawn before it — legs and arms were being erased by the
+    // torso's own glow. Laying one soft radial pool down first keeps the "these soldiers are
+    // lit" read while leaving every silhouette below it at full contrast.
+    const glowR = 17 + glowBlur * 0.55;
+    const glowGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, glowR);
+    glowGrad.addColorStop(0, withAlpha(uniform, 0.5));
+    glowGrad.addColorStop(0.55, withAlpha(uniform, 0.2));
+    glowGrad.addColorStop(1, withAlpha(uniform, 0));
+    ctx.fillStyle = glowGrad;
     ctx.beginPath();
-    ctx.ellipse(-7, -5, 4.5, 3, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(-7, 5, 4.5, 3, 0, 0, Math.PI * 2);
+    ctx.arc(0, 0, glowR, 0, Math.PI * 2);
     ctx.fill();
 
-    // torso
+    // Long coat, drawn under everything and only for the heavier bosses — trails behind them,
+    // catching the run's rhythm. Pure silhouette work: it's what makes a tier-4/5 boss read as
+    // a commander striding across the field rather than a recolour of the same trooper.
+    if (tier >= 2 || isExBoss) {
+      const flutter = Math.sin(now / 150 + stride) * (1.4 + gait * 3.2);
+      const drag = 7 + gait * 6; // the faster they move, the further it streams out behind
+      ctx.save();
+      ctx.globalAlpha = 0.72;
+      ctx.fillStyle = uniformDark;
+      ctx.beginPath();
+      ctx.moveTo(-2, -8);
+      ctx.quadraticCurveTo(-10 - drag * 0.4, -9 + flutter, -8 - drag, -5 + flutter * 1.6);
+      ctx.quadraticCurveTo(-9 - drag * 0.9, 0, -8 - drag, 5 - flutter * 1.6);
+      ctx.quadraticCurveTo(-10 - drag * 0.4, 9 - flutter, -2, 8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Every part below is drawn with NO canvas shadow (the glow pool above already covers that
+    // job) and in deliberately separated tones — limb, torso and helmet each read as a distinct
+    // value. At the size a soldier actually occupies on a phone, that value separation is what
+    // makes the anatomy visible; fine interior linework is not.
+    const legTone = shadeAnyColor(uniform, 0.2);
+    const bootTone = shadeAnyColor(uniform, 0.34);
+    const armTone = shadeAnyColor(uniform, 0.6);
+
+    // ---- legs ----
+    // Feet swing along the ACTUAL movement axis, in antiphase, amplitude scaled by speed — so a
+    // strafing soldier side-steps and a retreating one walks backwards, instead of every
+    // direction sharing one canned forward jog. At a standstill they settle into a staggered
+    // braced stance (front foot inside the aim line, rear foot planted back) rather than the
+    // symmetric pair this used to draw, which is most of what made it read as an object before.
+    // The stance is deliberately wider than the torso so the boots clear its silhouette —
+    // tucked underneath, a top-down walk cycle is invisible no matter how well it's animated.
+    const swing = Math.sin(stride) * 7 * gait;
+    const legs = [
+      { bx: -6, by: -7, ph: 1 }, // front-ish foot
+      { bx: -8.5, by: 7, ph: -1 }, // rear foot, planted back
+    ];
+    for (const leg of legs) {
+      const s = swing * leg.ph;
+      const fx = leg.bx + moveF * s;
+      const fy = leg.by + moveR * s;
+      // thigh: hip -> boot, so the leg visibly extends and gathers rather than the boot floating
+      ctx.strokeStyle = legTone;
+      ctx.lineWidth = 4.6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-1, leg.by * 0.42);
+      ctx.lineTo(fx, fy);
+      ctx.stroke();
+      // boot, angled along the direction of travel
+      ctx.save();
+      ctx.translate(fx, fy);
+      ctx.rotate(Math.atan2(moveR, moveF) * Math.min(1, gait * 1.5));
+      ctx.fillStyle = bootTone;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 3.9, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // ---- upper body ----
+    // Leans into the direction of travel and rocks with the stride; the recoil kick shoves it
+    // back along the aim line. Everything from here up sits in this one transform, so torso,
+    // arms, rifle and head all move together as one body instead of as separate decals.
+    ctx.save();
+    ctx.translate(moveF * gait * 1.6 - recoil * 1.5, moveR * gait * 1.6);
+    ctx.rotate(Math.sin(stride) * 0.05 * gait);
+
+    // Shoulders: WIDER across than deep, i.e. squashed along the aim axis. This is the whole
+    // trick for a top-down soldier — the camera is above them, so what you see is the span of
+    // the shoulders with the helmet capping it, not a body seen side-on. Drawing this the other
+    // way round (long in the facing direction, head pushed out in front) is what made the old
+    // silhouette read as a vehicle: one continuous nose-forward lozenge with no shoulder line.
     ctx.fillStyle = uniform;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 10, 8.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(-0.5, 0, 7 + bob * 0.2, 9 + bob * 0.25, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = uniformDark;
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = legTone;
+    ctx.lineWidth = 1.6;
     ctx.stroke();
 
-    // rifle
-    ctx.shadowBlur = 0;
+    // pack slung on the back — pushes the mass behind the shoulders, so the body has a front
+    ctx.fillStyle = shadeAnyColor(uniform, 0.5);
+    ctx.beginPath();
+    ctx.ellipse(-5, 0, 3.4, 5.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ---- rifle + arms ----
+    // Shouldered on the soldier's left of the aim line (local -y), both hands on the weapon,
+    // the whole assembly kicking back on recoil. The crossing front arm is the shape that sells
+    // "braced against the shoulder" from a top-down camera.
+    ctx.save();
+    ctx.translate(-recoil * 4, 0);
+
     ctx.strokeStyle = '#2a2a28';
     ctx.lineWidth = 3;
+    ctx.lineCap = 'butt';
     ctx.beginPath();
-    ctx.moveTo(3, -2);
-    ctx.lineTo(23, -1);
+    ctx.moveTo(-4, -3.5); // stock, tucked behind the shoulder
+    ctx.lineTo(23, -2.5);
     ctx.stroke();
     ctx.fillStyle = '#1a1a18';
-    ctx.fillRect(19, -3, 6, 3);
+    ctx.fillRect(19, -4.5, 6, 3.4); // muzzle/foresight block
+    ctx.fillStyle = '#232320';
+    ctx.fillRect(6, -2, 3.6, 5); // magazine, hanging below the receiver
 
-    // helmeted head, offset toward facing direction
-    ctx.fillStyle = helmet;
+    // Arms reach forward from the shoulder span and OUTSIDE the body outline, so they read as
+    // limbs rather than shading on the torso: rear hand back on the grip, front hand stretched
+    // across to the foregrip. That asymmetric reach is the pose the eye recognises as someone
+    // holding a rifle up, and it's the clearest single cue that this is a person.
+    ctx.strokeStyle = armTone;
+    ctx.lineWidth = 3.2;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.arc(6, 0, 5.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.moveTo(-1, -7.5);
+    ctx.quadraticCurveTo(3, -7, 5, -3.4);
+    ctx.stroke();
     ctx.beginPath();
-    ctx.arc(4.5, -1.8, 1.6, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(-0.5, 7);
+    ctx.quadraticCurveTo(9.5, 6.5, 14.5, -1.6);
+    ctx.stroke();
 
+    // muzzle flash — brief, so it lands as a "crack" rather than a constant glow
+    const flashAge = m ? now - m.lastFireAt : Infinity;
+    if (flashAge < MUZZLE_FLASH_MS) {
+      const f = 1 - flashAge / MUZZLE_FLASH_MS;
+      ctx.save();
+      ctx.translate(26, -2.5);
+      ctx.globalAlpha = f;
+      ctx.shadowColor = '#ffd98a';
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = '#fff3c4';
+      // four-point star: a long horizontal spike down the barrel line, a short vertical one
+      ctx.beginPath();
+      ctx.moveTo(9 * f, 0);
+      ctx.lineTo(0, 3.4 * f);
+      ctx.lineTo(-3 * f, 0);
+      ctx.lineTo(0, -3.4 * f);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(0, 0, 2.6 * f, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.restore(); // rifle/arms recoil transform
+
+    // ---- helmet, seen from directly above ----
+    // Sits at the CENTRE of the shoulders, not out in front of them: looking straight down at
+    // someone, the helmet is the top of the stack and caps the body rather than leading it.
+    // It's also the brightest value on the figure — it's the surface facing the sky — which is
+    // what separates the head from the uniform at a glance. It counter-bobs slightly so the
+    // head stays level while the body works underneath.
+    ctx.save();
+    ctx.translate(0.5, -bob * 0.3);
+    ctx.fillStyle = shadeAnyColor(uniform, 1.14);
+    ctx.beginPath();
+    ctx.arc(0, 0, 4.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = legTone;
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+    // brim/visor, angled toward whatever they're aiming at — the one asymmetry that tells you
+    // which way the head is turned once the body is a near-symmetric oval from above
+    ctx.fillStyle = shadeAnyColor(uniform, 0.55);
+    ctx.beginPath();
+    ctx.ellipse(3.3, 0, 1.6, 3.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // specular kick off the crown
+    ctx.fillStyle = 'rgba(255,255,255,0.26)';
+    ctx.beginPath();
+    ctx.ellipse(-1.2, -1.3, 1.7, 1.2, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.restore(); // upper-body lean/bob transform
     ctx.restore();
 
     // Boss aura. EX boss: one ring per RAINBOW_RING_COLORS entry, each its own fixed color —
@@ -2932,6 +3245,7 @@
     const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
     lastFrameTime = now;
     updateEffects(dt);
+    updateShipMotion(dt, now); // must run before draw() — drawShip() reads this frame's gait/recoil
     spawnTrails();
     draw(now);
     if (latestState) updateHud(latestState);
