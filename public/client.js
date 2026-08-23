@@ -641,8 +641,21 @@
   function attemptConnect(url, room) {
     let opened = false;
     ws = new WebSocket(url);
+    // Identity of THIS socket. Every listener below checks it, because closing a socket does not
+    // detach its listeners and its close/message events keep arriving afterwards — and any path
+    // that swaps connections (the game-over retry, the co-op lobby, a fresh story) does
+    // `ws.close()` and then immediately `connect()`, which resets `leavingIntentionally` to
+    // false BEFORE the old socket's close event has fired. The old socket then failed its
+    // "was this intentional?" test and started its own reconnect loop to the OLD room, taking
+    // over the module-level `ws`; meanwhile its in-flight state messages were still being fed
+    // into handleState alongside the new room's. Two rooms' player lists alternating through the
+    // same diffing logic makes every frame look like a huge hp change, which fires the hit/
+    // pickup cues continuously — the reported "sound effects just kept playing".
+    const sock = ws;
+    const isCurrent = () => ws === sock;
 
     ws.addEventListener('open', () => {
+      if (!isCurrent()) return;
       opened = true;
       connectAttempt = 0;
       hideConnectingBanner();
@@ -661,6 +674,7 @@
     });
 
     ws.addEventListener('message', (ev) => {
+      if (!isCurrent()) return; // a superseded socket's in-flight messages must never reach handleState
       // Wrapped so a bug anywhere in here (JSON.parse on a malformed payload, or any of the
       // branches below) can't throw uncaught and silently stop this listener from ever firing
       // again for the rest of the session — which, since draw()/updateHud() render purely off
@@ -701,6 +715,10 @@
     });
 
     ws.addEventListener('close', () => {
+      // A socket that has already been replaced must not stop the NEW connection's music, and
+      // must never fall through to the reconnect logic below and hijack `ws` back to its own
+      // (old) room. See the `sock` comment at the top of attemptConnect.
+      if (!isCurrent()) return;
       if (window.GameAudio) window.GameAudio.stopBgm();
       // An intentional close (goToTitle()/a fresh connect()/cancelPendingConnect()) already
       // sets this, which cancels everything below — but an unexpected drop (server hiccup,
@@ -1241,9 +1259,20 @@
   storyRetryBtn.addEventListener('click', () => {
     audioReady();
     const st = latestState;
-    const coopIntact = !!(st && st.storyCoop && st.players && st.players.length === 3);
+    // Count ALLIES, not total players. This used to test `players.length === 3`, which is only
+    // right for a normal co-op room (2 allies + 1 boss) — a hard-mode co-op room holds 4 (2
+    // allies + 2 bosses), so the test failed and retry fell through to startStoryMode(), which
+    // silently dropped the pair into a brand-new SOLO NORMAL campaign. That is exactly the
+    // reported "lost the mini-game and it turned into a one-boss story".
+    const allies = st && st.players ? st.players.filter((p) => !p.isBoss).length : 0;
+    const bossesPresent = !!(st && st.players && st.players.some((p) => p.isBoss));
+    const coopIntact = !!(st && st.storyCoop) && allies === 2 && bossesPresent;
     if (coopIntact && ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'rematch' }));
+    } else if (st && st.hardMode) {
+      // Hard 1P (or a hard co-op room that has lost a player): restart HARD, not the normal
+      // campaign — retrying must never quietly downgrade the mode the player chose.
+      startHardMode1p();
     } else {
       startStoryMode();
     }
