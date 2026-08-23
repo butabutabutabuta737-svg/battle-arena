@@ -1907,6 +1907,47 @@
   // holding their rifle — so the slash read as something happening NEAR the soldier rather than
   // something they did. Driven from the same per-tick swordSwings list that spawns that arc, so
   // the two are guaranteed to start on the same frame.
+  // ---- monster animation state ----
+  // Same derive-it-from-the-position-stream approach as shipMotion: the server sends monsters as
+  // bare {x,y} with no facing and no animation, so which way a grunt is looking and whether it is
+  // walking are both worked out here from frame-to-frame movement. Keyed by monster id, swept
+  // whenever the monster list no longer contains that id so a long wave cannot leak entries.
+  const mobMotion = new Map();
+  const MOB_STRIDE_LENGTH = 15; // px travelled per full two-step cycle — shorter than a soldier's, so grunts read as scurrying
+  function updateMobMotion(dt) {
+    if (!latestState) return;
+    const live = new Set();
+    for (const m of latestState.monsters || []) {
+      live.add(m.id);
+      let s = mobMotion.get(m.id);
+      if (!s) {
+        // Starts facing 'down' so a monster that has not moved yet faces the camera, rather than
+        // showing you the back of something you have never seen the front of.
+        s = { x: m.x, y: m.y, dir: 'down', stride: 0, speed: 0 };
+        mobMotion.set(m.id, s);
+      }
+      const dx = m.x - s.x;
+      const dy = m.y - s.y;
+      const dist = Math.hypot(dx, dy);
+      s.x = m.x;
+      s.y = m.y;
+      if (dist > 0.01) {
+        s.stride += (dist / MOB_STRIDE_LENGTH) * Math.PI * 2;
+        // Dominant axis picks the sprite, biased toward KEEPING the current facing (the 1.25 vs
+        // 0.8 asymmetry): a monster homing diagonally sits right on the axis boundary and would
+        // otherwise flip between two sprites every few frames.
+        const horizBias = (s.dir === 'left' || s.dir === 'right') ? 0.8 : 1.25;
+        if (Math.abs(dx) > Math.abs(dy) * horizBias) s.dir = dx < 0 ? 'left' : 'right';
+        else s.dir = dy < 0 ? 'up' : 'down';
+      }
+      const inst = dt > 0 ? dist / dt : 0;
+      s.speed += (inst - s.speed) * Math.min(1, dt * 10);
+    }
+    if (mobMotion.size > live.size) {
+      for (const id of [...mobMotion.keys()]) if (!live.has(id)) mobMotion.delete(id);
+    }
+  }
+
   function triggerSwordSwing(p) {
     if (!p) return;
     getShipMotion(p.id).lastSwordAt = performance.now();
@@ -2245,6 +2286,136 @@
     ctx.restore();
   }
 
+  // A walking grunt, drawn as an UPRIGHT little figure with four facings (front / back / both
+  // profiles) rather than the single static 🧟 emoji it replaces. Upright, not top-down like the
+  // soldiers, because that is what "前姿・後ろ姿・横向き" means and because the emoji it replaces
+  // was upright too — so this keeps the monsters' existing visual language, it doesn't introduce
+  // a new one. Everything is expressed relative to `radius` so the gold variant's bigger body
+  // scales with it for free.
+  function drawMobSprite(m, radius, glow, waveTheme) {
+    const s = mobMotion.get(m.id);
+    const dir = s ? s.dir : 'down';
+    const stride = s ? s.stride : 0;
+    // Walk amplitude fades out when a monster is stationary (blocked, or mid-attack pause), so
+    // it settles into a stand rather than marching on the spot.
+    const gait = s ? Math.min(1, s.speed / 60) : 0;
+    const swing = Math.sin(stride) * gait;
+    const bob = Math.abs(Math.sin(stride)) * 1.1 * gait;
+
+    const k = radius / 20; // 20 = MONSTER_RADIUS_VISUAL, the size these numbers were drawn at
+    const skin = waveTheme ? glow : '#9dff6b';
+    // These sit on top of the monster's own dark body disc, so both tones have to stay clearly
+    // ABOVE that background, not just below the head. A first pass at 0.42/0.22 left the torso
+    // and limbs reading as one dark blob against the disc with no anatomy visible at all.
+    const cloth = shadeAnyColor(skin, 0.62);
+    const dark = shadeAnyColor(skin, 0.44);
+    const outline = shadeAnyColor(skin, 0.2);
+    const side = dir === 'left' || dir === 'right';
+
+    ctx.save();
+    ctx.scale(k, k);
+    if (dir === 'left') ctx.scale(-1, 1); // one profile drawn, mirrored for the other
+    ctx.translate(0, -bob);
+
+    // legs — swing along the travel axis: front-to-back reads as up/down steps on the profile
+    // and side views, and as a left/right stride when walking toward or away from the camera.
+    ctx.strokeStyle = dark;
+    ctx.lineWidth = 3.4;
+    ctx.lineCap = 'round';
+    for (const sgn of [1, -1]) {
+      const sw = swing * sgn * (side ? 4.5 : 3.2);
+      ctx.beginPath();
+      if (side) {
+        ctx.moveTo(0, 5);
+        ctx.lineTo(sw, 13);
+      } else {
+        ctx.moveTo(sgn * 2.6, 5);
+        ctx.lineTo(sgn * 2.6 + sw * 0.35, 13);
+      }
+      ctx.stroke();
+    }
+
+    // torso — outlined so the limbs drawn in the same family of tones still separate from it
+    ctx.fillStyle = cloth;
+    ctx.beginPath();
+    ctx.ellipse(0, 1, side ? 3.6 : 5.2, 6.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 1.1;
+    ctx.stroke();
+
+    // arms — a grunt shambles with them reaching toward whatever it is chasing, so on the front
+    // and profile views they hang forward; on the back view they trail behind the body instead.
+    ctx.strokeStyle = dark;
+    ctx.lineWidth = 2.8;
+    for (const sgn of [1, -1]) {
+      const sw = -swing * sgn * (side ? 4 : 2.4);
+      ctx.beginPath();
+      if (side) {
+        ctx.moveTo(0.5, -1.5);
+        ctx.quadraticCurveTo(5, 0.5 + sw * 0.3, 8.5, 2 + sw * 0.5);
+      } else {
+        ctx.moveTo(sgn * 4.4, -1.5);
+        ctx.quadraticCurveTo(sgn * 6.4, 2 + sw * 0.4, sgn * 6.6, 6 + sw * 0.6);
+      }
+      ctx.stroke();
+    }
+
+    // head
+    ctx.fillStyle = skin;
+    ctx.beginPath();
+    ctx.arc(side ? 0.8 : 0, -9.5, 5.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // The face is the whole point of having four sprites, so it is the one thing that differs
+    // per direction: two eyes looking at you from the front, one eye on the profile, and
+    // nothing at all from behind — just the back of the head.
+    if (dir === 'down') {
+      ctx.fillStyle = '#1a1a22';
+      ctx.beginPath();
+      ctx.ellipse(-2, -10, 1.15, 1.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(2, -10, 1.15, 1.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(26,26,34,0.75)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-2.2, -6.9);
+      ctx.lineTo(2.2, -6.9);
+      ctx.stroke();
+    } else if (side) {
+      // hair covering the REAR of the skull, so the profile has a clear front and back
+      ctx.fillStyle = dark;
+      ctx.beginPath();
+      ctx.arc(0.8, -9.5, 5.4, Math.PI * 0.55, Math.PI * 1.45);
+      ctx.fill();
+      ctx.fillStyle = '#1a1a22';
+      ctx.beginPath();
+      ctx.ellipse(2.6, -10, 1.1, 1.45, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // snout/jaw nub, so the profile has an actual front to it
+      ctx.fillStyle = skin;
+      ctx.beginPath();
+      ctx.ellipse(5.4, -8.4, 1.7, 1.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Back view: the head is almost entirely hair, with just a sliver of nape showing at the
+      // bottom. A first pass drew only a top cap, which left a bright lower half that read as a
+      // visor — i.e. it looked like a FRONT view wearing a helmet, the exact opposite of intent.
+      ctx.fillStyle = dark;
+      ctx.beginPath();
+      ctx.arc(0, -9.9, 5.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = skin;
+      ctx.beginPath();
+      ctx.ellipse(0, -5.6, 2.5, 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function drawMonster(m, t) {
     const gold = !!m.gold;
     const chicken = !!m.chicken;
@@ -2273,10 +2444,22 @@
       ctx.stroke();
     }
     ctx.shadowBlur = 0;
-    ctx.font = `${chicken ? 22 : gold ? 24 : 20}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(chicken ? '🐔' : '🧟', 0, 1);
+    if (chicken) {
+      // The chicken stays an emoji — it's a deliberate comedy variant, and a hand-drawn bird
+      // would lose that read — but it now hops and flips to face its travel direction instead
+      // of sliding around frozen.
+      const cs = mobMotion.get(m.id);
+      const hop = cs ? Math.abs(Math.sin(cs.stride)) * 3.5 : 0;
+      ctx.save();
+      if (cs && cs.dir === 'left') ctx.scale(-1, 1);
+      ctx.font = '22px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🐔', 0, 1 - hop);
+      ctx.restore();
+    } else {
+      drawMobSprite(m, radius, glow, waveTheme);
+    }
     ctx.restore();
 
     // small hp bar overhead, same idea as a player's but miniature
@@ -3447,6 +3630,7 @@
     lastFrameTime = now;
     updateEffects(dt);
     updateShipMotion(dt, now); // must run before draw() — drawShip() reads this frame's gait/recoil
+    updateMobMotion(dt); // ditto for drawMonster()'s facing/walk cycle
     spawnTrails();
     draw(now);
     if (latestState) updateHud(latestState);
