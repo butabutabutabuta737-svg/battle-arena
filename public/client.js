@@ -3708,8 +3708,11 @@
           if (isHard) recordHardCleared();
           storyEndingTag.textContent = isHard ? 'HARD MODE ALL CLEAR' : 'ALL STAGES CLEAR';
           storyEndingTitle.textContent = isHard ? '🔥 二つの影も、断ち切った' : '🏆 戦場に、静寂が訪れた';
+          // The last stage goes straight from the kill to this screen without a defeat card
+          // (same as the normal campaign's stage 5), so the final pair's parting words live
+          // here instead of being written and never shown.
           storyEndingText.innerHTML = isHard
-            ? '二体同時という理不尽を、三度くぐり抜けた。<br /><br />束になっても届かなかった――そう戦場に刻ませた。<br />もはやこの地に、あなたの前に立てる影はない。'
+            ? '地獄の底から這い上がった狼たちが、二匹ずつ束になって牙を剥いた。<br />その夢のタッグを、三度とも噛み砕いた。<br /><br />「――認めよう。真の『戦場の狼』は、貴様だ。」<br /><br />もはやこの戦場に、あなたの前へ立てる影はない。'
             : '立ちはだかった５人の強敵、そのすべてを打ち破った。<br /><br />すべての戦場の敵は、倒した。<br />だが、戦いはまだ終わらない――。';
           challengeExBtn.classList.toggle('hidden', isHard);
           storyEndingOverlay.classList.remove('hidden');

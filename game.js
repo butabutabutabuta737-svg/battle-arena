@@ -978,15 +978,24 @@ function bossNameForStage(stage) {
 // lookup below goes through bossSpec() rather than indexing STORY_BOSSES directly.
 const HARD_STAGES = [[1, 2], [3, 4], [5, 6]];
 const HARD_MOB_WAVE_COUNT = 20; // vs MOB_WAVE_COUNT (10) in the normal campaign, per explicit request
+// Hard mode's pre-battle taunts and defeat lines, per explicit request: the bosses you already
+// buried have clawed their way back out of hell and paired up to come for you — and the later
+// pairings are billed as dream tag-teams, matchups that should never have been possible.
+// One line per stage; syncBosses() hands the taunt to the lead boss and the defeat line to the
+// partner, so the intro card and the defeat card each read as one scene rather than two halves.
 const HARD_STAGE_LINES = [
-  '２人がかりとは、ずいぶんと舐められたものだな――いや、逆か。ここからは、そういう戦場だ。',
-  '前も後ろも敵だ。悲鳴を上げる暇があるなら、引き金を引け。',
-  'この戦場を創った者と、支配した者。その両方が、いま貴様の前に立っている。',
+  '地獄の底で、俺たち二匹は手を取った。――もう一度、貴様を喰い殺すためだけにな。',
+  '正面から叩き潰す男と、影から喉を裂く男。決して並び立たぬはずの二人だ。……夢のタッグと呼べ。',
+  '戦場を統べた覇者と、戦場を創り出した神。二つの伝説が、いま初めて肩を並べた。これ以上の夢は、どこにも無い。',
 ];
+// Index 2 is deliberately kept for symmetry but is NOT currently shown: clearing the last stage
+// jumps straight to the ending screen with no defeat card in between (exactly as the normal
+// campaign's stage 5 does), so the final pair's parting words are written into that ending text
+// instead — see client.js's finalStageClear branch.
 const HARD_STAGE_DEFEAT_LINES = [
-  'ば……馬鹿な……二人がかりで……押し負けるだと……!?',
-  'こんな……こんな human 一人に……我々の連携が……!',
-  'そうか……これが、貴様の選んだ答えか……。ならば持っていけ、この戦場のすべてを――。',
+  '馬鹿な……地獄から這い上がってなお、二匹がかりで……まだ届かんのか……!',
+  'この夢のタッグが……たった一匹の狼に、喰い破られるというのか……!',
+  '二つの伝説を束にして、なお超えていったか。……認めよう。真の「戦場の狼」は、貴様だ。',
 ];
 // The whole per-boss identity in one place: index 1-5 from STORY_BOSSES, 6 = the EX boss.
 // Used by hard mode (which mixes numbered bosses and the EX boss freely in one fight) and by
@@ -1128,11 +1137,17 @@ function syncBosses(room) {
     // A hard stage is a PAIR, so its dialogue belongs to the encounter rather than to either
     // boss individually: the lead boss carries the stage's taunt and the partner carries the
     // stage's defeat line, so the intro and the defeat card each read as one scene.
+    // BOTH lines go on the lead boss: the client's intro and defeat cards each render
+    // `players.find(p => p.isBoss)`, i.e. the first one. Putting the defeat line on the partner
+    // instead meant the card fell back to that boss's own numbered-stage line — the stage-1 pair
+    // signed off with the rookie's solo "ば……馬鹿な……この俺が……こんな所で……!" instead of
+    // the tag-team line, which is exactly what showed up on screen.
     const hs = Math.min(Math.max(1, room.storyStage || 1), HARD_STAGES.length) - 1;
-    const bosses = bossPlayers(room);
-    if (bosses[0]) bosses[0].line = HARD_STAGE_LINES[hs];
-    const last = bosses[bosses.length - 1];
-    if (last) last.defeatLine = HARD_STAGE_DEFEAT_LINES[hs];
+    const lead = bossPlayers(room)[0];
+    if (lead) {
+      lead.line = HARD_STAGE_LINES[hs];
+      lead.defeatLine = HARD_STAGE_DEFEAT_LINES[hs];
+    }
   }
 }
 
