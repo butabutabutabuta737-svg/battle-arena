@@ -1641,6 +1641,7 @@
       // and exact hex values as drawShip's uniform/drawBomb's ring), computed once here at
       // creation time rather than re-looked-up every frame in drawSwordSlashes.
       const swingOwner = state.players.find((p) => p.id === swing.ownerId);
+      triggerSwordSwing(swingOwner); // put the swinger's own body into the blade pose, not just the arc
       const color = sideColor(swingOwner, '77,120,217', '63,179,110', '201,82,74');
       swordSlashes.push({ x: swing.x, y: swing.y, angle: swing.angle, hit: swing.hit, range: swing.range, life: 0.24, maxLife: 0.24, color });
       if (swing.hit) {
@@ -1819,6 +1820,12 @@
   // resetClientState() rather than being trusted to stay valid across rounds.
   const shipMotion = new Map();
   const MUZZLE_FLASH_MS = 70;
+  // Mirrors game.js's SWORD_ARC_HALF_ANGLE, and the 0.24s life the slash fan is spawned with —
+  // the soldier's own blade is animated off the SAME numbers as that effect, so the blade the
+  // character is holding stays glued to the leading edge of the arc instead of drifting out of
+  // step with it.
+  const SWORD_ARC_HALF_ANGLE = Math.PI / 4;
+  const SWORD_SWING_MS = 240;
   // Per explicit request, characters (and their hitbox — see game.js's PLAYER_RADIUS, raised
   // 16 -> 19.2 to match) are 1.2x bigger. Kept as `1.25 * SIZE_UP` rather than folded into one
   // number so the two factors stay readable: 1.25 is the original "draw the soldier nearer its
@@ -1839,6 +1846,7 @@
         lastFootfall: 0,
         recoil: 0, // 1 right as a shot leaves, decaying to 0 — set by triggerShotRecoil()
         lastFireAt: -1e9,
+        lastSwordAt: -1e9, // set by triggerSwordSwing(); drives the blade pose in drawShip()
       };
       shipMotion.set(id, m);
     }
@@ -1885,6 +1893,16 @@
         }
       }
     }
+  }
+
+  // Puts the soldier into the sword pose for SWORD_SWING_MS. Until now a swing only ever drew
+  // the detached arc effect (drawSwordSlashes) while the character underneath went on calmly
+  // holding their rifle — so the slash read as something happening NEAR the soldier rather than
+  // something they did. Driven from the same per-tick swordSwings list that spawns that arc, so
+  // the two are guaranteed to start on the same frame.
+  function triggerSwordSwing(p) {
+    if (!p) return;
+    getShipMotion(p.id).lastSwordAt = performance.now();
   }
 
   // Kicks the shooter's rifle back, lights the muzzle flash drawn in drawShip(), and flicks a
@@ -2133,7 +2151,7 @@
   }
 
   function drawSwordSlashes() {
-    const halfArc = Math.PI / 4; // mirrors game.js's SWORD_ARC_HALF_ANGLE
+    const halfArc = SWORD_ARC_HALF_ANGLE; // shared with the blade pose in drawShip, so the two stay in step
     for (const s of swordSlashes) {
       const range = s.range || SWORD_RANGE_VISUAL;
       const t = 1 - Math.max(0, Math.min(1, s.life / s.maxLife)); // 0 -> 1 over the swing's life
@@ -2519,66 +2537,129 @@
     ctx.ellipse(-5, 0, 3.4, 5.6, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // ---- rifle + arms ----
-    // Shouldered on the soldier's left of the aim line (local -y), both hands on the weapon,
-    // the whole assembly kicking back on recoil. The crossing front arm is the shape that sells
-    // "braced against the shoulder" from a top-down camera.
-    ctx.save();
-    ctx.translate(-recoil * 4, 0);
+    // ---- weapon: rifle at the ready, or a blade mid-swing ----
+    const swordAge = m ? now - m.lastSwordAt : Infinity;
+    const swinging = swordAge < SWORD_SWING_MS;
 
-    ctx.strokeStyle = '#2a2a28';
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'butt';
-    ctx.beginPath();
-    ctx.moveTo(-4, -3.5); // stock, tucked behind the shoulder
-    ctx.lineTo(23, -2.5);
-    ctx.stroke();
-    ctx.fillStyle = '#1a1a18';
-    ctx.fillRect(19, -4.5, 6, 3.4); // muzzle/foresight block
-    ctx.fillStyle = '#232320';
-    ctx.fillRect(6, -2, 3.6, 5); // magazine, hanging below the receiver
+    if (swinging) {
+      // The blade tracks the leading edge of the slash fan exactly (same sweep curve as
+      // drawSwordSlashes), so the weapon in the soldier's hands and the arc on the ground are
+      // one motion. The rifle is dropped to the off hand for the duration rather than left
+      // floating on target, which is what made a swing read as "someone else's effect" before.
+      const t = swordAge / SWORD_SWING_MS;
+      const sweep = Math.min(1, t / 0.45);
+      const bladeAngle = -SWORD_ARC_HALF_ANGLE + SWORD_ARC_HALF_ANGLE * 2 * sweep;
 
-    // Arms reach forward from the shoulder span and OUTSIDE the body outline, so they read as
-    // limbs rather than shading on the torso: rear hand back on the grip, front hand stretched
-    // across to the foregrip. That asymmetric reach is the pose the eye recognises as someone
-    // holding a rifle up, and it's the clearest single cue that this is a person.
-    ctx.strokeStyle = armTone;
-    ctx.lineWidth = 3.2;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(-1, -7.5);
-    ctx.quadraticCurveTo(3, -7, 5, -3.4);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(-0.5, 7);
-    ctx.quadraticCurveTo(9.5, 6.5, 14.5, -1.6);
-    ctx.stroke();
-
-    // muzzle flash — brief, so it lands as a "crack" rather than a constant glow
-    const flashAge = m ? now - m.lastFireAt : Infinity;
-    if (flashAge < MUZZLE_FLASH_MS) {
-      const f = 1 - flashAge / MUZZLE_FLASH_MS;
+      // rifle lowered across the body in the off hand while the blade is out
       ctx.save();
-      ctx.translate(26, -2.5);
-      ctx.globalAlpha = f;
-      ctx.shadowColor = '#ffd98a';
-      ctx.shadowBlur = 16;
-      ctx.fillStyle = '#fff3c4';
-      // four-point star: a long horizontal spike down the barrel line, a short vertical one
+      ctx.rotate(0.9);
+      ctx.strokeStyle = '#2a2a28';
+      ctx.lineWidth = 2.6;
+      ctx.lineCap = 'butt';
       ctx.beginPath();
-      ctx.moveTo(9 * f, 0);
-      ctx.lineTo(0, 3.4 * f);
-      ctx.lineTo(-3 * f, 0);
-      ctx.lineTo(0, -3.4 * f);
+      ctx.moveTo(-3, 4);
+      ctx.lineTo(13, 4);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.rotate(bladeAngle);
+      // both hands together on the hilt — a two-handed grip is what makes a swing look committed
+      ctx.strokeStyle = armTone;
+      ctx.lineWidth = 3.2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-1, -6.5);
+      ctx.quadraticCurveTo(4, -4, 7.5, -0.6);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-0.5, 6.5);
+      ctx.quadraticCurveTo(4.5, 4, 7.5, 0.6);
+      ctx.stroke();
+      // guard + hilt
+      ctx.strokeStyle = '#6b5a3a';
+      ctx.lineWidth = 3.4;
+      ctx.beginPath();
+      ctx.moveTo(6, -2.6);
+      ctx.lineTo(6, 2.6);
+      ctx.stroke();
+      // blade: a tapered steel wedge, brightest along its leading edge
+      const bladeLen = 15 + 13 * sweep;
+      const bladeGrad = ctx.createLinearGradient(7, 0, 7 + bladeLen, 0);
+      bladeGrad.addColorStop(0, '#9fb0c8');
+      bladeGrad.addColorStop(0.55, '#eef4ff');
+      bladeGrad.addColorStop(1, '#ffffff');
+      ctx.fillStyle = bladeGrad;
+      ctx.beginPath();
+      ctx.moveTo(7, -2.2);
+      ctx.lineTo(7 + bladeLen * 0.82, -1.5);
+      ctx.lineTo(7 + bladeLen, 0);
+      ctx.lineTo(7 + bladeLen * 0.82, 1.5);
+      ctx.lineTo(7, 2.2);
       ctx.closePath();
       ctx.fill();
-      ctx.beginPath();
-      ctx.arc(0, 0, 2.6 * f, 0, Math.PI * 2);
-      ctx.fill();
       ctx.restore();
-    }
+    } else {
+      // Shouldered on the soldier's left of the aim line (local -y), both hands on the weapon,
+      // the whole assembly kicking back on recoil. The crossing front arm is the shape that
+      // sells "braced against the shoulder" from a top-down camera.
+      ctx.save();
+      ctx.translate(-recoil * 4, 0);
 
-    ctx.restore(); // rifle/arms recoil transform
+      ctx.strokeStyle = '#2a2a28';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'butt';
+      ctx.beginPath();
+      ctx.moveTo(-4, -3.5); // stock, tucked behind the shoulder
+      ctx.lineTo(23, -2.5);
+      ctx.stroke();
+      ctx.fillStyle = '#1a1a18';
+      ctx.fillRect(19, -4.5, 6, 3.4); // muzzle/foresight block
+      ctx.fillStyle = '#232320';
+      ctx.fillRect(6, -2, 3.6, 5); // magazine, hanging below the receiver
+
+      // Arms reach forward from the shoulder span and OUTSIDE the body outline, so they read as
+      // limbs rather than shading on the torso: rear hand back on the grip, front hand stretched
+      // across to the foregrip. That asymmetric reach is the pose the eye recognises as someone
+      // holding a rifle up, and it's the clearest single cue that this is a person.
+      ctx.strokeStyle = armTone;
+      ctx.lineWidth = 3.2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-1, -7.5);
+      ctx.quadraticCurveTo(3, -7, 5, -3.4);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-0.5, 7);
+      ctx.quadraticCurveTo(9.5, 6.5, 14.5, -1.6);
+      ctx.stroke();
+
+      // muzzle flash — brief, so it lands as a "crack" rather than a constant glow
+      const flashAge = m ? now - m.lastFireAt : Infinity;
+      if (flashAge < MUZZLE_FLASH_MS) {
+        const f = 1 - flashAge / MUZZLE_FLASH_MS;
+        ctx.save();
+        ctx.translate(26, -2.5);
+        ctx.globalAlpha = f;
+        ctx.shadowColor = '#ffd98a';
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = '#fff3c4';
+        // four-point star: a long horizontal spike down the barrel line, a short vertical one
+        ctx.beginPath();
+        ctx.moveTo(9 * f, 0);
+        ctx.lineTo(0, 3.4 * f);
+        ctx.lineTo(-3 * f, 0);
+        ctx.lineTo(0, -3.4 * f);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(0, 0, 2.6 * f, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      ctx.restore(); // rifle/arms recoil transform
+    }
 
     // ---- helmet, seen from directly above ----
     // Sits at the CENTRE of the shoulders, not out in front of them: looking straight down at
@@ -2595,16 +2676,38 @@
     ctx.strokeStyle = legTone;
     ctx.lineWidth = 1.3;
     ctx.stroke();
-    // brim/visor, angled toward whatever they're aiming at — the one asymmetry that tells you
-    // which way the head is turned once the body is a near-symmetric oval from above
-    ctx.fillStyle = shadeAnyColor(uniform, 0.55);
+    // VISOR: a dark band wrapping the front ~130° of the helmet, with a bright glint along it.
+    // From directly above a helmet is otherwise a circle — perfectly symmetric, so the head
+    // alone gave no clue which way the soldier was facing, and the small offset brim this
+    // replaces was too subtle to read at actual play size. A hard dark-to-light band across one
+    // side is unambiguous at a glance, and it points exactly where the rifle does.
+    // Kept deliberately THIN (outer 4.4 down to 3.2 only, ~±57°): a deeper band eats most of the
+    // dome and the head stops reading as a helmet at all — it turns into a camera lens with a
+    // bright pupil in the middle. A narrow rim at the leading edge is enough to point the head.
     ctx.beginPath();
-    ctx.ellipse(3.3, 0, 1.6, 3.4, 0, 0, Math.PI * 2);
+    ctx.arc(0, 0, 4.4, -1.0, 1.0);
+    ctx.arc(0, 0, 3.2, 1.0, -1.0, true);
+    ctx.closePath();
+    ctx.fillStyle = '#1b2233';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, 0, 3.85, -0.75, 0.2);
+    ctx.strokeStyle = 'rgba(150,205,255,0.9)';
+    ctx.lineWidth = 0.9;
+    ctx.stroke();
+    // a short muzzle-side nose wedge past the visor — pushes the silhouette itself off-centre,
+    // so facing survives even when the visor's colours wash out against a pale boss uniform
+    ctx.fillStyle = shadeAnyColor(uniform, 0.72);
+    ctx.beginPath();
+    ctx.moveTo(4.1, -2);
+    ctx.lineTo(6.6, 0);
+    ctx.lineTo(4.1, 2);
+    ctx.closePath();
     ctx.fill();
     // specular kick off the crown
     ctx.fillStyle = 'rgba(255,255,255,0.26)';
     ctx.beginPath();
-    ctx.ellipse(-1.2, -1.3, 1.7, 1.2, -0.5, 0, Math.PI * 2);
+    ctx.ellipse(-1.6, -1.4, 1.6, 1.1, -0.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
