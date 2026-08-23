@@ -112,6 +112,12 @@ const GOLD_MONSTER_ATTACK_COOLDOWN_MS = 1300;
 const GOLDEN_CHICKEN_CHANCE = 0.08; // "そこまで高くない" — modest, not "極まれに" rare
 const GOLDEN_CHICKEN_SPEED = 160; // faster than the base monster, deliberately hard to run down
 const GOLDEN_CHICKEN_RADIUS = 18;
+// The gold WAVE tier (the strongest of the five mini-game tiers — see MOB_WAVE_COLOR_STATS) is
+// 1.2x the base grunt, per explicit request. Until now every wave grunt was exactly the same
+// size and only its colour hinted at the tier; this gives the most dangerous one a silhouette
+// cue as well. Distinct from GOLD_MONSTER_RADIUS above, which is the ambient gold monster that
+// only spawns OUTSIDE waves.
+const GOLD_WAVE_MOB_RADIUS = Math.round(MONSTER_RADIUS * 1.2 * 10) / 10; // 24
 const GOLDEN_CHICKEN_ITEM_COUNT = 3;
 // Mob wave: a mini-game inserted between story-mode boss fights ("ボス→ミニゲーム→ボス…").
 // 10 grunt monsters must be wiped out. Each individual mob rolls a color tier — 白(white,
@@ -1632,8 +1638,14 @@ function dropBlockItems(room, block, cx, cy) {
   }
 }
 
+// Single source of truth for a monster's collision size — every hit test (bullets, laser, sword,
+// bombs, contact damage) goes through this, so the gold wave tier's bigger hitbox follows from
+// the one branch below rather than needing each of those sites touched.
 function monsterRadius(m) {
-  return m.chicken ? GOLDEN_CHICKEN_RADIUS : m.gold ? GOLD_MONSTER_RADIUS : MONSTER_RADIUS;
+  if (m.chicken) return GOLDEN_CHICKEN_RADIUS;
+  if (m.gold) return GOLD_MONSTER_RADIUS;
+  if (m.wave && m.waveColor === 'gold') return GOLD_WAVE_MOB_RADIUS;
+  return MONSTER_RADIUS;
 }
 
 function spawnItem(room) {
@@ -1711,7 +1723,9 @@ function spawnMonster(room) {
 function spawnWaveMob(room) {
   const tier = pickMobWaveColorTier(room.mobWaveIndex);
   const stats = MOB_WAVE_COLOR_STATS[tier];
-  const radius = MONSTER_RADIUS;
+  // Must match what monsterRadius() will report for this tier, or a gold grunt gets placed using
+  // the smaller base radius and can spawn clipped into a wall it doesn't actually fit beside.
+  const radius = tier === 'gold' ? GOLD_WAVE_MOB_RADIUS : MONSTER_RADIUS;
   const spawnPoints = getSpawnPoints(room);
   let x, y, tries = 0;
   do {

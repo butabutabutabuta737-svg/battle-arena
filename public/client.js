@@ -364,6 +364,7 @@
   const MONSTER_RADIUS_VISUAL = 20; // mirrors game.js's MONSTER_RADIUS
   const GOLD_MONSTER_RADIUS_VISUAL = 26; // mirrors game.js's GOLD_MONSTER_RADIUS
   const GOLDEN_CHICKEN_RADIUS_VISUAL = 18; // mirrors game.js's GOLDEN_CHICKEN_RADIUS
+  const GOLD_WAVE_MOB_RADIUS_VISUAL = 24; // mirrors game.js's GOLD_WAVE_MOB_RADIUS (MONSTER_RADIUS * 1.2)
   let shockwaves = [];
   let shakeMag = 0;
   let hitFlash = 0;
@@ -2423,7 +2424,13 @@
     // a visual readout of that mob's rolled speed/damage strength, distinct from the
     // ambient-monster gold/chicken variants above (which only ever occur outside a wave).
     const waveTheme = m.wave ? (WAVE_COLOR_THEME[m.waveColor] || WAVE_COLOR_THEME.blue) : null;
-    const radius = chicken ? GOLDEN_CHICKEN_RADIUS_VISUAL : gold ? GOLD_MONSTER_RADIUS_VISUAL : MONSTER_RADIUS_VISUAL;
+    // Mirrors game.js's monsterRadius() branch-for-branch — the gold wave tier is the strongest
+    // of the five and is drawn (and collided) 1.2x, so its size reads as a warning too.
+    const goldWaveTier = !!m.wave && m.waveColor === 'gold';
+    const radius = chicken ? GOLDEN_CHICKEN_RADIUS_VISUAL
+      : gold ? GOLD_MONSTER_RADIUS_VISUAL
+        : goldWaveTier ? GOLD_WAVE_MOB_RADIUS_VISUAL
+          : MONSTER_RADIUS_VISUAL;
     const glow = waveTheme ? waveTheme.glow : chicken ? '#fff59d' : gold ? '#ffd35b' : '#9dff6b';
     const fill = waveTheme ? waveTheme.fill : chicken ? '#4a3c10' : gold ? '#3a2c14' : '#241c34';
     const ring = waveTheme ? waveTheme.ring : chicken ? '255,245,157' : '255,211,91'; // only gold/chicken/wave get a ring at all
