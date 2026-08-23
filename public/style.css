@@ -701,6 +701,27 @@ button:active {
   font-weight: 700;
   color: #ff8a8a;
 }
+/* Per-player story level, sat right beside that player's own name so in 2P co-op it is
+   unambiguous which level belongs to whom (levels are tracked per player — see game.js's
+   addStoryXp). Deliberately compact: it shares a cramped HUD row with the name and the
+   downed badge. */
+.lv-badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 211, 91, 0.4);
+  background: rgba(255, 211, 91, 0.12);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #ffd35b;
+  white-space: nowrap;
+}
+/* Right-aligned HP block: the badge precedes the name there, so its spacing has to flip too. */
+.lv-badge-left {
+  margin-left: 0;
+  margin-right: 6px;
+}
 /* Shown full-screen-width but non-blocking (doesn't cover the arena) to the specific player
    who was downed first, telling them the match isn't over — their ally is still fighting. */
 .downed-banner {

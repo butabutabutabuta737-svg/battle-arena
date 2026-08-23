@@ -148,7 +148,7 @@ function pickMobWaveColorTier(waveIndex) {
   return 'blue';
 }
 // Story-mode leveling (story mode only — never touches arena/PvP rooms): every wave-mob or
-// boss kill grants XP toward room.storyXp, and the level derived from it only ever grants a
+// boss kill grants XP toward that player's own storyXp, and the level derived from it only grants a
 // max-HP bonus — nothing else about the player changes. Two balance knobs, per explicit
 // request ("レベルは徐々に上がりにくくなり強い敵ほどキルが高いように"):
 //   1. Tougher kills are worth more XP — MOB_WAVE_COLOR_XP scales 1(white)->5(gold) with the
@@ -181,14 +181,34 @@ function storyLevelHpMult(level) {
   const l = Math.min(Math.max(1, level), STORY_LEVEL_CAP);
   return (100 + (l - 1) * 10) / 100;
 }
-function addStoryXp(room, amount) {
-  room.storyXp += amount;
+// XP and level live on the PLAYER, not the room — per explicit request, 2P co-op levels each
+// ally independently ("レベルはプレイヤーごとに表記してレベル向上もわけて") rather than pooling
+// every kill into one shared room-wide level. Wave-mob XP goes to whoever actually landed the
+// killing blow (see `lastHitById` on the monster); a boss kill is a shared objective and is paid
+// to every ally. 1P behaviour is unchanged — one human means one level either way.
+function addStoryXp(player, amount) {
+  if (!player || player.isBoss) return;
+  player.storyXp = (player.storyXp || 0) + amount;
   let level = 1;
   for (let i = 1; i < STORY_LEVEL_THRESHOLDS.length; i++) {
-    if (room.storyXp >= STORY_LEVEL_THRESHOLDS[i]) level = i + 1;
+    if (player.storyXp >= STORY_LEVEL_THRESHOLDS[i]) level = i + 1;
     else break;
   }
-  room.storyLevel = Math.min(STORY_LEVEL_CAP, level);
+  player.storyLevel = Math.min(STORY_LEVEL_CAP, level);
+}
+function resetStoryProgress(room) {
+  for (const pl of room.players.values()) {
+    if (pl.isBoss) continue;
+    pl.storyLevel = 1;
+    pl.storyXp = 0;
+  }
+}
+// Whoever last damaged this monster, if they're still in the room. Monster deaths are collected
+// once per tick (rather than at each of the four damage sites), so the killer has to be recorded
+// on the monster at damage time for the XP to be attributable at all.
+function killerOf(room, m) {
+  if (!m.lastHitById) return null;
+  return [...room.players.values()].find((pl) => pl.id === m.lastHitById) || null;
 }
 // Clone: a purely visual, non-collidable decoy offset to the player's side (mirrors the
 // existing trees/houses "visual-only, no server-side hitbox" pattern) — it's untargetable
@@ -623,6 +643,7 @@ function fireLaser(room, shooterWs, shooter, now, originX, originY) {
     applyDamage(room, hitTargetWs, hitTarget, LASER_DAMAGE * atkMult, now);
   } else if (hitMonster) {
     hitMonster.hp -= LASER_DAMAGE;
+    hitMonster.lastHitById = shooter.id;
   }
 
   room.lasers.push({
@@ -791,7 +812,7 @@ function attemptSword(room, ws, p, now) {
     if (hitTarget) {
       const atkMult = ws === room.cpuToken ? cpuAttackMult(room) * cpuSwordMult(room) : 1;
       applyDamage(room, hitTargetWs, hitTarget, SWORD_DAMAGE * atkMult, now);
-    } else if (hitMonster) hitMonster.hp -= SWORD_DAMAGE;
+    } else if (hitMonster) { hitMonster.hp -= SWORD_DAMAGE; hitMonster.lastHitById = p.id; }
     else if (hitBlock) hitBlock.hp -= SWORD_DAMAGE;
   }
 }
@@ -827,6 +848,7 @@ function explodeBomb(room, bomb, now) {
     if (d < BOMB_RADIUS + monsterRadius(m)) {
       m.hp -= BOMB_DAMAGE; // one-shots a regular monster (exceeds its 25 max hp); a gold
       // monster's boosted hp pool (75) survives a single blast, needing a second hit
+      m.lastHitById = bomb.ownerId;
     }
   }
   room.blocks = room.blocks.filter((bl) => {
@@ -1407,8 +1429,6 @@ function getRoom(id) {
       mobWaveKilled: 0,
       mobWaveNextSpawnAt: 0,
       pendingMobWaveIntro: false, // mirrors pendingStoryIntro's extended-countdown-wait trick
-      storyLevel: 1, // story-mode-only player level (1-10), see STORY_LEVEL_CAP/storyLevelHpMult
-      storyXp: 0, // cumulative XP from wave-mob/boss kills (weighted by strength) — see STORY_LEVEL_THRESHOLDS
       cpuState: null,
       phase: 'waiting', // waiting | countdown | playing | finished
       countdownEndsAt: 0,
@@ -1456,7 +1476,7 @@ function resetPositions(room) {
     // must stay untouched here. Recomputed every round so it always reflects the current
     // level, including immediately after a level-up mid-run.
     if (room.isCpuMatch && !p.isBoss) {
-      p.maxHp = Math.round(MAX_HP * storyLevelHpMult(room.storyLevel));
+      p.maxHp = Math.round(MAX_HP * storyLevelHpMult(p.storyLevel || 1)); // this player's OWN level, not a shared room one
     }
     p.hp = p.maxHp || MAX_HP;
     p.alive = true;
@@ -1921,6 +1941,7 @@ function tick(room) {
         const mRadius = monsterRadius(monster);
         if (monster.hp > 0 && Math.hypot(monster.x - b.x, monster.y - b.y) < mRadius + bRadius) {
           monster.hp -= b.damage || BASE_BULLET_DAMAGE;
+          monster.lastHitById = b.ownerId; // credits the wave-mob XP to whoever fired this — see addStoryXp
           return false;
         }
       }
@@ -1956,7 +1977,10 @@ function tick(room) {
       if (m.hp <= 0) {
         if (m.wave) {
           room.mobWaveKilled++;
-          addStoryXp(room, MOB_WAVE_COLOR_XP[m.waveColor] || MOB_WAVE_COLOR_XP.blue);
+          // Paid to the ally who actually landed the kill, so the two levels genuinely diverge
+          // by how each of them played. An unattributable kill (killer already disconnected)
+          // simply awards nothing rather than defaulting to someone who didn't earn it.
+          addStoryXp(killerOf(room, m), MOB_WAVE_COLOR_XP[m.waveColor] || MOB_WAVE_COLOR_XP.blue);
         }
         if (m.chicken) {
           // "周囲にアイテムが3種類獲得" — scattered around the death point, not stacked
@@ -2166,8 +2190,8 @@ function broadcastState(room) {
     mobWaveCount: MOB_WAVE_COUNT,
     mobWaveSpawned: room.mobWaveSpawned,
     mobWaveKilled: room.mobWaveKilled,
-    storyLevel: room.storyLevel,
-    storyXp: room.storyXp,
+    // Level/XP now ride on each player object (see addStoryXp) and reach the client through the
+    // `...p` spread in the players array above — there is no room-wide level any more.
     storyLevelCap: STORY_LEVEL_CAP,
   };
   const msg = JSON.stringify(state);
@@ -2212,6 +2236,8 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
     alive: true,
     bombs: 0,
     shieldAmount: 0,
+    storyLevel: 1, // story-mode-only, PER PLAYER (1-10) — see STORY_LEVEL_CAP/storyLevelHpMult
+    storyXp: 0, // this player's own wave-mob kills plus the shared boss-kill awards
   };
   room.players.set(ws, player);
   room.inputs.set(ws, { up: false, down: false, left: false, right: false, angle: 0, shooting: false, swording: false });
@@ -2357,8 +2383,7 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
                 room.pendingStoryIntro = true;
               } else {
                 room.storyStage = 1;
-                room.storyLevel = 1;
-                room.storyXp = 0;
+                resetStoryProgress(room);
                 if (cpuPlayer) {
                   cpuPlayer.name = bossNameForStage(1);
                   cpuPlayer.line = bossLineForStage(1);
@@ -2371,7 +2396,11 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
                 room.pendingStoryIntro = true;
               }
             } else if (humanWon) {
-              addStoryXp(room, bossKillXp(room.storyStage)); // storyStage still holds the just-cleared stage here
+              // Boss kills are a SHARED objective — both allies fought the same 3-round series,
+              // so both are paid, unlike wave mobs which go to the individual killer. Awarding
+              // it on last-hit instead would swing a whole level on an arbitrary final bullet.
+              // storyStage still holds the just-cleared stage here.
+              for (const pl of room.players.values()) addStoryXp(pl, bossKillXp(room.storyStage));
               if (room.storyStage < STORY_BOSSES.length) {
                 // Just cleared a boss and more stages remain — insert the grunt wave
                 // mini-game before the next boss ("ボス→ミニゲーム→ボス…") instead of
@@ -2392,8 +2421,7 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
               // "retry" path is a fresh connection (see storyRetryBtn), but handle an
               // in-room rematch gracefully too rather than leaving story state stuck.
               room.storyStage = 1;
-              room.storyLevel = 1;
-              room.storyXp = 0;
+              resetStoryProgress(room);
               if (cpuPlayer) {
                 cpuPlayer.name = bossNameForStage(1);
                 cpuPlayer.line = bossLineForStage(1);

@@ -297,7 +297,10 @@
 <div id="game" class="screen hidden">
   <div class="hud">
     <div class="hp-block">
-      <div class="pname"><span id="nameMine">あなた</span><span class="downed-badge hidden" id="downedMine">💀戦闘不能</span></div>
+      <!-- lv-badge: per-player story level, shown only in 2P co-op (1P keeps the single
+           centre ⭐Lv label instead — one human means one level, so two places to read it
+           would just be noise). -->
+      <div class="pname"><span id="nameMine">あなた</span><span class="lv-badge hidden" id="lvMine"></span><span class="downed-badge hidden" id="downedMine">💀戦闘不能</span></div>
       <div class="hp-bar-bg"><div class="hp-bar-fill color-me" id="hpMine" style="width:100%"></div><div class="hp-bar-bonus" id="hpBonusMine"></div></div>
       <div class="buff-row" id="buffMine"></div>
       <div class="bomb-status hidden" id="bombStatus">💣 所持数 <span id="bombStatusCount">0</span></div>
@@ -314,7 +317,10 @@
          request); the boss's own bar moves to the bottom row below. Color class is set in
          JS (color-boss / color-ally) since which one this slot represents varies by mode. -->
     <div class="hp-block" style="text-align:right" id="hpBlockTheirs">
-      <div class="pname"><span id="nameTheirs">相手</span><span class="downed-badge hidden" id="downedTheirs">💀戦闘不能</span></div>
+      <!-- Lv badge sits BEFORE the name here, unlike the left block: this block is right-aligned,
+           so anything appended after the name grows toward the screen edge and slides under the
+           mute button. Putting it first keeps the name ending exactly where it always did. -->
+      <div class="pname"><span class="lv-badge lv-badge-left hidden" id="lvTheirs"></span><span id="nameTheirs">相手</span><span class="downed-badge hidden" id="downedTheirs">💀戦闘不能</span></div>
       <div class="hp-bar-bg"><div class="hp-bar-fill" id="hpTheirs" style="width:100%"></div><div class="hp-bar-bonus" id="hpBonusTheirs"></div></div>
       <div class="buff-row buff-row-right" id="buffTheirs"></div>
     </div>

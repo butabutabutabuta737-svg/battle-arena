@@ -122,6 +122,8 @@
   const buffAlly = $('#buffAlly');
   const downedMine = $('#downedMine');
   const downedTheirs = $('#downedTheirs');
+  const lvMine = $('#lvMine');
+  const lvTheirs = $('#lvTheirs');
   const downedBanner = $('#downedBanner');
   const bombControls = $('.bomb-controls');
   const placeBombBtn = $('#placeBombBtn');
@@ -1480,12 +1482,17 @@
       // resyncs lastStoryLevel either way (up with a toast, or silently down on a story
       // restart) so a later re-level-up after a restart isn't suppressed by a stale high
       // watermark from the previous run.
-      if (typeof state.storyLevel === 'number') {
-        if (state.storyLevel > lastStoryLevel) {
-          showLevelUpToast(state.storyLevel);
+      // Levels are per player now (see game.js's addStoryXp), so this watches MY OWN level off
+      // the players array rather than a room-wide field. The toast/fanfare deliberately fires
+      // only for my own level-up — in co-op an ally levelling is their moment, and firing the
+      // full-screen toast for both would mean interruptions I didn't earn.
+      const meForLevel = state.players.find((p) => p.id === myId);
+      if (meForLevel && typeof meForLevel.storyLevel === 'number') {
+        if (meForLevel.storyLevel > lastStoryLevel) {
+          showLevelUpToast(meForLevel.storyLevel);
           if (audio) audio.playLevelUp();
         }
-        lastStoryLevel = state.storyLevel;
+        lastStoryLevel = meForLevel.storyLevel;
       }
     }
 
@@ -2994,6 +3001,17 @@
     }
   }
 
+  // `level` null/undefined hides the badge entirely — used for the boss slot (bosses have no
+  // level at all) and for every non-co-op mode.
+  function setLvBadge(el, level) {
+    if (typeof level !== 'number') {
+      el.classList.add('hidden');
+      return;
+    }
+    el.textContent = `⭐Lv.${level}`;
+    el.classList.remove('hidden');
+  }
+
   function renderBuffBadges(container, player) {
     if (!player || !player.buffs) {
       container.innerHTML = '';
@@ -3166,6 +3184,13 @@
     // relabeling it, per explicit request. Only applies where this slot actually shows the
     // boss: in 2P co-op, hpTheirs shows the ally (a human teammate), who stays relevant.
     hpBlockTheirs.classList.toggle('hidden', !isCoop && !!state.mobWaveActive);
+    // Per-player level badges beside each human's name. Only in co-op: with two allies levelling
+    // independently there is no single "the level" to show, and a lone centre number would be
+    // ambiguous about whose it is. In 1P the centre ⭐Lv label below stays the one place to read
+    // it, exactly as before.
+    const showLvBadges = isCpuMatch && isCoop;
+    setLvBadge(lvMine, showLvBadges && me ? me.storyLevel : null);
+    setLvBadge(lvTheirs, showLvBadges && topRight && !topRight.isBoss ? topRight.storyLevel : null);
     renderBuffBadges(buffMine, me);
     renderBuffBadges(buffTheirs, topRight);
 
@@ -3213,8 +3238,11 @@
     } else {
       mobWaveLabel.classList.add('hidden');
     }
-    if (isCpuMatch && typeof state.storyLevel === 'number') {
-      levelLabel.textContent = `⭐ Lv.${state.storyLevel}`;
+    // 1P only: reads MY level off the players array (levels are per player now — there is no
+    // room-wide state.storyLevel any more). In co-op this stays hidden and the two per-name
+    // badges above carry it instead.
+    if (isCpuMatch && !isCoop && me && typeof me.storyLevel === 'number') {
+      levelLabel.textContent = `⭐ Lv.${me.storyLevel}`;
       levelLabel.classList.remove('hidden');
     } else {
       levelLabel.classList.add('hidden');
