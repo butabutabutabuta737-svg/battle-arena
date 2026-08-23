@@ -645,7 +645,7 @@ function fireLaser(room, shooterWs, shooter, now, originX, originY) {
   }
 
   if (hitTarget) {
-    const atkMult = shooterWs === room.cpuToken ? cpuAttackMult(room) : 1;
+    const atkMult = isBossWs(room, shooterWs) ? cpuAttackMult(room, shooter) : 1;
     applyDamage(room, hitTargetWs, hitTarget, LASER_DAMAGE * atkMult, now);
   } else if (hitMonster) {
     hitMonster.hp -= LASER_DAMAGE;
@@ -676,7 +676,7 @@ function attemptFire(room, ws, p, now) {
   // overridden: Math.min so a genuinely-held rapid buff on top can never come out slower than
   // this floor. Note the stage-5 boss already had fireChance 1.0 (it always *wants* to shoot),
   // so the cooldown was the only thing actually rate-limiting it.
-  const isAlwaysRapidBoss = ws === room.cpuToken && (room.exBossActive || room.storyStage === STORY_BOSSES.length);
+  const isAlwaysRapidBoss = isBossWs(room, ws) && (room.exBossActive || p.bossIndex >= STORY_BOSSES.length || room.storyStage === STORY_BOSSES.length);
   const rapidCooldown = BASE_FIRE_COOLDOWN_MS / RAPID_BUFF_DIVISOR;
   const fireCooldown = Math.min(
     buffs && now < buffs.rapid ? rapidCooldown : BASE_FIRE_COOLDOWN_MS,
@@ -689,13 +689,13 @@ function attemptFire(room, ws, p, now) {
   // shrink anything back down; in practice the two never stack to more than BIG_BULLET_MULT
   // itself since neither multiplier ever exceeds it, but max is the correct, obviously-safe
   // combination regardless.
-  const isExShooter = room.exBossActive && ws === room.cpuToken;
+  const isExShooter = isBossWs(room, ws) && (room.exBossActive || p.bossIndex === STORY_BOSSES.length + 1);
   const bigMult = Math.max(
     buffs && now < buffs.big ? BIG_BULLET_MULT : 1,
     isExShooter ? BIG_BULLET_MULT : 1
   );
   const laserActive = buffs && now < buffs.laser;
-  const atkMult = ws === room.cpuToken ? cpuAttackMult(room) : 1;
+  const atkMult = isBossWs(room, ws) ? cpuAttackMult(room, p) : 1;
 
   const last = room.lastFire.get(ws) || 0;
   if (laserActive) {
@@ -816,7 +816,7 @@ function attemptSword(room, ws, p, now) {
 
     room.swordSwings.push({ ownerId: p.id, x: origin.x, y: origin.y, angle: p.angle, hit: !!(hitTarget || hitMonster || hitBlock), range });
     if (hitTarget) {
-      const atkMult = ws === room.cpuToken ? cpuAttackMult(room) * cpuSwordMult(room) : 1;
+      const atkMult = isBossWs(room, ws) ? cpuAttackMult(room, p) * cpuSwordMult(room, p) : 1;
       applyDamage(room, hitTargetWs, hitTarget, SWORD_DAMAGE * atkMult, now);
     } else if (hitMonster) { hitMonster.hp -= SWORD_DAMAGE; hitMonster.lastHitById = p.id; }
     else if (hitBlock) hitBlock.hp -= SWORD_DAMAGE;
@@ -828,8 +828,10 @@ function attemptSword(room, ws, p, now) {
 // Also instantly destroys any destructible block caught in the blast, regardless of its
 // remaining hp — a bomb is a lot more powerful than a single bullet, so no partial damage.
 function explodeBomb(room, bomb, now) {
-  const cpuPlayer = room.isCpuMatch ? room.players.get(room.cpuToken) : null;
-  const isCpuBomb = cpuPlayer && bomb.ownerId === cpuPlayer.id;
+  // Any of the room's bosses could have placed this, not just the first one — matching on a
+  // single cpuPlayer would have made the second hard-mode boss's bombs deal unscaled damage.
+  const bombOwnerBoss = room.isCpuMatch ? bossPlayers(room).find((b) => b.id === bomb.ownerId) : null;
+  const isCpuBomb = !!bombOwnerBoss;
   for (const [pws, pl] of room.players) {
     if (!pl.alive) continue;
     const isSelf = pl.id === bomb.ownerId;
@@ -844,7 +846,7 @@ function explodeBomb(room, bomb, now) {
     if (d < BOMB_RADIUS + PLAYER_RADIUS) {
       // Only the boss's outgoing blast against the human is scaled — a boss caught in its
       // own bomb (pws === room.cpuToken) still takes the full hit, same as always.
-      const dmg = isCpuBomb && pws !== room.cpuToken ? BOMB_DAMAGE * cpuAttackMult(room) : BOMB_DAMAGE;
+      const dmg = isCpuBomb && !isBossWs(room, pws) ? BOMB_DAMAGE * cpuAttackMult(room, bombOwnerBoss) : BOMB_DAMAGE;
       applyDamage(room, pws, pl, dmg, now);
     }
   }
@@ -967,18 +969,90 @@ function bossNameForStage(stage) {
   return `${s}面ボス「${STORY_BOSSES[s - 1].name}」`;
 }
 
+// ---- Hard mode ----------------------------------------------------------------------------
+// Unlocked once the player has beaten the hidden EX boss (the client gates the button on its
+// own localStorage record and passes ?hard=1; the server just honours the flag). Three stages,
+// each a SIMULTANEOUS two-boss fight, at each boss's normal HP — no scaling, per explicit
+// request, so a hard stage is roughly double the health and double the incoming fire.
+// Boss index 1-5 are the numbered STORY_BOSSES; index 6 is the EX boss, which is why every
+// lookup below goes through bossSpec() rather than indexing STORY_BOSSES directly.
+const HARD_STAGES = [[1, 2], [3, 4], [5, 6]];
+const HARD_MOB_WAVE_COUNT = 20; // vs MOB_WAVE_COUNT (10) in the normal campaign, per explicit request
+const HARD_STAGE_LINES = [
+  '２人がかりとは、ずいぶんと舐められたものだな――いや、逆か。ここからは、そういう戦場だ。',
+  '前も後ろも敵だ。悲鳴を上げる暇があるなら、引き金を引け。',
+  'この戦場を創った者と、支配した者。その両方が、いま貴様の前に立っている。',
+];
+const HARD_STAGE_DEFEAT_LINES = [
+  'ば……馬鹿な……二人がかりで……押し負けるだと……!?',
+  'こんな……こんな human 一人に……我々の連携が……!',
+  'そうか……これが、貴様の選んだ答えか……。ならば持っていけ、この戦場のすべてを――。',
+];
+// The whole per-boss identity in one place: index 1-5 from STORY_BOSSES, 6 = the EX boss.
+// Used by hard mode (which mixes numbered bosses and the EX boss freely in one fight) and by
+// the AI, which now needs each boss's own cfg rather than one room-wide "current stage" cfg.
+function bossSpec(index, coop) {
+  const i = Math.min(Math.max(1, index || 1), STORY_BOSSES.length + 1);
+  if (i === STORY_BOSSES.length + 1) {
+    return { index: i, isEx: true, name: EX_BOSS.name, line: EX_BOSS.line, defeatLine: EX_BOSS.defeatLine, hp: EX_BOSS_HP, cfg: EX_BOSS };
+  }
+  const table = coop ? STORY_BOSSES_2P : STORY_BOSSES;
+  return {
+    index: i,
+    isEx: false,
+    name: bossNameForStage(i),
+    line: STORY_BOSSES[i - 1].line,
+    defeatLine: STORY_BOSSES[i - 1].defeatLine,
+    hp: STORY_BOSS_HP[i - 1],
+    cfg: table[i - 1],
+  };
+}
+// Which boss indices should be alive right now. Normal mode: exactly one (the current stage, or
+// the EX boss once it's active). Hard mode: the pair for the current hard stage.
+function bossIndicesFor(room) {
+  if (room.hardMode) return HARD_STAGES[Math.min(Math.max(1, room.storyStage || 1), HARD_STAGES.length) - 1];
+  if (room.exBossActive) return [STORY_BOSSES.length + 1];
+  return [Math.min(Math.max(1, room.storyStage || 1), STORY_BOSSES.length)];
+}
+function hardStageCount() { return HARD_STAGES.length; }
+function mobWaveTarget(room) { return room.hardMode ? HARD_MOB_WAVE_COUNT : MOB_WAVE_COUNT; }
+// True for any of the room's boss connections. Replaces the old `ws === room.cpuToken` identity
+// test, which silently only ever recognised the FIRST boss once a room could hold two.
+function isBossWs(room, ws) {
+  return !!room.cpuTokens && room.cpuTokens.includes(ws);
+}
+function bossPlayers(room) {
+  return [...room.players.values()].filter((p) => p.isBoss);
+}
+// How many connections a fully-populated room of this type holds: humans + however many bosses
+// the current mode fields. Every "is the room full / still intact" test goes through this, since
+// the old hardcoded `storyCoop ? 3 : 2` is simply wrong once a stage can field two bosses.
+function humanTarget(room) {
+  return room.storyCoop ? 2 : 1;
+}
+function expectedRoomSize(room) {
+  if (!room.isCpuMatch) return 2; // arena PvP
+  return humanTarget(room) + bossIndicesFor(room).length;
+}
+
 // 1 outside story mode (or for the human's own attacks); the current stage boss's atkMult
 // when the attacker is the CPU — the single point every CPU-dealt-damage site reads from.
-function cpuAttackMult(room) {
+// `bossPlayer` is optional and only matters in hard mode, where two DIFFERENT bosses are alive
+// at once and each must hit for its own strength — reading a single room-wide "current stage"
+// multiplier there would give both bosses the same (wrong) damage. Normal mode passes nothing
+// and keeps the exact previous behaviour.
+function cpuAttackMult(room, bossPlayer) {
   if (!room.isCpuMatch) return 1;
+  if (bossPlayer && bossPlayer.bossIndex) return bossSpec(bossPlayer.bossIndex, room.storyCoop).cfg.atkMult;
   if (room.exBossActive) return EX_BOSS.atkMult;
   const s = Math.min(Math.max(1, room.storyStage || 1), STORY_BOSSES.length);
   return STORY_BOSSES[s - 1].atkMult;
 }
 
 // Same idea as cpuAttackMult but for the sword-specific bonus (stage 4's knife specialist).
-function cpuSwordMult(room) {
+function cpuSwordMult(room, bossPlayer) {
   if (!room.isCpuMatch) return 1;
+  if (bossPlayer && bossPlayer.bossIndex) return bossSpec(bossPlayer.bossIndex, room.storyCoop).cfg.swordMult;
   if (room.exBossActive) return EX_BOSS.swordMult;
   const s = Math.min(Math.max(1, room.storyStage || 1), STORY_BOSSES.length);
   return STORY_BOSSES[s - 1].swordMult;
@@ -994,25 +1068,25 @@ function bossDefeatLineForStage(stage) {
   return STORY_BOSSES[s - 1].defeatLine;
 }
 
-function addCpuPlayer(room, stage) {
-  const s = Math.min(Math.max(1, stage || 1), STORY_BOSSES.length);
+// Adds ONE boss by its index (1-5 = numbered stage bosses, 6 = the EX boss). `slot` shifts its
+// spawn point so a hard-mode pair doesn't stack on the same spot.
+function addBossByIndex(room, index, slot) {
+  const spec = bossSpec(index, room.storyCoop);
   const cpuToken = { cpu: true };
-  const idx = room.players.size;
-  const sp = getSpawnPoints(room)[idx] || { x: ARENA_W - 120, y: ARENA_H / 2 };
-  // Same per-stage HP for 1P and 2P alike now (STORY_BOSS_HP) — maxHp is tracked per-player
-  // (not just the flat MAX_HP constant) so resetPositions()/the heal item/house-heal caps all
-  // respect it instead of clamping a boosted-HP boss back down to the flat 100.
-  const maxHp = STORY_BOSS_HP[s - 1];
+  const points = getSpawnPoints(room);
+  const base = points[points.length - 1] || { x: ARENA_W - 120, y: ARENA_H / 2 };
+  const sp = (slot || 0) === 0 ? base : { x: base.x, y: Math.max(90, Math.min(ARENA_H - 90, base.y + (slot % 2 === 1 ? -170 : 170))) };
   const player = {
     id: 'cpu-' + Math.random().toString(36).slice(2, 8),
-    name: bossNameForStage(s),
-    line: bossLineForStage(s),
-    defeatLine: bossDefeatLineForStage(s),
+    name: spec.name,
+    line: spec.line,
+    defeatLine: spec.defeatLine,
+    bossIndex: spec.index, // every per-boss lookup (AI cfg, damage mults, EX-only bullet rules) keys off this
     x: sp.x,
     y: sp.y,
     angle: 0,
-    hp: maxHp,
-    maxHp,
+    hp: spec.hp,
+    maxHp: spec.hp,
     isBoss: true,
     alive: true,
     bombs: 0,
@@ -1021,20 +1095,66 @@ function addCpuPlayer(room, stage) {
   room.players.set(cpuToken, player);
   room.inputs.set(cpuToken, { up: false, down: false, left: false, right: false, angle: 0, shooting: false, swording: false });
   room.buffs.set(cpuToken, freshBuffs());
+  room.cpuTokens.push(cpuToken);
+  if (!room.cpuToken) room.cpuToken = cpuToken; // primary boss, kept for the single-boss paths
+  room.cpuStates.set(cpuToken, null);
+  return cpuToken;
+}
+
+// Removes every boss currently in the room. Used whenever the boss line-up has to change (a
+// stage transition, a hard-mode pair swap) — rebuilding is far safer than mutating identities
+// in place now that a room can hold two of them.
+function removeAllBosses(room) {
+  for (const token of room.cpuTokens || []) {
+    room.players.delete(token);
+    room.inputs.delete(token);
+    room.lastFire.delete(token);
+    room.buffs.delete(token);
+    if (room.cpuStates) room.cpuStates.delete(token);
+  }
+  room.cpuTokens = [];
+  room.cpuToken = null;
+}
+
+// Rebuilds the room's boss line-up to whatever the current stage calls for (one boss normally,
+// a pair in hard mode). Replaces the old "rename the single cpuPlayer in place" approach, which
+// cannot express a stage whose boss COUNT differs from the last one's.
+function syncBosses(room) {
+  removeAllBosses(room);
+  const indices = bossIndicesFor(room);
+  indices.forEach((idx, i) => addBossByIndex(room, idx, i));
   room.isCpuMatch = true;
-  room.cpuToken = cpuToken;
+  if (room.hardMode) {
+    // A hard stage is a PAIR, so its dialogue belongs to the encounter rather than to either
+    // boss individually: the lead boss carries the stage's taunt and the partner carries the
+    // stage's defeat line, so the intro and the defeat card each read as one scene.
+    const hs = Math.min(Math.max(1, room.storyStage || 1), HARD_STAGES.length) - 1;
+    const bosses = bossPlayers(room);
+    if (bosses[0]) bosses[0].line = HARD_STAGE_LINES[hs];
+    const last = bosses[bosses.length - 1];
+    if (last) last.defeatLine = HARD_STAGE_DEFEAT_LINES[hs];
+  }
+}
+
+function addCpuPlayer(room, stage) {
+  const s = Math.min(Math.max(1, stage || 1), room.hardMode ? HARD_STAGES.length : STORY_BOSSES.length);
+  room.isCpuMatch = true;
   room.storyStage = s;
-  room.cpuState = null;
+  syncBosses(room);
   room.pendingStoryIntro = true; // consumed by the next startCountdown() — see its comment
 }
 
+// Dispatcher: a room can now hold more than one boss (hard mode's pairs), so each one is
+// stepped independently with its own scratch state. Normal mode has exactly one entry here and
+// behaves precisely as before.
 function updateCpuAI(room, now) {
-  // The 2-human co-op story mode needs genuinely different targeting (pick between two
-  // allies) and gets its own dedicated function below rather than being folded into this
-  // one — keeps every line below completely untouched for the existing 1P/EX-boss path.
-  if (room.storyCoop) return updateCpuAICoop(room, now);
+  for (const token of room.cpuTokens) {
+    if (room.storyCoop) updateCpuAICoop(room, now, token);
+    else updateCpuAIOne(room, now, token);
+  }
+}
 
-  const cpuToken = room.cpuToken;
+function updateCpuAIOne(room, now, cpuToken) {
   const cpu = room.players.get(cpuToken);
   const inp = room.inputs.get(cpuToken);
   if (!cpu || !inp) return;
@@ -1061,9 +1181,12 @@ function updateCpuAI(room, now) {
     return;
   }
 
-  const cfg = room.exBossActive ? EX_BOSS : STORY_BOSSES[Math.min(Math.max(1, room.storyStage || 1), STORY_BOSSES.length) - 1];
-  if (!room.cpuState) {
-    room.cpuState = {
+  // Per-boss cfg (via cpu.bossIndex) rather than one room-wide "current stage" lookup: hard
+  // mode has two different bosses alive at once and each must behave as itself.
+  const cfg = cpu.bossIndex ? bossSpec(cpu.bossIndex, false).cfg
+    : (room.exBossActive ? EX_BOSS : STORY_BOSSES[Math.min(Math.max(1, room.storyStage || 1), STORY_BOSSES.length) - 1]);
+  if (!room.cpuStates.get(cpuToken)) {
+    room.cpuStates.set(cpuToken, {
       lastDecisionAt: 0,
       targetDx: 0,
       targetDy: 0,
@@ -1071,9 +1194,9 @@ function updateCpuAI(room, now) {
       firing: false,
       strafeSign: Math.random() < 0.5 ? 1 : -1,
       lastPos: { x: cpu.x, y: cpu.y },
-    };
+    });
   }
-  const st = room.cpuState;
+  const st = room.cpuStates.get(cpuToken);
 
   if (now - st.lastDecisionAt >= cfg.reactionMs) {
     st.lastDecisionAt = now;
@@ -1219,8 +1342,7 @@ function updateCpuAI(room, now) {
 // omniscience). The locked-on ally persists between decision ticks — re-rolled only on each
 // decision (or immediately if it died) — so the boss doesn't visibly flicker its aim between
 // two targets every reactionMs.
-function updateCpuAICoop(room, now) {
-  const cpuToken = room.cpuToken;
+function updateCpuAICoop(room, now, cpuToken) {
   const cpu = room.players.get(cpuToken);
   const inp = room.inputs.get(cpuToken);
   if (!cpu || !inp) return;
@@ -1245,9 +1367,12 @@ function updateCpuAICoop(room, now) {
     return;
   }
 
-  const cfg = STORY_BOSSES_2P[Math.min(Math.max(1, room.storyStage || 1), STORY_BOSSES_2P.length) - 1];
-  if (!room.cpuState) {
-    room.cpuState = {
+  // Per-boss cfg, same reason as the 1P path — and the co-op tuning table only covers the five
+  // numbered bosses, so the EX boss (hard stage 3's partner) falls back to its own cfg.
+  const cfg = cpu.bossIndex ? bossSpec(cpu.bossIndex, true).cfg
+    : STORY_BOSSES_2P[Math.min(Math.max(1, room.storyStage || 1), STORY_BOSSES_2P.length) - 1];
+  if (!room.cpuStates.get(cpuToken)) {
+    room.cpuStates.set(cpuToken, {
       lastDecisionAt: 0,
       targetDx: 0,
       targetDy: 0,
@@ -1256,9 +1381,9 @@ function updateCpuAICoop(room, now) {
       strafeSign: Math.random() < 0.5 ? 1 : -1,
       lastPos: { x: cpu.x, y: cpu.y },
       targetAllyId: null,
-    };
+    });
   }
-  const st = room.cpuState;
+  const st = room.cpuStates.get(cpuToken);
   let human = allies.find((p) => p.id === st.targetAllyId);
 
   if (now - st.lastDecisionAt >= cfg.reactionMs) {
@@ -1421,7 +1546,10 @@ function getRoom(id) {
       nextMonsterSpawnAt: 0,
       monsterAttacks: [],
       isCpuMatch: false,
-      cpuToken: null,
+      cpuToken: null, // primary boss (hard mode's first of the pair) — single-boss paths still read this
+      cpuTokens: [], // EVERY boss connection; hard mode holds two at once
+      cpuStates: new Map(), // per-boss AI scratch state, keyed by token (was one room-wide cpuState)
+      hardMode: false,
       storyStage: 1,
       storyComplete: false,
       exBossActive: false,
@@ -1473,8 +1601,20 @@ function gnow(room) {
 function resetPositions(room) {
   const arr = [...room.players.values()];
   const spawnPoints = getSpawnPoints(room);
+  // Bosses are placed off the LAST spawn point rather than by raw index: getSpawnPoints only
+  // ever defines one boss-side position, so a hard-mode pair would otherwise both be handed the
+  // same coordinates (or, worse, an ally's) and start the round stacked on top of each other.
+  let bossSlot = 0;
   arr.forEach((p, idx) => {
-    const sp = spawnPoints[idx] || spawnPoints[spawnPoints.length - 1];
+    let sp;
+    if (p.isBoss) {
+      const base = spawnPoints[spawnPoints.length - 1];
+      const offset = bossSlot === 0 ? 0 : (bossSlot % 2 === 1 ? -170 : 170);
+      sp = { x: base.x, y: Math.max(90, Math.min(ARENA_H - 90, base.y + offset)) };
+      bossSlot++;
+    } else {
+      sp = spawnPoints[idx] || spawnPoints[spawnPoints.length - 1];
+    }
     p.x = sp.x;
     p.y = sp.y;
     // Story-mode leveling only ever grants a max-HP bonus, and only to the human player(s) —
@@ -1980,7 +2120,7 @@ function tick(room) {
       spawnMonster(room);
       room.nextMonsterSpawnAt = now + MONSTER_SPAWN_MIN_MS + Math.random() * (MONSTER_SPAWN_MAX_MS - MONSTER_SPAWN_MIN_MS);
     }
-    if (room.mobWaveActive && room.mobWaveSpawned < MOB_WAVE_COUNT && now >= room.mobWaveNextSpawnAt) {
+    if (room.mobWaveActive && room.mobWaveSpawned < mobWaveTarget(room) && now >= room.mobWaveNextSpawnAt) {
       spawnWaveMob(room);
       room.mobWaveNextSpawnAt = now + MOB_WAVE_SPAWN_INTERVAL_MS;
     }
@@ -2045,7 +2185,7 @@ function tick(room) {
       const boss = allPlayers.find((pl) => pl.isBoss);
       const humans = allPlayers.filter((pl) => !pl.isBoss);
       const humansDead = humans.length > 0 && humans.every((pl) => !pl.alive);
-      const waveCleared = room.mobWaveSpawned >= MOB_WAVE_COUNT && room.monsters.filter((m) => m.wave).length === 0;
+      const waveCleared = room.mobWaveSpawned >= mobWaveTarget(room) && room.monsters.filter((m) => m.wave).length === 0;
       if (humansDead) {
         room.phase = 'finished';
         room.winnerId = boss ? boss.id : null;
@@ -2058,15 +2198,22 @@ function tick(room) {
         room.matchOver = true;
         room.matchWinnerId = rep ? rep.id : null;
       }
-    } else if (room.storyCoop) {
-      // 3-player win condition: the round ends when either the whole boss side or the
-      // whole ally side is wiped out — "the other 2 total players, one of them dead" no
-      // longer uniquely identifies a winner once there are 3 players in the room, so this
+    } else if (room.isCpuMatch) {
+      // Side-based win condition, now used for EVERY story room (1P included), not just co-op.
+      // The old 1P path in the else branch below asked "are there exactly 2 players and is one
+      // of them dead", which silently stops being true the moment a room holds two bosses —
+      // a hard-mode round would have ended the instant the FIRST boss fell. Side-based is
+      // correct for 1-vs-1, 2-vs-1 and 1-vs-2 alike, and it already uses the same stable
+      // 'ally'/'boss' tally keys the 1P client reads.
+      // Round ends when either the whole boss side or the whole ally side is wiped out — "the
+      // other 2 total players, one of them dead" no longer uniquely identifies a winner, so this
       // is a genuinely separate check from the else branch below, not a tweak to it.
       const allPlayers = [...room.players.values()];
-      const boss = allPlayers.find((pl) => pl.isBoss);
+      const bosses = allPlayers.filter((pl) => pl.isBoss);
+      const boss = bosses[0];
       const allies = allPlayers.filter((pl) => !pl.isBoss);
-      const bossDead = boss && !boss.alive;
+      // EVERY boss must fall, not just the first one — hard mode fields two at once.
+      const bossDead = bosses.length > 0 && bosses.every((pl) => !pl.alive);
       const alliesDead = allies.length > 0 && allies.every((pl) => !pl.alive);
       if (bossDead || alliesDead) {
         room.phase = 'finished';
@@ -2195,13 +2342,14 @@ function broadcastState(room) {
     rouletteResult: room.rouletteResult,
     isCpuMatch: room.isCpuMatch,
     storyStage: room.storyStage,
-    storyStageCount: STORY_BOSSES.length,
+    storyStageCount: room.hardMode ? hardStageCount() : STORY_BOSSES.length,
+    hardMode: room.hardMode,
     storyComplete: room.storyComplete,
     exBossActive: room.exBossActive,
     storyCoop: room.storyCoop,
     mobWaveActive: room.mobWaveActive,
     mobWaveIndex: room.mobWaveIndex,
-    mobWaveCount: MOB_WAVE_COUNT,
+    mobWaveCount: mobWaveTarget(room),
     mobWaveSpawned: room.mobWaveSpawned,
     mobWaveKilled: room.mobWaveKilled,
     // Level/XP now ride on each player object (see addStoryXp) and reach the client through the
@@ -2214,7 +2362,7 @@ function broadcastState(room) {
   }
 }
 
-function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
+function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop, wantsHard) {
   const room = getRoom(roomId);
   // A player is (re)joining — cancel any pending grace-period teardown from a previous
   // occupant's disconnect (see EMPTY_ROOM_GRACE_MS) so this room doesn't get deleted out
@@ -2226,10 +2374,17 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
   // Decided once, by the very first joiner, same pattern as rouletteEnabled below — must
   // happen before the capacity check right after it, since that check needs to already know
   // whether this room targets 2 players (arena/1P story) or 3 (2-human co-op story).
-  if (room.players.size === 0 && wantsStoryCpu && wantsCoop) {
-    room.storyCoop = true;
+  if (room.players.size === 0 && wantsStoryCpu) {
+    if (wantsCoop) room.storyCoop = true;
+    // Hard mode is a room-level rule fixed by its creator, same as co-op and the roulette.
+    if (wantsHard) room.hardMode = true;
   }
-  const maxPlayers = room.storyCoop ? 3 : 2;
+  // NOT expectedRoomSize() here: that early-returns 2 for a non-CPU room, and room.isCpuMatch is
+  // still false at this point on a brand-new story room (it is only set later, by syncBosses).
+  // Using it here sized a hard room at 2, so the room reached 3 occupants, never equalled
+  // maxPlayers, and sat in 'waiting' forever without ever starting the countdown.
+  const storyRoom = wantsStoryCpu || room.isCpuMatch;
+  const maxPlayers = storyRoom ? humanTarget(room) + bossIndicesFor(room).length : 2;
   if (room.players.size >= maxPlayers) {
     ws.send(JSON.stringify({ type: 'full' }));
     ws.close();
@@ -2269,7 +2424,7 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
   // Non-coop story: the boss is added as soon as the single human joins (unchanged from
   // before). Co-op story: the boss waits until BOTH humans are present, so a room never ends
   // up with just one ally and an already-active boss.
-  const humanTargetForCpu = room.storyCoop ? 2 : 1;
+  const humanTargetForCpu = humanTarget(room);
   if (wantsStoryCpu && room.players.size === humanTargetForCpu) {
     // room.storyStage (not a hardcoded 1) — this same trigger also fires on a RECONNECT: a
     // disconnect mid-fight removes the CPU token too (see the isCpuMatch branch in the 'close'
@@ -2279,20 +2434,10 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
     // stage — a fresh room simply has it at its default 1, so this is a no-op change for that
     // case and a real fix for the reconnect case (was silently restarting the whole campaign
     // from stage 1 every time, per an explicit "reconnecting shouldn't be a do-over" report).
+    // addCpuPlayer -> syncBosses builds the line-up from bossIndicesFor(), which already
+    // accounts for exBossActive and for hard mode's pairs, so a reconnect mid-EX-fight or
+    // mid-hard-stage restores the correct bosses with no special-casing here any more.
     addCpuPlayer(room, room.storyStage);
-    // Reconnecting mid-EX-fight needs its identity (and its own EX_BOSS_HP, not whatever
-    // addCpuPlayer() just set it to from STORY_BOSS_HP) re-applied — addCpuPlayer() only knows
-    // about the numbered STORY_BOSSES, not the hidden EX boss.
-    if (room.exBossActive) {
-      const cpuPlayer = room.players.get(room.cpuToken);
-      if (cpuPlayer) {
-        cpuPlayer.name = EX_BOSS.name;
-        cpuPlayer.line = EX_BOSS.line;
-        cpuPlayer.defeatLine = EX_BOSS.defeatLine;
-        cpuPlayer.maxHp = EX_BOSS_HP;
-        cpuPlayer.hp = EX_BOSS_HP;
-      }
-    }
   }
 
   ws.send(JSON.stringify({
@@ -2300,8 +2445,9 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
     id: pid,
     isCpuMatch: room.isCpuMatch,
     storyStage: room.storyStage,
-    storyStageCount: STORY_BOSSES.length,
+    storyStageCount: room.hardMode ? hardStageCount() : STORY_BOSSES.length,
     storyCoop: room.storyCoop,
+    hardMode: room.hardMode,
     rouletteEnabled: room.rouletteEnabled,
     arena: { w: ARENA_W, h: ARENA_H, walls: room.walls, trees: room.trees, houses: room.houses },
   }));
@@ -2366,46 +2512,32 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
         broadcastState(room);
       }
     } else if (data.type === 'rematch') {
-      if (room.phase === 'finished' && room.players.size === (room.storyCoop ? 3 : 2)) {
+      // Expected occupancy now depends on how many bosses this mode fields, not just on whether
+      // it is co-op: hard mode adds a second boss, so a hard co-op room legitimately holds 4.
+      if (room.phase === 'finished' && room.players.size === expectedRoomSize(room)) {
         // A finished match (someone already reached MATCH_WIN_TARGET) starts a brand new
         // best-of series on the next round; otherwise this is just the next round within
         // the current series, so the tally carries forward.
         if (room.matchOver) {
           if (room.isCpuMatch) {
-            const cpuPlayer = room.players.get(room.cpuToken);
-            const humanWon = cpuPlayer && room.matchWinnerId !== cpuPlayer.id;
+            const bossIds = bossPlayers(room).map((b) => b.id);
+            const humanWon = bossIds.length > 0 && !bossIds.includes(room.matchWinnerId);
             if (room.mobWaveActive) {
               // Just finished the grunt wave mini-game (clear or fail) — clear the flag and
               // either advance to the next boss or restart the story from stage 1, mirroring
               // the existing boss-clear/boss-loss branches below exactly.
               room.mobWaveActive = false;
+              // syncBosses() rebuilds the whole line-up from the (new) stage rather than
+              // renaming one boss in place — the old approach cannot express hard mode, where
+              // a stage's boss COUNT and identities both change together.
               if (humanWon) {
                 room.storyStage += 1;
-                if (cpuPlayer) {
-                  cpuPlayer.name = bossNameForStage(room.storyStage);
-                  cpuPlayer.line = bossLineForStage(room.storyStage);
-                  cpuPlayer.defeatLine = bossDefeatLineForStage(room.storyStage);
-                  // Per explicit request ("ボスのHPが少ない") — this rename-in-place never
-                  // touched maxHp/hp, so every boss past stage 1 was silently keeping
-                  // whichever earlier stage's HP the cpu token happened to start with (always
-                  // stage 1's 100, since addCpuPlayer() — the only place that ever set it from
-                  // STORY_BOSS_HP — only runs once per room, at the very first join).
-                  cpuPlayer.maxHp = STORY_BOSS_HP[room.storyStage - 1];
-                  cpuPlayer.hp = cpuPlayer.maxHp;
-                }
-                room.cpuState = null;
+                syncBosses(room);
                 room.pendingStoryIntro = true;
               } else {
                 room.storyStage = 1;
                 resetStoryProgress(room);
-                if (cpuPlayer) {
-                  cpuPlayer.name = bossNameForStage(1);
-                  cpuPlayer.line = bossLineForStage(1);
-                  cpuPlayer.defeatLine = bossDefeatLineForStage(1);
-                  cpuPlayer.maxHp = STORY_BOSS_HP[0];
-                  cpuPlayer.hp = cpuPlayer.maxHp;
-                }
-                room.cpuState = null;
+                syncBosses(room);
                 room.storyComplete = false;
                 room.pendingStoryIntro = true;
               }
@@ -2415,7 +2547,7 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
               // it on last-hit instead would swing a whole level on an arbitrary final bullet.
               // storyStage still holds the just-cleared stage here.
               for (const pl of room.players.values()) addStoryXp(pl, bossKillXp(room.storyStage));
-              if (room.storyStage < STORY_BOSSES.length) {
+              if (room.storyStage < (room.hardMode ? hardStageCount() : STORY_BOSSES.length)) {
                 // Just cleared a boss and more stages remain — insert the grunt wave
                 // mini-game before the next boss ("ボス→ミニゲーム→ボス…") instead of
                 // advancing storyStage immediately; storyStage only advances once the wave
@@ -2436,14 +2568,8 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
               // in-room rematch gracefully too rather than leaving story state stuck.
               room.storyStage = 1;
               resetStoryProgress(room);
-              if (cpuPlayer) {
-                cpuPlayer.name = bossNameForStage(1);
-                cpuPlayer.line = bossLineForStage(1);
-                cpuPlayer.defeatLine = bossDefeatLineForStage(1);
-                cpuPlayer.maxHp = STORY_BOSS_HP[0];
-                cpuPlayer.hp = cpuPlayer.maxHp;
-              }
-              room.cpuState = null;
+              room.exBossActive = false; // a hard run must not carry a stale EX flag into stage 1
+              syncBosses(room);
               room.storyComplete = false;
               room.pendingStoryIntro = true;
             }
@@ -2463,22 +2589,15 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
       // flow never actually gets set server-side here (storyEndingOverlay shows without ever
       // sending 'rematch' — see the client's finalStageClear comment for why). !room.exBossActive
       // guards against a double-send re-triggering this mid-EX-fight.
-      if (room.phase === 'finished' && room.players.size === (room.storyCoop ? 3 : 2) && room.isCpuMatch && room.matchOver
-        && room.storyStage >= STORY_BOSSES.length && !room.exBossActive) {
-        const cpuPlayer = room.players.get(room.cpuToken);
-        const humanWon = cpuPlayer && room.matchWinnerId !== cpuPlayer.id;
+      if (room.phase === 'finished' && room.players.size === expectedRoomSize(room) && room.isCpuMatch && room.matchOver
+        && room.storyStage >= STORY_BOSSES.length && !room.exBossActive && !room.hardMode) {
+        const bossIds = bossPlayers(room).map((b) => b.id);
+        const humanWon = bossIds.length > 0 && !bossIds.includes(room.matchWinnerId);
         if (humanWon) {
           room.exBossActive = true;
-          if (cpuPlayer) {
-            cpuPlayer.name = EX_BOSS.name;
-            cpuPlayer.line = EX_BOSS.line;
-            cpuPlayer.defeatLine = EX_BOSS.defeatLine;
-            // Per explicit request, the EX boss gets its own HP (200) instead of just
-            // inheriting whatever stage 5 last had it at (180, per STORY_BOSS_HP).
-            cpuPlayer.maxHp = EX_BOSS_HP;
-            cpuPlayer.hp = EX_BOSS_HP;
-          }
-          room.cpuState = null;
+          // syncBosses() reads exBossActive via bossIndicesFor() and rebuilds the line-up as
+          // the EX boss (with its own EX_BOSS_HP), replacing the old rename-in-place.
+          syncBosses(room);
           room.storyComplete = false;
           room.matchWins = {};
           room.matchOver = false;
@@ -2499,13 +2618,12 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop) {
     room.inputs.delete(ws);
     room.lastFire.delete(ws);
     room.buffs.delete(ws);
-    if (room.isCpuMatch && room.cpuToken) {
-      // CPU-match rooms are private/single-use — once the human leaves, tear the
-      // whole room down rather than leaving an idle CPU token connected forever.
-      room.players.delete(room.cpuToken);
-      room.inputs.delete(room.cpuToken);
-      room.lastFire.delete(room.cpuToken);
-      room.buffs.delete(room.cpuToken);
+    if (room.isCpuMatch && room.cpuTokens.length) {
+      // CPU-match rooms are private/single-use — once a human leaves, tear the bosses down
+      // rather than leaving idle CPU tokens connected forever. ALL of them, not just the
+      // first: a hard-mode room holds two, and leaving one behind would keep the room
+      // permanently "full" and block the reconnect.
+      removeAllBosses(room);
     }
     if (room.players.size < 2) {
       // A DECIDED match (someone already reached MATCH_WIN_TARGET) must stay decided. This

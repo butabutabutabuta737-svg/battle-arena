@@ -655,6 +655,16 @@ button:active {
   }
 }
 
+/* Wrapper for the bottom HP row. One block normally, two side by side in hard mode — laid out
+   as a row so a pair of boss bars share the width instead of stacking and eating arena height
+   (this row's height is reserved by fitArena(), so growing it directly shrinks the playfield). */
+.ally-hp-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+}
 .ally-hp-block {
   width: 100%;
   max-width: 320px;
@@ -672,7 +682,11 @@ button:active {
    .ally-hp-block class, same specificity as .hp-block's own rule below it — since that rule
    comes later in the file, it won the cascade regardless; the ID selector here guarantees this
    wins no matter the declaration order. */
-#allyHpBlock {
+/* Both bottom blocks: the flex:none reasoning above still applies (they must not stretch to
+   fill leftover space), and it now also keeps a lone boss bar from ballooning to the full row
+   width when it is the only one shown. .ally-hp-row's own max-width per block handles sharing. */
+#allyHpBlock,
+#boss2HpBlock {
   flex: none;
 }
 
@@ -1825,4 +1839,64 @@ button:active {
   color: #ffd9ad;
   font-size: 12px;
   font-weight: 700;
+}
+
+/* ---- Hard mode entry block on the story-intro screen. Only revealed once the hidden EX boss
+   has been beaten (see client.js's exBossDefeated record), so its styling deliberately reads as
+   a reward: warmer, hotter and more emphatic than the normal mode cards above it. ---- */
+.hard-mode-block {
+  margin-top: 18px;
+  padding: 14px 16px 16px;
+  border: 1px solid rgba(255, 122, 74, 0.5);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(70, 24, 14, 0.55), rgba(40, 16, 12, 0.35));
+  box-shadow: 0 0 22px rgba(255, 100, 50, 0.14);
+}
+.hard-mode-title {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: #ff9b6a;
+  margin-bottom: 6px;
+}
+.hard-mode-tag {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 211, 91, 0.5);
+  background: rgba(255, 211, 91, 0.12);
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffd35b;
+  vertical-align: middle;
+}
+.hard-mode-desc {
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: #e6c6ba;
+  margin-bottom: 12px;
+}
+.hard-mode-desc b { color: #ffd0b0; }
+.hard-mode-card {
+  border-color: rgba(255, 122, 74, 0.45);
+}
+.hard-mode-card:hover {
+  border-color: rgba(255, 150, 100, 0.8);
+}
+
+/* Two portraits side by side for a hard-mode boss pair. Each shrinks so the pair occupies the
+   same footprint one portrait used to, keeping this card's height (which has a documented
+   history of overflowing short phones) unchanged. */
+.boss-intro-portrait-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+}
+.boss-intro-portrait-row .boss-intro-portrait:not(.hidden) ~ .boss-intro-portrait:not(.hidden),
+.boss-intro-portrait-row:has(.boss-intro-portrait:nth-of-type(2):not(.hidden)) .boss-intro-portrait {
+  width: 108px;
+  height: 135px;
 }

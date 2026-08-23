@@ -76,7 +76,8 @@ wss.on('connection', (ws, req) => {
   const cpu = url.searchParams.get('cpu');
   const roulette = url.searchParams.get('roulette') === '1';
   const coop = url.searchParams.get('coop') === '1';
-  joinRoom(roomId, ws, name, cpu, roulette, coop);
+  const hard = url.searchParams.get('hard') === '1';
+  joinRoom(roomId, ws, name, cpu, roulette, coop, hard);
 });
 
 server.listen(PORT, '0.0.0.0', () => {

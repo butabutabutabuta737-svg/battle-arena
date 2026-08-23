@@ -76,6 +76,9 @@
   const storyRouletteToggle = $('#storyRouletteToggle');
   const story1pBtn = $('#story1pBtn');
   const story2pBtn = $('#story2pBtn');
+  const hardModeBlock = $('#hardModeBlock');
+  const hard1pBtn = $('#hard1pBtn');
+  const hard2pBtn = $('#hard2pBtn');
   const story2pLobby = $('#story2pLobby');
   const story2pBackBtn = $('#story2pBackBtn');
   const story2pNameInput = $('#story2pNameInput');
@@ -87,12 +90,16 @@
   const storyEndingOverlay = $('#storyEndingOverlay');
   const storyEndingTitleBtn = $('#storyEndingTitleBtn');
   const challengeExBtn = $('#challengeExBtn');
+  const storyEndingTag = $('#storyEndingTag');
+  const storyEndingTitle = $('#storyEndingTitle');
+  const storyEndingText = $('#storyEndingText');
   const trueEndingOverlay = $('#trueEndingOverlay');
   const trueEndingTitleBtn = $('#trueEndingTitleBtn');
   const gameOverOverlay = $('#gameOverOverlay');
   const bossIntroOverlay = $('#bossIntroOverlay');
   const bossIntroStage = $('#bossIntroStage');
   const bossIntroPortrait = $('#bossIntroPortrait');
+  const bossIntroPortrait2 = $('#bossIntroPortrait2');
   const bossIntroName = $('#bossIntroName');
   const bossIntroLine = $('#bossIntroLine');
   const bossIntroRule = $('#bossIntroRule');
@@ -117,6 +124,12 @@
   const buffMine = $('#buffMine');
   const buffTheirs = $('#buffTheirs');
   const allyHpBlock = $('#allyHpBlock');
+  const bottomHpRow = $('#bottomHpRow');
+  const boss2HpBlock = $('#boss2HpBlock');
+  const nameBoss2 = $('#nameBoss2');
+  const hpBoss2 = $('#hpBoss2');
+  const hpBonusBoss2 = $('#hpBonusBoss2');
+  const buffBoss2 = $('#buffBoss2');
   const nameAlly = $('#nameAlly');
   const hpAlly = $('#hpAlly');
   const buffAlly = $('#buffAlly');
@@ -262,8 +275,8 @@
   // Index 6 is the hidden EX boss's tier — only ever displayed once exBossDefeated is true
   // (see below), which itself requires bestBossDefeated===5, so there's no "index 6 with
   // index<5" reachable state to worry about.
-  const CERT_TITLES = ['証明書なし', '1面 撃破証明書', '2面 撃破証明書', '3面 撃破証明書', '4面 撃破証明書', '全ボス撃破証明書', '真・撃破証明書'];
-  const CERT_HONORIFICS = ['', '見習い戦士', '歴戦の戦士', '精鋭の戦士', '血刃を制する者', '戦場の狼', '戦場を統べし者'];
+  const CERT_TITLES = ['証明書なし', '1面 撃破証明書', '2面 撃破証明書', '3面 撃破証明書', '4面 撃破証明書', '全ボス撃破証明書', '真・撃破証明書', '極・双撃破証明書'];
+  const CERT_HONORIFICS = ['', '見習い戦士', '歴戦の戦士', '精鋭の戦士', '血刃を制する者', '戦場の狼', '戦場を統べし者', '双影を断つ者'];
   let bestBossDefeated = 0;
   try { bestBossDefeated = parseInt(localStorage.getItem(CERT_STORAGE_KEY), 10) || 0; } catch (e) { bestBossDefeated = 0; }
 
@@ -310,6 +323,19 @@
     if (exBossDefeated) return;
     exBossDefeated = true;
     try { localStorage.setItem(EX_STORAGE_KEY, '1'); } catch (e) { /* localStorage unavailable — certificate just won't persist */ }
+  }
+
+  // Hard-mode all-clear. Its own record (and its own certificate tier, 7) rather than being
+  // folded into the EX-boss flag: beating the EX boss is what UNLOCKS hard mode, so the two
+  // must stay distinguishable or the certificate would claim a hard clear the moment the EX
+  // boss fell.
+  const HARD_STORAGE_KEY = 'battle-arena-hard-cleared';
+  let hardCleared = false;
+  try { hardCleared = localStorage.getItem(HARD_STORAGE_KEY) === '1'; } catch (e) { hardCleared = false; }
+  function recordHardCleared() {
+    if (hardCleared) return;
+    hardCleared = true;
+    try { localStorage.setItem(HARD_STORAGE_KEY, '1'); } catch (e) { /* same as above */ }
   }
 
   let ws = null;
@@ -598,7 +624,7 @@
     if (ws) { ws.close(); ws = null; }
   }
 
-  function connect(room, name, wantsStoryCpu, roulette, wantsCoop) {
+  function connect(room, name, wantsStoryCpu, roulette, wantsCoop, wantsHard) {
     audioReady();
     if (connectRetryTimer) { clearTimeout(connectRetryTimer); connectRetryTimer = null; }
     connectAttempt = 0;
@@ -606,7 +632,8 @@
     const cpuParam = wantsStoryCpu ? '&cpu=story' : '';
     const rouletteParam = roulette ? '&roulette=1' : '';
     const coopParam = wantsCoop ? '&coop=1' : '';
-    const url = `${proto}://${location.host}/?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}${cpuParam}${rouletteParam}${coopParam}`;
+    const hardParam = wantsHard ? '&hard=1' : '';
+    const url = `${proto}://${location.host}/?room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}${cpuParam}${rouletteParam}${coopParam}${hardParam}`;
     leavingIntentionally = false;
     attemptConnect(url, room);
   }
@@ -830,6 +857,7 @@
     modeSelect.classList.add('hidden');
     storyIntro.classList.remove('hidden');
     renderStorySilhouettes();
+    refreshHardModeUnlock();
   });
 
   storyIntroBackBtn.addEventListener('click', () => {
@@ -906,13 +934,16 @@
     // boss has also fallen (which requires bestBossDefeated===5 already, so this can't be
     // reached "early"). CERT_TITLES/HONORIFICS/certCard's tier class all use this, not
     // bestBossDefeated directly, so the true-ending tier gets its own distinct card styling.
-    const tier = exBossDefeated ? 6 : bestBossDefeated;
+    // Tier 7 = hard mode all-cleared, which sits above the true-ending tier 6 (hard mode is only
+    // unlockable after 6, so this can never be reached early).
+    const tier = hardCleared ? 7 : exBossDefeated ? 6 : bestBossDefeated;
     certCard.className = 'certificate' + (tier > 0 ? ` cert-tier-${tier}` : '');
     certLabel.textContent = CERT_TITLES[tier];
-    certSub.textContent = exBossDefeated ? 'すべてを統べる者を、討った。'
+    certSub.textContent = hardCleared ? 'ハードモード全制覇——二体同時の猛攻を、すべて退けた。'
+      : exBossDefeated ? 'すべてを統べる者を、討った。'
       : bestBossDefeated > 0 ? `あなたは${bestBossDefeated}面のボスまで撃破しました` : 'まずは1面のボスを倒そう';
     certSeal.classList.toggle('visible', bestBossDefeated >= 5);
-    certBossIcon.textContent = exBossDefeated ? '🌌' : bestBossDefeated > 0 ? BOSS_TIER_THEME[bestBossDefeated - 1].icon : '❔';
+    certBossIcon.textContent = hardCleared ? '🔥' : exBossDefeated ? '🌌' : bestBossDefeated > 0 ? BOSS_TIER_THEME[bestBossDefeated - 1].icon : '❔';
     certTitleBadge.textContent = CERT_HONORIFICS[tier];
     certTitleBadge.style.display = tier > 0 ? 'inline-block' : 'none';
     // certSilhouetteEls[0] is stage1's silhouette, so tier (i+1) is unlocked once that
@@ -951,8 +982,42 @@
   // server, see game.js's STORY_BOSSES; portrait from BOSS_TIER_THEME) tinted per stage,
   // then auto-hides itself — doesn't block or delay the actual countdown/round underneath,
   // purely a presentation overlay.
-  function showBossIntro(stage, boss, isEx) {
+  // `partner` is the second boss of a hard-mode pair (null everywhere else): its portrait is
+  // shown alongside the first and both names go on the name line, so the card introduces the
+  // encounter rather than only half of it.
+  function showBossIntro(stage, boss, isEx, partner) {
     introShownForStage = isEx ? 'EX' : stage;
+    // Portrait for a boss is chosen by its OWN index in hard mode (a pair mixes stages, and
+    // stage 3 pairs a numbered boss with the EX boss), not by the stage number.
+    const artFor = (b) => {
+      if (!b) return null;
+      if (b.bossIndex === BOSS_TIER_THEME.length + 1) return { src: 'images/bosses/boss6-face.jpg', pos: 'center top' };
+      const t = BOSS_TIER_THEME[Math.min(Math.max(1, b.bossIndex || stage), BOSS_TIER_THEME.length) - 1];
+      return { src: t.image, pos: t.facePos };
+    };
+    if (partner) {
+      const a1 = artFor(boss);
+      const a2 = artFor(partner);
+      bossIntroOverlay.style.setProperty('--boss-color', '#ff8a5a');
+      bossIntroStage.textContent = `🔥ハード 第${stage}ステージ`;
+      bossIntroPortrait.src = a1.src;
+      bossIntroPortrait.style.objectPosition = a1.pos;
+      bossIntroPortrait2.src = a2.src;
+      bossIntroPortrait2.style.objectPosition = a2.pos;
+      bossIntroPortrait2.classList.remove('hidden');
+      bossIntroName.textContent = `${boss.name} ＆ ${partner.name}`;
+      bossIntroLine.textContent = boss.line ? `「${boss.line}」` : '';
+      bossIntroRule.textContent = `⚔️ ${MATCH_WIN_TARGET}本先取で勝利 ／ 2体とも倒す`;
+      bossIntroOverlay.classList.remove('hidden');
+      fitBossIntroCardSoon(bossIntroOverlay);
+      if (bossIntroHideTimer) clearTimeout(bossIntroHideTimer);
+      bossIntroHideTimer = setTimeout(() => {
+        bossIntroOverlay.classList.add('hidden');
+        bossIntroHideTimer = null;
+      }, 5000);
+      return;
+    }
+    bossIntroPortrait2.classList.add('hidden');
     if (isEx) {
       bossIntroOverlay.style.setProperty('--boss-color', '#ffe9a8');
       bossIntroStage.textContent = 'EX';
@@ -1148,6 +1213,7 @@
   // helper is reused by the game-over "retry" button so losing just restarts cleanly with
   // a brand new room rather than needing any server-side "reset to stage 1" round-trip ----
   function startStoryMode() {
+    hardModeRequested = false; // the normal-mode entry point, and the game-over retry, are never hard
     const name = storyNameInput.value.trim() || 'プレイヤー';
     const room = 'CPU' + randomRoomCode();
     // storyRetryBtn can fire while a previous (just-finished) connection is still open —
@@ -1196,8 +1262,36 @@
       ws = null;
     }
     resetClientState();
-    connect(room, name, true, roulette, true);
+    connect(room, name, true, roulette, true, hardModeRequested);
   }
+
+  // ---- hard mode ----
+  // Unlocked by beating the hidden EX boss, which the client already records in localStorage for
+  // the certificate (exBossDefeated). `hardModeRequested` is what every connect path reads, so
+  // both the 1P button and the 2P lobby flow carry the flag through without separate plumbing.
+  let hardModeRequested = false;
+  function refreshHardModeUnlock() {
+    hardModeBlock.classList.toggle('hidden', !exBossDefeated);
+  }
+  function startHardMode1p() {
+    hardModeRequested = true;
+    const name = storyNameInput.value.trim() || 'プレイヤー';
+    const room = 'HARD' + randomRoomCode();
+    if (ws) { leavingIntentionally = true; ws.close(); ws = null; }
+    resetClientState();
+    connect(room, name, true, storyRouletteToggle.checked, false, true);
+  }
+  hard1pBtn.addEventListener('click', () => { audioReady(); playSelectSfx(); startHardMode1p(); });
+  hard2pBtn.addEventListener('click', () => {
+    audioReady();
+    playSelectSfx();
+    hardModeRequested = true; // consumed by connectStory2p() when the lobby finally connects
+    if (storyNameInput.value.trim() && !story2pNameInput.value.trim()) {
+      story2pNameInput.value = storyNameInput.value;
+    }
+    storyIntro.classList.add('hidden');
+    story2pLobby.classList.remove('hidden');
+  });
   story2pBtn.addEventListener('click', () => {
     audioReady();
     playSelectSfx();
@@ -1470,8 +1564,8 @@
       // whatever numeric stage was last shown) rather than reusing the plain stage number.
       const introKey = state.exBossActive ? 'EX' : state.storyStage;
       if (state.phase === 'countdown' && state.storyStage && !state.mobWaveActive && introKey !== introShownForStage) {
-        const boss = state.players.find((p) => p.isBoss);
-        if (boss) showBossIntro(state.storyStage, boss, state.exBossActive);
+        const bs = state.players.filter((p) => p.isBoss);
+        if (bs[0]) showBossIntro(state.storyStage, bs[0], state.exBossActive, bs[1] || null);
       }
       // Grunt-wave narration — same "fires once per transition, gated by a remembered key"
       // pattern as the boss intro above, keyed by mobWaveIndex instead of storyStage.
@@ -3332,12 +3426,22 @@
       lastArenaFitSignature = arenaFitSignature;
       fitArenaSoon();
     }
-    const boss = isCoop ? state.players.find((p) => p.isBoss) : state.players.find((p) => p.id !== myId);
+    // A hard-mode stage fields TWO bosses at once, so the slots are worked out from the real
+    // boss list rather than from "the one player who isn't me".
+    const bossList = state.players.filter((p) => p.isBoss);
+    const boss = isCoop ? bossList[0] : (bossList[0] || state.players.find((p) => p.id !== myId));
     const ally = isCoop ? state.players.find((p) => p.id !== myId && !p.isBoss) : null;
     // Top row is reserved for the two human players in co-op (per explicit request) — the
     // top-right slot shows the ally there instead of the boss, and the boss's bar moves to
     // the bottom row (allyHpBlock, repurposed — see index.html's comment on it).
-    const topRight = isCoop ? ally : boss;
+    // Layout by mode:
+    //   normal 1P  : me | boss              (bottom row hidden)
+    //   normal 2P  : me | ally              | boss
+    //   hard   1P  : me | boss1             | boss2
+    //   hard   2P  : me | ally              | boss1 + boss2
+    // i.e. the bottom row absorbs whichever bosses the top row has no space for.
+    const topRight = isCoop ? ally : (bossList.length > 1 ? bossList[0] : boss);
+    const bottomBosses = isCoop ? bossList : bossList.slice(1);
 
     if (me) {
       nameMine.textContent = me.name;
@@ -3386,19 +3490,24 @@
 
     // allyHpBlock shows the boss in co-op (see index.html's comment on it) — hidden outside
     // co-op as before, and now also hidden during a wave for the same reason as hpBlockTheirs.
-    allyHpBlock.classList.toggle('hidden', !isCoop || !!state.mobWaveActive);
-    if (isCoop) {
-      if (boss) {
-        nameAlly.textContent = state.mobWaveActive ? 'ザコモンスター討伐中…' : boss.name;
-        renderHpBar(hpAlly, hpBonusAlly, boss);
-        hpAlly.classList.toggle('house-healing', boss.hp < (boss.maxHp || 100) && isInsideAnyHouse(boss.x, boss.y));
-      } else {
-        nameAlly.textContent = '敵を待っています…';
-        hpAlly.style.width = '100%';
-        hpBonusAlly.style.width = '0%';
-      }
-      renderBuffBadges(buffAlly, boss);
-    }
+    // Bottom row: driven by `bottomBosses` (see above) so it holds one boss in 2P co-op, the
+    // second boss in hard 1P, and both of them in hard 2P. Hidden entirely during a mob wave —
+    // the bosses are inert and untargetable then, so their static bars are just noise.
+    const showBottom = bottomBosses.length > 0 && !state.mobWaveActive;
+    bottomHpRow.classList.toggle('hidden', !showBottom);
+    const bottomSlots = [
+      { block: allyHpBlock, name: nameAlly, bar: hpAlly, bonus: hpBonusAlly, buffs: buffAlly },
+      { block: boss2HpBlock, name: nameBoss2, bar: hpBoss2, bonus: hpBonusBoss2, buffs: buffBoss2 },
+    ];
+    bottomSlots.forEach((slot, i) => {
+      const b = showBottom ? bottomBosses[i] : null;
+      slot.block.classList.toggle('hidden', !b);
+      if (!b) { renderBuffBadges(slot.buffs, null); return; }
+      slot.name.textContent = b.name;
+      renderHpBar(slot.bar, slot.bonus, b);
+      slot.bar.classList.toggle('house-healing', b.hp < (b.maxHp || 100) && isInsideAnyHouse(b.x, b.y));
+      renderBuffBadges(slot.buffs, b);
+    });
 
     const wins = state.matchWins || {};
     // CPU matches (1P story and 2P co-op alike) key room.matchWins by the stable 'ally'/'boss'
@@ -3416,7 +3525,9 @@
     // that tally, so hide the badge for the duration instead.
     matchScoreEl.classList.toggle('hidden', !!state.mobWaveActive);
     if (isCpuMatch) {
-      storyStageLabel.textContent = `第${storyStage}面 / 全${storyStageCount}面`;
+      storyStageLabel.textContent = state.hardMode
+        ? `🔥ハード 第${storyStage}/${storyStageCount}ステージ`
+        : `第${storyStage}面 / 全${storyStageCount}面`;
       storyStageLabel.classList.remove('hidden');
     } else {
       storyStageLabel.classList.add('hidden');
@@ -3575,7 +3686,20 @@
           trueEndingOverlay.classList.remove('hidden');
         }
       } else if (finalStageClear) {
-        if (bossVictoryOverlay.classList.contains('hidden')) storyEndingOverlay.classList.remove('hidden');
+        if (bossVictoryOverlay.classList.contains('hidden')) {
+          // Hard mode ends on its own third stage, so it reuses this same overlay with its own
+          // wording — and hides the "go deeper" button, since the EX boss has already been part
+          // of the fight the player just won rather than being something still ahead of them.
+          const isHard = !!state.hardMode;
+          if (isHard) recordHardCleared();
+          storyEndingTag.textContent = isHard ? 'HARD MODE ALL CLEAR' : 'ALL STAGES CLEAR';
+          storyEndingTitle.textContent = isHard ? '🔥 二つの影も、断ち切った' : '🏆 戦場に、静寂が訪れた';
+          storyEndingText.innerHTML = isHard
+            ? '二体同時という理不尽を、三度くぐり抜けた。<br /><br />束になっても届かなかった――そう戦場に刻ませた。<br />もはやこの地に、あなたの前に立てる影はない。'
+            : '立ちはだかった５人の強敵、そのすべてを打ち破った。<br /><br />すべての戦場の敵は、倒した。<br />だが、戦いはまだ終わらない――。';
+          challengeExBtn.classList.toggle('hidden', isHard);
+          storyEndingOverlay.classList.remove('hidden');
+        }
       } else if (waveCleared) {
         // No boss-defeat-quote card plays for a wave-clear (see handleState's guard), so
         // bossPresentationDone flips true right as the "勝利！！" flash itself ends.

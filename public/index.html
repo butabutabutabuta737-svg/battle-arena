@@ -115,6 +115,28 @@
       </button>
     </div>
 
+    <!-- Hard mode. Hidden until the player has beaten the hidden EX boss; the client checks its
+         own localStorage record and only then reveals this block. -->
+    <div class="hard-mode-block hidden" id="hardModeBlock">
+      <div class="hard-mode-title">🔥 ハードモード <span class="hard-mode-tag">解放済み</span></div>
+      <div class="hard-mode-desc">
+        全3ステージ。各ステージで<b>ボスが2体同時</b>に襲いかかる（1面＋2面 → 3面＋4面 → 5面＋戦神）。
+        HPは据え置きのまま2体なので、火力も体力も実質2倍。間のザコ戦は<b>20体</b>。
+      </div>
+      <div class="mode-select-row">
+        <button class="mode-card hard-mode-card" id="hard1pBtn">
+          <div class="mode-card-icon">🔥</div>
+          <div class="mode-card-title">ハード 1P</div>
+          <div class="mode-card-desc">一人で2体同時のボスに挑む。</div>
+        </button>
+        <button class="mode-card hard-mode-card" id="hard2pBtn">
+          <div class="mode-card-icon">🔥🤝</div>
+          <div class="mode-card-title">ハード 2P 協力</div>
+          <div class="mode-card-desc">二人がかりでも足りるかどうか。</div>
+        </button>
+      </div>
+    </div>
+
     <div class="btn-row">
       <button class="btn-secondary" id="certOpenBtn">🏅 証明書を見る</button>
     </div>
@@ -335,10 +357,20 @@
        explicit request that the top row be reserved for the two human players). Element ids
        here predate this reshuffle (originally built for the ally) but the ids don't need to
        match their current on-screen meaning, only client.js's DOM references need to. -->
-  <div class="hp-block ally-hp-block hidden" id="allyHpBlock">
-    <div class="pname" id="nameAlly">ボス</div>
-    <div class="hp-bar-bg"><div class="hp-bar-fill color-boss" id="hpAlly" style="width:100%"></div><div class="hp-bar-bonus" id="hpBonusAlly"></div></div>
-    <div class="buff-row" id="buffAlly"></div>
+  <!-- Bottom HP row. Holds one block normally (the boss in 2P co-op) and TWO in hard mode,
+       where a stage fields a pair of bosses at once — 2 humans + 2 bosses needs four bars and
+       the top row only has two slots. -->
+  <div class="ally-hp-row hidden" id="bottomHpRow">
+    <div class="hp-block ally-hp-block hidden" id="allyHpBlock">
+      <div class="pname" id="nameAlly">ボス</div>
+      <div class="hp-bar-bg"><div class="hp-bar-fill color-boss" id="hpAlly" style="width:100%"></div><div class="hp-bar-bonus" id="hpBonusAlly"></div></div>
+      <div class="buff-row" id="buffAlly"></div>
+    </div>
+    <div class="hp-block ally-hp-block hidden" id="boss2HpBlock">
+      <div class="pname" id="nameBoss2">ボス</div>
+      <div class="hp-bar-bg"><div class="hp-bar-fill color-boss" id="hpBoss2" style="width:100%"></div><div class="hp-bar-bonus" id="hpBonusBoss2"></div></div>
+      <div class="buff-row" id="buffBoss2"></div>
+    </div>
   </div>
 
   <div class="arena-wrap">
@@ -383,9 +415,11 @@
 
     <div class="story-ending-overlay hidden" id="storyEndingOverlay">
       <div class="story-ending-card">
-        <div class="story-ending-tag">ALL STAGES CLEAR</div>
-        <div class="story-ending-title">🏆 戦場に、静寂が訪れた</div>
-        <div class="story-ending-text">
+        <!-- Tag/title/text are swapped from JS for the hard-mode ending — see updateHud's
+             finalStageClear branch. -->
+        <div class="story-ending-tag" id="storyEndingTag">ALL STAGES CLEAR</div>
+        <div class="story-ending-title" id="storyEndingTitle">🏆 戦場に、静寂が訪れた</div>
+        <div class="story-ending-text" id="storyEndingText">
           立ちはだかった５人の強敵、そのすべてを打ち破った。<br /><br />
           すべての戦場の敵は、倒した。<br />
           だが、戦いはまだ終わらない――。
@@ -410,7 +444,11 @@
     <div class="boss-intro-overlay hidden" id="bossIntroOverlay">
       <div class="boss-intro-card">
         <div class="boss-intro-stage" id="bossIntroStage">第1面</div>
-        <img class="boss-intro-portrait" id="bossIntroPortrait" src="images/bosses/boss1.jpg" alt="" />
+        <!-- Second portrait shown only in hard mode, where a stage is a two-boss encounter. -->
+        <div class="boss-intro-portrait-row">
+          <img class="boss-intro-portrait" id="bossIntroPortrait" src="images/bosses/boss1.jpg" alt="" />
+          <img class="boss-intro-portrait hidden" id="bossIntroPortrait2" src="images/bosses/boss2.jpg" alt="" />
+        </div>
         <div class="boss-intro-name" id="bossIntroName">見習い兵士</div>
         <div class="boss-intro-line" id="bossIntroLine">「……」</div>
         <!-- Text set from JS off MATCH_WIN_TARGET so it can never drift from the real rule. -->
