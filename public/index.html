@@ -474,7 +474,11 @@
     <div class="boss-intro-overlay boss-defeat-overlay hidden" id="bossDefeatOverlay">
       <div class="boss-intro-card">
         <div class="boss-intro-stage" id="bossDefeatStage">撃破！</div>
-        <img class="boss-intro-portrait" id="bossDefeatPortrait" src="images/bosses/boss1.jpg" alt="" />
+        <!-- Second portrait shown only when a hard-mode PAIR is defeated, mirroring the intro. -->
+        <div class="boss-intro-portrait-row">
+          <img class="boss-intro-portrait" id="bossDefeatPortrait" src="images/bosses/boss1.jpg" alt="" />
+          <img class="boss-intro-portrait hidden" id="bossDefeatPortrait2" src="images/bosses/boss2.jpg" alt="" />
+        </div>
         <div class="boss-intro-name" id="bossDefeatName">見習い兵士</div>
         <div class="boss-intro-line" id="bossDefeatLine">「……」</div>
       </div>

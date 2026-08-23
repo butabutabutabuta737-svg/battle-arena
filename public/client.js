@@ -106,6 +106,7 @@
   const bossDefeatOverlay = $('#bossDefeatOverlay');
   const bossDefeatStage = $('#bossDefeatStage');
   const bossDefeatPortrait = $('#bossDefeatPortrait');
+  const bossDefeatPortrait2 = $('#bossDefeatPortrait2');
   const bossDefeatName = $('#bossDefeatName');
   const bossDefeatLine = $('#bossDefeatLine');
   const bossVictoryOverlay = $('#bossVictoryOverlay');
@@ -352,6 +353,10 @@
   let gameOverRetryReady = false; // flips true only after gameOverTimer elapses — keeps the
     // retry button hidden for a dramatic beat instead of appearing the instant the boss wins
   let gameOverTimer = null;
+  // Same idea as gameOverRetryReady, for an ordinary decided round (1 of 3) — per explicit
+  // request that a single round's result also gets a 3s beat before the next-round button.
+  let roundPauseReady = false;
+  let roundPauseTimer = null;
   let trueEndingTapReady = false; // flips true (and reveals the "tap to continue" hint) only after trueEndingRevealTimer elapses — same "let it sit" beat as gameOverRetryReady above
   let trueEndingRevealTimer = null;
   // Gates rematchBtn/trueEndingOverlay behind the WHOLE post-victory dramatic sequence for
@@ -425,6 +430,30 @@
     if (p.id === myId) return meColor;
     const coop = !!(latestState && latestState.storyCoop);
     return coop && !p.isBoss ? allyColor : enemyColor;
+  }
+
+  // The single source of truth for "what colour is this character", matching exactly what
+  // drawShip() paints its uniform. Per explicit request, a character's bullets and sword arc now
+  // take their OWN colour rather than a generic gold/white or a 3-way me/ally/enemy bucket — so
+  // in a hard-mode pair you can tell at a glance which of the two bosses is shooting at you.
+  // Bosses key off their own bossIndex (not the stage), same rule as drawShip.
+  function characterColor(p) {
+    if (!p) return '#ffe28a';
+    const cpu = !!(latestState && latestState.isCpuMatch);
+    if (p.isBoss && cpu) {
+      if (p.bossIndex === BOSS_TIER_THEME.length + 1 || (latestState && latestState.exBossActive)) return '#f5e6b8';
+      const stage = (latestState && latestState.storyStage) || 1;
+      return BOSS_TIER_THEME[Math.min(Math.max(1, p.bossIndex || stage), BOSS_TIER_THEME.length) - 1].uniform;
+    }
+    if (p.id === myId) return '#4d78d9';
+    const coop = !!(latestState && latestState.storyCoop);
+    return coop && !p.isBoss ? '#3fb36e' : '#c9524a';
+  }
+  // Same colour as an "r,g,b" triplet, for the rgba() strings the slash fan builds.
+  function characterColorRgb(p) {
+    const hex = characterColor(p);
+    const n = parseInt(hex.slice(1), 16);
+    return `${(n >> 16) & 0xff},${(n >> 8) & 0xff},${n & 0xff}`;
   }
 
   function audioReady() {
@@ -806,6 +835,8 @@
     document.querySelectorAll('.crumble-tile').forEach((el) => el.remove());
     gameOverRetryReady = false;
     if (gameOverTimer) { clearTimeout(gameOverTimer); gameOverTimer = null; }
+    roundPauseReady = false;
+    if (roundPauseTimer) { clearTimeout(roundPauseTimer); roundPauseTimer = null; }
     gameOverOverlay.classList.add('hidden');
     gameOverScore.classList.add('hidden'); // wave-specific line; must not carry into a boss-loss card later
     downedMine.classList.add('hidden');
@@ -1117,13 +1148,32 @@
   // `onDone` (added alongside bossPresentationDone below) fires once this card actually hides
   // itself, so callers have a real completion signal instead of inferring "done" from current
   // visibility.
-  function showBossDefeat(stage, boss, onDone) {
-    const theme = BOSS_TIER_THEME[Math.min(Math.max(1, stage), BOSS_TIER_THEME.length) - 1];
-    bossDefeatOverlay.style.setProperty('--boss-color', theme.uniform);
+  // `partner` is the second boss of a hard-mode pair: per explicit request, beating a pair shows
+  // BOTH of the bosses you just put down, not only the one carrying the line. Portrait art is
+  // chosen per boss from its own bossIndex (a pair can mix stages, and hard stage 3 pairs a
+  // numbered boss with the EX boss), falling back to the stage number for the normal campaign.
+  function bossPortraitArt(b, stage) {
+    if (b && b.bossIndex === BOSS_TIER_THEME.length + 1) return { src: 'images/bosses/boss6-face.jpg', pos: 'center top', uniform: '#f5e6b8' };
+    const t = BOSS_TIER_THEME[Math.min(Math.max(1, (b && b.bossIndex) || stage), BOSS_TIER_THEME.length) - 1];
+    return { src: t.image, pos: t.facePos, uniform: t.uniform };
+  }
+
+  function showBossDefeat(stage, boss, onDone, partner) {
+    const art = bossPortraitArt(boss, stage);
+    bossDefeatOverlay.style.setProperty('--boss-color', art.uniform);
     bossDefeatPortrait.style.filter = ''; // in case showExBossDefeat() last set this to 'none' — falls back to the normal dulled-grayscale CSS rule
-    bossDefeatPortrait.src = theme.image;
-    bossDefeatPortrait.style.objectPosition = theme.facePos;
-    bossDefeatName.textContent = boss.name;
+    bossDefeatPortrait.src = art.src;
+    bossDefeatPortrait.style.objectPosition = art.pos;
+    if (partner) {
+      const art2 = bossPortraitArt(partner, stage);
+      bossDefeatPortrait2.style.filter = '';
+      bossDefeatPortrait2.src = art2.src;
+      bossDefeatPortrait2.style.objectPosition = art2.pos;
+      bossDefeatPortrait2.classList.remove('hidden');
+    } else {
+      bossDefeatPortrait2.classList.add('hidden');
+    }
+    bossDefeatName.textContent = partner ? `${boss.name} ＆ ${partner.name}` : boss.name;
     bossDefeatLine.textContent = boss.defeatLine ? `「${boss.defeatLine}」` : '';
     bossDefeatOverlay.classList.remove('hidden');
     fitBossIntroCardSoon(bossDefeatOverlay);
@@ -1677,9 +1727,10 @@
                   bossPresentationDone = true;
                 }
               } else if (!state.mobWaveActive && storyStage < storyStageCount) {
-                const boss = state.players.find((p) => p.isBoss);
+                const bs = state.players.filter((p) => p.isBoss);
+                const boss = bs[0];
                 if (boss) {
-                  showBossDefeat(storyStage, boss, () => { bossPresentationDone = true; });
+                  showBossDefeat(storyStage, boss, () => { bossPresentationDone = true; }, bs[1] || null);
                 } else {
                   bossPresentationDone = true;
                 }
@@ -1718,6 +1769,15 @@
             gameOverTimer = null;
           }, 3000);
         }
+        // Every OTHER round end (an ordinary 1-of-3 decision, either way) gets its own 3s beat
+        // before the next-round button, per explicit request — started here on the phase edge so
+        // it runs once, not restarted by each of the ~30Hz broadcasts that follow.
+        roundPauseReady = false;
+        if (roundPauseTimer) clearTimeout(roundPauseTimer);
+        roundPauseTimer = setTimeout(() => {
+          roundPauseReady = true;
+          roundPauseTimer = null;
+        }, 3000);
       }
       if (lastPhase === 'finished' && state.phase !== 'finished') {
         rouletteBlock.classList.add('hidden');
@@ -1739,8 +1799,10 @@
         seenBulletIds.add(b.id);
         if (audio) audio.playShoot();
         const owner = state.players.find((p) => p.id === b.ownerId);
-        const color = sideColor(owner, '#9dbaff', '#7dffb0', '#ffd35b');
-        spawnParticles(b.x, b.y, 5, color, 90, 0.22, 4);
+        // Muzzle sparks share the bullet's colour — they are part of the same shot, and leaving
+        // them on the old 3-way me/ally/enemy palette would have them disagree with the round
+        // that just left the barrel.
+        spawnParticles(b.x, b.y, 5, shadeAnyColor(characterColor(owner), 1.35), 90, 0.22, 4);
         triggerShotRecoil(owner); // rifle kick + muzzle flash + ejected casing on the shooter
       }
     }
@@ -1778,7 +1840,9 @@
       // creation time rather than re-looked-up every frame in drawSwordSlashes.
       const swingOwner = state.players.find((p) => p.id === swing.ownerId);
       triggerSwordSwing(swingOwner); // put the swinger's own body into the blade pose, not just the arc
-      const color = sideColor(swingOwner, '77,120,217', '63,179,110', '201,82,74');
+      // The swinger's OWN colour, per explicit request — this used to be a 3-way me/ally/enemy
+      // bucket, so every boss's arc was the same red regardless of which boss swung it.
+      const color = characterColorRgb(swingOwner);
       swordSlashes.push({ x: swing.x, y: swing.y, angle: swing.angle, hit: swing.hit, range: swing.range, life: 0.24, maxLife: 0.24, color });
       if (swing.hit) {
         const reach = swing.range || SWORD_RANGE_VISUAL;
@@ -2288,9 +2352,17 @@
       fillColor = glowColor = RAINBOW_RING_COLORS[b.id % RAINBOW_RING_COLORS.length];
       strokeAlpha = 0.6;
     } else if (b.big) {
+      // The big-bullet powerup keeps its own unmistakable purple — it is a temporary buff the
+      // player needs to read instantly, so identity of the shooter is secondary there.
       fillColor = '#e4d4ff'; glowColor = '#c9a8ff'; strokeAlpha = 0.6;
     } else {
-      fillColor = '#ffe28a'; glowColor = '#ffd35b'; strokeAlpha = 0.55;
+      // Ordinary rounds carry the SHOOTER's colour (per explicit request) instead of a single
+      // gold shared by everyone on the field — with two bosses firing at once, one gold stream
+      // gave no clue which of them it came from.
+      const owner = latestState && latestState.players.find((p) => p.id === b.ownerId);
+      glowColor = characterColor(owner);
+      fillColor = shadeAnyColor(glowColor, 1.45); // brighter core over its own glow, so it still reads as hot
+      strokeAlpha = 0.55;
     }
     ctx.save();
     ctx.shadowColor = glowColor;
@@ -3766,7 +3838,12 @@
         // the sequence even starts, which let rematchBtn (and so the next mob-wave mini-game)
         // appear while the flash/defeat-quote were still queued behind it — confirmed live via
         // a timing test, matching an explicit "画面がめちゃくちゃ" report.
-        const waitingOnDefeatLine = stageAdvance && !bossPresentationDone;
+        // A plain mid-series round (1 of 3 decided, match still going) has no dramatic sequence
+        // to wait on, so its button used to appear the instant the round ended — the result
+        // flashed past with no beat to register who won. Per explicit request it now gets the
+        // same 3s pause the GAME OVER screen has (roundPauseReady, started once on the
+        // 'finished' edge in handleState).
+        const waitingOnDefeatLine = stageAdvance ? !bossPresentationDone : !roundPauseReady;
         if (!waitingOnDefeatLine) rematchBtn.classList.remove('hidden');
         rematchBtn.textContent = stageAdvance ? '次の面へ' : (isCpuMatch ? '次のラウンドへ' : 'もう一度対戦する');
       }
