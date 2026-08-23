@@ -1648,7 +1648,12 @@
           // win-check), but it isn't a boss kill — the boss was already recorded when the
           // *previous* round (the actual boss fight) finished, so skip re-recording here and
           // skip the boss's defeat-quote card below (there's no boss on screen to have said it).
-          if (!state.mobWaveActive) recordBossDefeated(storyStage, !!state.storyCoop);
+          // Hard mode is excluded: its stage numbers are 1-3 and mean "boss pair 1-3", not
+          // "normal campaign stage 1-3". Recording them here wrote into the normal campaign's
+          // per-stage clear sets, so clearing hard stage 1 in co-op lit the 🤝 badge for normal
+          // stage 1 the player might never have cleared that way. Hard mode has its own
+          // certificate record (hardCleared / tier 7).
+          if (!state.mobWaveActive && !state.hardMode) recordBossDefeated(storyStage, !!state.storyCoop);
           if (state.exBossActive) recordExBossDefeated();
           bossPresentationDone = false; // reset for this kill — flipped true once whichever branch below actually finishes
           // The boss's whole dramatic presentation (fanfare + "勝利！！" flash + defeat-quote
