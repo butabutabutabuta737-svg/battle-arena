@@ -2638,7 +2638,14 @@
     // non-me player always IS the boss) or in arena mode (isCpuMatch is false there).
     const isBoss = !!p.isBoss;
     const isAlly = !isMe && !isBoss && isCpuMatch;
-    const tier = isBoss && isCpuMatch ? Math.min(Math.max(1, storyStage), BOSS_TIER_THEME.length) : 0;
+    // Colour comes from the boss's OWN identity (p.bossIndex) rather than the room's current
+    // stage number. In hard mode a stage fields two different bosses at once, so keying off the
+    // stage painted BOTH of them the same colour — hard stage 1 showed two white soldiers
+    // instead of the rookie's white and the mercenary's bronze. Falls back to storyStage for
+    // any boss without an index (normal mode is unaffected either way, since there the single
+    // boss's index and the stage number are the same number).
+    const bossTier = p.bossIndex || storyStage;
+    const tier = isBoss && isCpuMatch ? Math.min(Math.max(1, bossTier), BOSS_TIER_THEME.length) : 0;
     const theme = tier > 0 ? BOSS_TIER_THEME[tier - 1] : null;
     // 2P co-op bosses now use the same per-stage BOSS_TIER_THEME color as 1P (per explicit
     // request) — this used to be forced to a fixed red instead, back when stage1's color was
@@ -2652,7 +2659,10 @@
     // color, and not a color-cycling animation either — that was tried first and explicitly
     // rejected in favor of a single static design with multiple differently-colored rings, see
     // RAINBOW_RING_COLORS and the aura section below).
-    const isExBoss = isBoss && isCpuMatch && !!(latestState && latestState.exBossActive);
+    // exBossActive covers the normal-campaign EX fight; the bossIndex check covers hard stage 3,
+    // where the EX boss appears as one half of a pair and that room-wide flag is never set.
+    const isExBoss = isBoss && isCpuMatch
+      && (!!(latestState && latestState.exBossActive) || p.bossIndex === BOSS_TIER_THEME.length + 1);
     if (isExBoss) {
       uniform = '#f5e6b8';
       uniformDark = shadeColor(uniform, 0.45);
@@ -3525,8 +3535,12 @@
     // that tally, so hide the badge for the duration instead.
     matchScoreEl.classList.toggle('hidden', !!state.mobWaveActive);
     if (isCpuMatch) {
+      // Kept short deliberately. .room-tag is white-space:nowrap and sits between the two
+      // hp-blocks in the HUD's flex row, so a long centre label cannot shrink and instead
+      // starves the side blocks — a first pass ("🔥ハード 第1/3ステージ") squeezed the
+      // top-right name so hard that a 5-letter player name wrapped mid-word as "B / ravo".
       storyStageLabel.textContent = state.hardMode
-        ? `🔥ハード 第${storyStage}/${storyStageCount}ステージ`
+        ? `🔥ハード ${storyStage}/${storyStageCount}`
         : `第${storyStage}面 / 全${storyStageCount}面`;
       storyStageLabel.classList.remove('hidden');
     } else {
