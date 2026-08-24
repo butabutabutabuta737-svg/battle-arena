@@ -430,20 +430,29 @@ input[type="text"]:focus {
 }
 .cert-silhouette-row {
   display: flex;
-  flex-wrap: wrap; /* on narrow viewports 5×60px+gaps doesn't fit .certificate's content
-    width (which shrinks along with .modal-card below ~520px) — wrapping to 2 rows keeps
-    every portrait fully visible instead of overflowing the card's frame. A fixed height
-    would clip a wrapped second row, so this is auto-height (row-gap reuses the same `gap`). */
-  align-items: flex-end;
+  /* Never wrap. Wrapping used to be the answer to "6×60px + gaps doesn't fit .certificate's
+     content width once .modal-card shrinks", but a 5-then-1 split is precisely what reads as
+     "the portraits are all different heights". Instead the slots share the row equally and
+     shrink together (see .cert-portrait-wrap), so all of them stay on one line, the same size,
+     at every width. */
+  flex-wrap: nowrap;
+  /* Align by the TOP edge, not the bottom. The five main slots each carry a 👤/🤝 badge row
+     underneath and the EX slot does not, so flex-end lined up the badges and pushed the EX
+     portrait 14px lower than the rest — the portraits are all the same 60x75, but they did not
+     look it. Aligning tops makes every portrait sit on the same line whatever is (or isn't)
+     below it. */
+  align-items: flex-start;
   justify-content: center;
   gap: 8px;
   margin: 16px 0 2px;
 }
 .cert-portrait {
-  width: 60px;
-  height: 75px;
-  flex-shrink: 0; /* same defensive fix as .boss-portrait — not currently overflowing its
-    row, but prevents the same non-uniform-shrink bug if sizes/modal width ever change */
+  /* Fills its slot; the slot is what carries the sizing (see .cert-portrait-wrap). aspect-ratio
+     keeps the original 60x75 proportion at every width, so every portrait is always exactly as
+     tall as every other one — which is the whole point here. */
+  width: 100%;
+  height: auto;
+  aspect-ratio: 60 / 75;
   border-radius: 6px;
   object-fit: cover;
   object-position: center top; /* keep the face in frame, same reasoning as .boss-portrait */
@@ -460,6 +469,12 @@ input[type="text"]:focus {
   flex-direction: column;
   align-items: center;
   gap: 3px;
+  /* Equal share of the row, never wider than the original 60px. min-width:0 is required — a
+     flex item's default min-width:auto refuses to shrink below its content and would push the
+     row into an overflow instead of letting the slots scale down together. */
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 60px;
 }
 /* 👤(solo)/🤝(co-op) badges under each cert-portrait — dimmed/grayscale until that specific
    mode has cleared this boss (independently of the other mode), so a boss cleared in both
@@ -483,6 +498,17 @@ input[type="text"]:focus {
   margin: 2px 0 0;
   font-size: 10px;
   color: #6b74a8;
+}
+/* Six portraits (EX unlocked) need 6*60 + 5*8 = 400px, which .certificate's content box no longer
+   has once .modal-card starts shrinking — the EX slot alone wrapped onto a second row, which is
+   the same "uneven" complaint in a louder form. Scale the row down so all six stay on one line.
+   MUST stay after .cert-portrait's own width/height above: a media query adds no specificity, so
+   placed before it this block silently loses on source order (measured — the portraits stayed
+   60x75 and the EX slot still wrapped). */
+@media (max-width: 560px) {
+  .cert-silhouette-row {
+    gap: 5px;
+  }
 }
 .cert-seal {
   display: none;

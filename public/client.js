@@ -1003,6 +1003,7 @@
   const certSilhouetteEls = Array.from($('#certSilhouetteRow').querySelectorAll('.cert-portrait:not(#certPortraitEx)'));
   const certModeBadgeEls = Array.from($('#certSilhouetteRow').querySelectorAll('.cert-mode-badge'));
   const certPortraitEx = $('#certPortraitEx');
+  const certPortraitExWrap = $('#certPortraitExWrap');
   certPortraitEx.src = 'images/bosses/boss6-face.jpg';
   function renderCertificate() {
     // Display tier is 0-6: 0-5 mirror bestBossDefeated exactly, 6 only once the hidden EX
@@ -1035,7 +1036,11 @@
     });
     // The EX slot doesn't exist pre-unlock (no "locked" dim state like the other 5) — it's
     // simply absent until earned, preserving the "hidden boss" surprise.
+    // Hide the whole column, not just the image: a display:none <img> inside a still-present
+    // wrapper leaves a zero-width flex item behind, which the row's gap then pads either side of,
+    // nudging the five visible portraits off-centre.
     certPortraitEx.classList.toggle('hidden', !exBossDefeated);
+    certPortraitExWrap.classList.toggle('hidden', !exBossDefeated);
   }
   // Both entry points — the title screen and the story-intro screen — open the one modal.
   const openCertificate = () => { audioReady(); renderCertificate(); certOverlay.classList.remove('hidden'); };

@@ -232,7 +232,11 @@
           <img class="cert-portrait" src="images/bosses/boss5.jpg" alt="5面ボス" />
           <div class="cert-mode-badge"><span class="cert-mode-icon" data-mode="solo">👤</span><span class="cert-mode-icon" data-mode="coop">🤝</span></div>
         </div>
-        <div class="cert-portrait-wrap">
+        <!-- The EX slot carries no 👤/🤝 badge (2P can't reach the EX boss), so its column is
+             shorter than the other five. The row aligns portraits by their TOP edge for exactly
+             that reason — see .cert-silhouette-row. The wrapper is hidden as a unit pre-unlock so
+             it doesn't leave a stray flex gap behind. -->
+        <div class="cert-portrait-wrap hidden" id="certPortraitExWrap">
           <img class="cert-portrait hidden" id="certPortraitEx" alt="EXボス" />
         </div>
       </div>
