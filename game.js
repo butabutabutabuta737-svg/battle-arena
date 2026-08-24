@@ -2632,6 +2632,11 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop, wantsHar
     } catch {
       return;
     }
+    // JSON.parse succeeding is NOT enough: `null`, `[]`, `12345` and `"str"` are all valid JSON
+    // that then blow up on `data.type`. The dispatch's own try/catch caught it and the room
+    // survived, but every such frame logged a full stack trace — so anything sending junk (a
+    // buggy or hostile client) could flood the server log at will. Verified by fuzzing.
+    if (!data || typeof data !== 'object' || Array.isArray(data) || typeof data.type !== 'string') return;
     // Everything below dispatches on data.type — wrapped so a bug in any one branch (input,
     // rematch, etc.) can't throw uncaught and crash the whole Node process (which would drop
     // every connected player's game, not just this room's). Not re-indented to keep this a
