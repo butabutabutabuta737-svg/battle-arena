@@ -523,11 +523,11 @@
          .boss-intro-overlay's layout/timing but with no portrait, since this is flavor text
          about the coming/just-fought swarm, not a specific character. -->
     <div class="boss-intro-overlay wave-intro-overlay hidden" id="waveIntroOverlay">
+      <!-- Full-bleed backdrop rather than a thumbnail in the card: the art is a tall column of
+           advancing ranks and an inset 98x123 box threw nearly all of it away. -->
+      <img class="wave-intro-bg" src="images/wave-intro.jpg" alt="" />
       <div class="boss-intro-card">
         <div class="boss-intro-stage" id="waveIntroStage">ザコモンスター襲来</div>
-        <!-- The wave now gets a real card image like the boss fights do, instead of a lone emoji.
-             Reuses .boss-intro-portrait so the two cards stay visually the same shape. -->
-        <img class="boss-intro-portrait wave-intro-portrait" src="images/wave-intro.jpg" alt="" />
         <div class="wave-intro-title" id="waveIntroTitle">⚔️</div>
         <div class="boss-intro-line" id="waveIntroLine">「……」</div>
       </div>

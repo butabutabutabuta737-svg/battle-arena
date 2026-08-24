@@ -1536,13 +1536,34 @@ button:active {
   filter: drop-shadow(0 0 18px rgba(255, 122, 74, 0.7));
   animation: boss-intro-icon-pulse 1.2s ease-in-out infinite;
 }
-/* The wave art is a column of advancing ranks, so it is centre-cropped — the boss cards' own
-   `center top` exists to keep a face in frame and here would show only the burning skyline
-   above the horde. The orange glow matches .wave-intro-overlay's own accent rather than
-   inheriting whichever boss colour was last set. */
-.wave-intro-portrait {
-  object-position: center;
-  --boss-color: #ff8a5b;
+/* The horde fills the whole card. Sits behind .boss-intro-card, which is given its own stacking
+   context below so the text stays on top of both the art and the scrim. */
+.wave-intro-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: boss-intro-pop 0.5s cubic-bezier(.2,1.4,.4,1);
+}
+/* Scrim. Heavier at the top and bottom, where the heading and the flavour line sit, and lightest
+   across the middle so the ranks stay visible. The art is already dark (median ~30), so this only
+   has to guarantee the text, not rescue the whole image. */
+.wave-intro-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(4, 5, 14, 0.82) 0%,
+    rgba(4, 5, 14, 0.34) 34%,
+    rgba(4, 5, 14, 0.34) 60%,
+    rgba(4, 5, 14, 0.86) 100%);
+}
+.wave-intro-overlay .boss-intro-card {
+  position: relative;
+  z-index: 1;
 }
 .wave-intro-overlay .boss-intro-line {
   border-color: rgba(255, 138, 91, 0.35);
