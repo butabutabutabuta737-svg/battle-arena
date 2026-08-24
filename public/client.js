@@ -621,6 +621,24 @@
     return `${(n >> 16) & 0xff},${(n >> 8) & 0xff},${n & 0xff}`;
   }
 
+  // The later-game splashes carry loading="lazy" so they cost nothing on the title screen.
+  // Fetch them in the background the moment a game starts instead — minutes before either can
+  // appear — so lazy loading never turns into a blank frame at the actual moment.
+  // Staggered on purpose. Warming all of it at connect() meant ~700KB competing with the very
+  // first seconds of gameplay traffic. The wave art is needed within a couple of minutes, so it
+  // goes early; the ending splashes only matter on the last stage, so they wait until the player
+  // actually gets there — still many seconds of boss dialogue before either can be shown.
+  const warmed = new Set();
+  function warmArt(...srcs) {
+    for (const src of srcs) {
+      if (warmed.has(src)) continue;
+      warmed.add(src);
+      const im = new Image();
+      im.src = src;
+    }
+  }
+  function preloadLaterArt() { warmArt('images/wave-intro.jpg'); }
+
   function audioReady() {
     if (!window.GameAudio) return;
     window.GameAudio.resume();
@@ -819,6 +837,7 @@
   }
 
   function connect(room, name, wantsStoryCpu, roulette, wantsCoop, wantsHard) {
+    preloadLaterArt();
     audioReady();
     if (connectRetryTimer) { clearTimeout(connectRetryTimer); connectRetryTimer = null; }
     connectAttempt = 0;
@@ -1917,6 +1936,11 @@
         // finalStageClear logic already relies on) — fires exactly once per real boss kill
         // since this whole block only runs on the 'finished' phase-transition edge, not on
         // every repeated broadcast while sitting in that phase.
+        // On the final stage now: pull the ending splashes in the background, many seconds of
+        // boss dialogue before either of them can actually be shown.
+        if (isCpuMatch && storyStage >= storyStageCount) {
+          warmArt(state.hardMode ? 'images/ending_hard.jpg' : 'images/ending_stage5.jpg', 'images/ending_true.jpg');
+        }
         if (isCpuMatch && state.matchOver && humanSideWon(state, state.matchWinnerId)) {
           // A wave-clear also reaches matchOver/humanSideWon (see game.js's mobWaveActive
           // win-check), but it isn't a boss kill — the boss was already recorded when the

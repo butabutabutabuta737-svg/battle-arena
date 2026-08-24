@@ -32,6 +32,16 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
 };
 
+// Images only. Deliberately NOT max-age caching: 'no-cache' means the browser must revalidate
+// on every request, so a replaced file is picked up immediately — there is no stale-file risk at
+// all, which is the whole reason the rest of this server sends no-store. What it buys is that an
+// UNCHANGED image comes back as a 304 with no body. The artwork is ~2.6MB and every reload was
+// re-sending all of it; now it re-sends only what actually changed.
+// Cheap, collision-safe validator: size + mtime, which is what any static file server uses.
+function imageEtag(stat) {
+  return '"' + stat.size.toString(16) + '-' + stat.mtimeMs.toString(16) + '"';
+}
+
 const server = http.createServer((req, res) => {
   const reqPath = decodeURIComponent(req.url.split('?')[0]);
   const relPath = reqPath === '/' ? '/index.html' : reqPath;
@@ -41,19 +51,36 @@ const server = http.createServer((req, res) => {
     res.end();
     return;
   }
-  fs.readFile(filePath, (err, data) => {
-    if (err) {
-      res.writeHead(404);
-      res.end('Not found');
+  const ext = path.extname(filePath);
+  const isImage = ext === '.jpg' || ext === '.jpeg' || ext === '.png' || ext === '.webp' || ext === '.svg';
+  fs.stat(filePath, (statErr, stat) => {
+    if (!statErr && isImage) {
+      const etag = imageEtag(stat);
+      if (req.headers['if-none-match'] === etag) {
+        // Unchanged since the browser last saw it — send the header only, no body.
+        res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' });
+        res.end();
+        return;
+      }
+      fs.readFile(filePath, (err, data) => {
+        if (err) { res.writeHead(404); res.end('Not found'); return; }
+        res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': 'no-cache', ETag: etag });
+        res.end(data);
+      });
       return;
     }
-    const ext = path.extname(filePath);
-    // No caching at all — this project's static files change constantly during active
-    // development, and a stale-cached style.css/client.js/image after an edit (needing an
-    // unobvious hard-refresh to see) has already caused real confusion once. This is a
-    // small LAN-only game, so the bandwidth cost of always refetching is negligible.
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': 'no-store' });
-    res.end(data);
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+      }
+      // Everything that is not an image keeps no-store, unchanged: this project's html/js/css
+      // change constantly during active development, and a stale one of those (needing an
+      // unobvious hard-refresh to notice) has already caused real confusion once.
+      res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': 'no-store' });
+      res.end(data);
+    });
   });
 });
 

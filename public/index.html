@@ -471,7 +471,9 @@
          a deliberate cinematic beat, then an explicit button returns to the title (also still
          tappable anywhere on the image itself, per the existing overlay click handler). -->
     <div class="true-ending-overlay hidden" id="trueEndingOverlay">
-      <img class="true-ending-img" src="images/ending_true.jpg" alt="THE END" />
+      <!-- lazy for the same reason — 322KB that is only ever needed after the hidden EX boss
+           falls, which is many minutes of play away. See preloadLaterArt. -->
+      <img class="true-ending-img" src="images/ending_true.jpg" alt="THE END" loading="lazy" />
       <button class="btn-primary true-ending-title-btn" id="trueEndingTitleBtn">タイトルへ戻る</button>
     </div>
 
@@ -525,7 +527,10 @@
     <div class="boss-intro-overlay wave-intro-overlay hidden" id="waveIntroOverlay">
       <!-- Full-bleed backdrop rather than a thumbnail in the card: the art is a tall column of
            advancing ranks and an inset 98x123 box threw nearly all of it away. -->
-      <img class="wave-intro-bg" src="images/wave-intro.jpg" alt="" />
+      <!-- lazy: this overlay is display:none on the title screen, so without it the browser
+           fetched 122KB of horde art before the player had even pressed anything. Warmed from JS
+           once a game actually starts (see preloadLaterArt), long before a wave can occur. -->
+      <img class="wave-intro-bg" src="images/wave-intro.jpg" alt="" loading="lazy" />
       <div class="boss-intro-card">
         <div class="boss-intro-stage" id="waveIntroStage">ザコモンスター襲来</div>
         <div class="wave-intro-title" id="waveIntroTitle">⚔️</div>
