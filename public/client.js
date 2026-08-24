@@ -118,6 +118,8 @@
   const levelLabel = $('#levelLabel');
   const levelUpToast = $('#levelUpToast');
   const bossSpecialWarn = $('#bossSpecialWarn');
+  const lowHpVignette = $('#lowHpVignette');
+  const roundStakes = $('#roundStakes');
   const bossSpecialName = $('#bossSpecialName');
   const levelUpValue = $('#levelUpValue');
   const floatJoystick = $('#floatJoystick');
@@ -359,6 +361,14 @@
   // request that a single round's result also gets a 3s beat before the next-round button.
   let roundPauseReady = false;
   let roundPauseTimer = null;
+  // Near-death tension state, driven by updateHud and consumed by the frame loop's heartbeat.
+  const LOW_HP_THRESHOLD = 0.3; // below 30% of max hp
+  const HEARTBEAT_SLOW_MS = 900; // just under the threshold
+  const HEARTBEAT_FAST_MS = 380; // at death's door
+  let lowHpActive = false;
+  let lowHpIntensity = 0;
+  let lastHeartbeatAt = 0;
+  let lastStakesKey = ''; // so the match-point sting fires once per countdown, not per broadcast
   let trueEndingTapReady = false; // flips true (and reveals the "tap to continue" hint) only after trueEndingRevealTimer elapses — same "let it sit" beat as gameOverRetryReady above
   let trueEndingRevealTimer = null;
   // Gates rematchBtn/trueEndingOverlay behind the WHOLE post-victory dramatic sequence for
@@ -840,7 +850,11 @@
     roundPauseReady = false;
     if (roundPauseTimer) { clearTimeout(roundPauseTimer); roundPauseTimer = null; }
     gameOverOverlay.classList.add('hidden');
-    gameOverScore.classList.add('hidden'); // wave-specific line; must not carry into a boss-loss card later
+    gameOverScore.classList.add('hidden');
+    lowHpVignette.classList.add('hidden');
+    roundStakes.classList.add('hidden');
+    lowHpActive = false;
+    lastStakesKey = ''; // wave-specific line; must not carry into a boss-loss card later
     downedMine.classList.add('hidden');
     downedTheirs.classList.add('hidden');
     downedBanner.classList.add('hidden');
@@ -3665,6 +3679,46 @@
     } else {
       mobWaveLabel.classList.add('hidden');
     }
+    // ---- near-death tension ----
+    // Only for MY own hp, only while the round is actually live: the vignette and heartbeat are
+    // about how much trouble *I* am in, so they must not fire while dead, paused, or sitting on
+    // a result screen. Rate tightens as hp falls, and the CSS animation reads the same number,
+    // so the pulse and the heartbeat stay locked together.
+    const meLow = state.phase === 'playing' && !state.paused && me && me.alive
+      ? me.hp / (me.maxHp || 100)
+      : 1;
+    lowHpActive = meLow <= LOW_HP_THRESHOLD;
+    lowHpIntensity = lowHpActive ? Math.max(0, Math.min(1, 1 - meLow / LOW_HP_THRESHOLD)) : 0;
+    lowHpVignette.classList.toggle('hidden', !lowHpActive);
+    if (lowHpActive) {
+      lowHpVignette.style.setProperty('--lowhp-rate', `${(HEARTBEAT_SLOW_MS - (HEARTBEAT_SLOW_MS - HEARTBEAT_FAST_MS) * lowHpIntensity) / 1000}s`);
+    }
+
+    // ---- match-point / deciding-round banner ----
+    // Shown during the pre-round countdown only. "王手" = someone can take the match with this
+    // round; the 2-2 case is the decider and gets its own hotter treatment.
+    const target = MATCH_WIN_TARGET;
+    const stakesMine = isCpuMatch ? (wins.ally || 0) : (me ? wins[me.id] || 0 : 0);
+    const stakesTheirs = isCpuMatch ? (wins.boss || 0) : (boss ? wins[boss.id] || 0 : 0);
+    let stakesText = '', stakesDecider = false;
+    if (state.phase === 'countdown' && !state.mobWaveActive) {
+      if (stakesMine === target - 1 && stakesTheirs === target - 1) { stakesText = '⚔️ 最終ラウンド'; stakesDecider = true; }
+      else if (stakesMine === target - 1) stakesText = '🔥 王手 ─ 勝てば決着';
+      else if (stakesTheirs === target - 1) stakesText = '⚠ 後がない ─ 負ければ終わり';
+    }
+    roundStakes.classList.toggle('hidden', !stakesText);
+    roundStakes.classList.toggle('decider', stakesDecider);
+    if (stakesText) roundStakes.textContent = stakesText;
+    // Sting fires once per countdown, on the transition into a stakes round — not on every
+    // broadcast, and not again if the same countdown keeps ticking.
+    const stakesKey = stakesText ? `${state.storyStage}|${stakesMine}-${stakesTheirs}|${stakesText}` : '';
+    if (stakesKey && stakesKey !== lastStakesKey) {
+      lastStakesKey = stakesKey;
+      if (window.GameAudio) window.GameAudio.playFinalRound();
+    } else if (!stakesKey) {
+      lastStakesKey = '';
+    }
+
     // Boss signature-move warning: shown only during the move's wind-up. `specialUntil` is a
     // server clock reading, so it is compared against the server's own `now` carried on the
     // state rather than the browser's clock, which would drift.
@@ -3904,6 +3958,17 @@
     updateEffects(dt);
     updateShipMotion(dt, now); // must run before draw() — drawShip() reads this frame's gait/recoil
     updateMobMotion(dt); // ditto for drawMonster()'s facing/walk cycle
+    // Heartbeat while nearly dead. Scheduled off the frame clock rather than a setInterval so it
+    // stops the instant the condition clears (death, pause, round end) with no timer to cancel.
+    if (lowHpActive) {
+      const interval = HEARTBEAT_SLOW_MS - (HEARTBEAT_SLOW_MS - HEARTBEAT_FAST_MS) * lowHpIntensity;
+      if (now - lastHeartbeatAt >= interval) {
+        lastHeartbeatAt = now;
+        if (window.GameAudio) window.GameAudio.playHeartbeat(lowHpIntensity);
+      }
+    } else {
+      lastHeartbeatAt = 0;
+    }
     spawnTrails();
     draw(now);
     if (latestState) updateHud(latestState);

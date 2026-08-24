@@ -377,6 +377,9 @@
     <canvas id="canvas" width="800" height="1000"></canvas>
 
     <div class="overlay" id="waitOverlay">
+      <!-- Match-point / deciding-round banner, shown above the countdown so the stakes are
+           set before the round starts rather than only readable off the score. -->
+      <div class="round-stakes hidden" id="roundStakes"></div>
       <div class="status-big" id="statusLabel">相手を待っています…</div>
       <div id="shareHint" class="share-hint">部屋コード<div class="share-hint-code" id="roomLabel2">----</div>を相手に伝えてください</div>
     </div>
@@ -504,6 +507,10 @@
     <!-- Boss signature-move warning. Shown for the move's wind-up only, so the player has a
          readable beat to react in before it lands. -->
     <div class="boss-special-warn hidden" id="bossSpecialWarn">⚠ <span id="bossSpecialName"></span></div>
+
+    <!-- Near-death vignette: pulses at the screen edges while the local player is nearly out of
+         HP. Purely decorative and never intercepts input. -->
+    <div class="lowhp-vignette hidden" id="lowHpVignette"></div>
 
     <!-- floating joystick: appears wherever the player first touches (anywhere except
          another button), rather than a fixed-position pad -->

@@ -1959,3 +1959,59 @@ button:active {
   0%, 100% { transform: translateX(-50%) scale(1); box-shadow: 0 0 26px rgba(255, 70, 50, 0.5), 0 6px 20px rgba(0, 0, 0, 0.45); }
   50% { transform: translateX(-50%) scale(1.06); box-shadow: 0 0 40px rgba(255, 90, 70, 0.85), 0 6px 20px rgba(0, 0, 0, 0.45); }
 }
+
+/* ---- Near-death vignette ------------------------------------------------------------------
+   Pulses at the very edges of the viewport while the local player is nearly dead. Fixed and
+   pointer-events:none so it can never eat a tap, and it only ever paints the border region so
+   the arena itself stays fully readable — the point is dread, not obstruction. The pulse rate
+   is driven from JS (--lowhp-rate) so it tightens as HP falls, matching the heartbeat. */
+.lowhp-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 24;
+  pointer-events: none;
+  /* Two rings: a wide soft bleed plus a tighter hot rim. A single dark-red shadow just reads as
+     "the screen got darker" against this page's near-black background — the brighter inner rim is
+     what actually says "blood". */
+  box-shadow:
+    inset 0 0 160px 40px rgba(210, 0, 26, 0.75),
+    inset 0 0 50px 0 rgba(255, 70, 80, 0.5);
+  animation: lowhp-pulse var(--lowhp-rate, 0.8s) ease-in-out infinite;
+}
+@keyframes lowhp-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* ---- Match-point / deciding-round banner --------------------------------------------------
+   Sits above the countdown inside #waitOverlay. Two flavours: 王手 (someone is one win from
+   taking the match) and the 2-2 decider, which gets the hotter treatment. */
+.round-stakes {
+  margin-bottom: 10px;
+  padding: 8px 22px;
+  border-radius: 999px;
+  font-size: clamp(15px, 4.5vw, 21px);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  border: 1px solid rgba(255, 211, 91, 0.6);
+  background: rgba(60, 40, 0, 0.6);
+  color: #ffe9a8;
+  box-shadow: 0 0 22px rgba(255, 211, 91, 0.35);
+  animation: round-stakes-in 0.45s cubic-bezier(.2, 1.5, .4, 1);
+}
+.round-stakes.decider {
+  border-color: rgba(255, 90, 70, 0.85);
+  background: rgba(70, 12, 8, 0.72);
+  color: #ffd0c0;
+  box-shadow: 0 0 30px rgba(255, 80, 60, 0.6);
+  animation: round-stakes-in 0.45s cubic-bezier(.2, 1.5, .4, 1), round-stakes-throb 1s ease-in-out infinite 0.45s;
+}
+@keyframes round-stakes-in {
+  0% { transform: scale(0.7); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes round-stakes-throb {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(255, 80, 60, 0.5); }
+  50% { transform: scale(1.05); box-shadow: 0 0 46px rgba(255, 110, 80, 0.85); }
+}

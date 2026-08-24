@@ -310,6 +310,51 @@ window.GameAudio = (() => {
 
   // Story-mode level-up cue — a bright 5-note ascending run, quicker/lighter than
   // playBossVictory's fanfare since this fires mid-combat and shouldn't feel like a big pause.
+  // Two low thumps — a heartbeat. Called on an interval that tightens as hp drops (see
+  // client.js's frame loop), so "nearly dead" is something you hear before you read it.
+  // Deliberately sub-bass and short so it sits under the action instead of masking gunfire.
+  function playHeartbeat(intensity) {
+    ensureCtx();
+    const t = ctx.currentTime;
+    const v = 0.16 + 0.12 * (intensity || 0);
+    const thump = (at, f) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, at);
+      osc.frequency.exponentialRampToValueAtTime(f * 0.55, at + 0.13);
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(v, at + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.16);
+      osc.connect(gain).connect(sfxGain);
+      osc.start(at);
+      osc.stop(at + 0.2);
+    };
+    thump(t, 78);
+    thump(t + 0.17, 62); // the second, softer beat of the pair
+  }
+
+  // Announcement sting for a match-point / deciding round: a low swell with a rising two-note
+  // figure over it. Bigger than a pickup, smaller than the boss-victory fanfare.
+  function playFinalRound() {
+    ensureCtx();
+    const t = ctx.currentTime;
+    const drone = ctx.createOscillator();
+    const dg = ctx.createGain();
+    drone.type = 'sawtooth';
+    drone.frequency.setValueAtTime(55, t);
+    drone.frequency.linearRampToValueAtTime(82.41, t + 1.1);
+    dg.gain.setValueAtTime(0.0001, t);
+    dg.gain.exponentialRampToValueAtTime(0.13, t + 0.35);
+    dg.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+    drone.connect(dg).connect(sfxGain);
+    drone.start(t);
+    drone.stop(t + 1.35);
+    noiseBurst(t, 0.5, 0.1, 'lowpass', 900, sfxGain);
+    beep(392, 0.5, t + 0.5, 0.16, 'triangle');
+    beep(587.33, 0.75, t + 0.78, 0.18, 'triangle');
+  }
+
   function playLevelUp() {
     ensureCtx();
     const t = ctx.currentTime;
@@ -500,6 +545,8 @@ window.GameAudio = (() => {
     playLose,
     playBossVictory,
     playLevelUp,
+    playHeartbeat,
+    playFinalRound,
     startBgm,
     stopBgm,
     startTitleBgm,
