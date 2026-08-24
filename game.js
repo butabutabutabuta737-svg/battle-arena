@@ -610,7 +610,7 @@ function fireLaser(room, shooterWs, shooter, now, originX, originY) {
 
   for (const [ows, op] of room.players) {
     if (ows === shooterWs || !op.alive) continue;
-    if (room.storyCoop && !!shooter.isBoss === !!op.isBoss) continue; // co-op: never friendly fire
+    if (room.isCpuMatch && !!shooter.isBoss === !!op.isBoss) continue; // story rooms have sides: never friendly fire
     if (room.mobWaveActive && op.isBoss) continue; // boss is inert/hidden during a wave
     const toX = op.x - originX;
     const toY = op.y - originY;
@@ -759,7 +759,7 @@ function attemptSword(room, ws, p, now) {
     let hitTargetWs = null;
     for (const [ows, op] of room.players) {
       if (ows === ws || !op.alive) continue;
-      if (room.storyCoop && !!p.isBoss === !!op.isBoss) continue; // co-op: never friendly fire
+      if (room.isCpuMatch && !!p.isBoss === !!op.isBoss) continue; // story rooms have sides: never friendly fire
       if (room.mobWaveActive && op.isBoss) continue; // boss is inert/hidden during a wave
       const dx = op.x - origin.x;
       const dy = op.y - origin.y;
@@ -830,7 +830,10 @@ function attemptSword(room, ws, p, now) {
 // the bomb's own owner if they're still standing close (deliberate risk/reward, not a bug).
 // Also instantly destroys any destructible block caught in the blast, regardless of its
 // remaining hp — a bomb is a lot more powerful than a single bullet, so no partial damage.
-function explodeBomb(room, bomb, now) {
+// `opts.sparesOwner` is set by the artillery signature move: that is a strike the boss CALLS IN
+// on a position, not a device it walked up and planted, so blowing itself up with it is not the
+// same deliberate risk/reward a placed bomb carries.
+function explodeBomb(room, bomb, now, opts) {
   // Any of the room's bosses could have placed this, not just the first one — matching on a
   // single cpuPlayer would have made the second hard-mode boss's bombs deal unscaled damage.
   const bombOwnerBoss = room.isCpuMatch ? bossPlayers(room).find((b) => b.id === bomb.ownerId) : null;
@@ -844,6 +847,12 @@ function explodeBomb(room, bomb, now) {
     // (where !isCpuBomb just means "a human's bomb" and there's no ally to protect) is
     // completely unaffected.
     if (room.storyCoop && !isSelf && !isCpuBomb && !pl.isBoss) continue;
+    // The boss-side mirror of that ally rule: a boss's blast never damages ANOTHER boss. Only
+    // reachable in hard mode, where a stage fields two — and it mattered a lot there, because
+    // both bosses chase the same player, so the squad leader's called-in artillery landed on
+    // its own partner nearly every time (measured: partner 160hp -> 25hp in one fight).
+    if (isCpuBomb && pl.isBoss && !isSelf) continue;
+    if (isCpuBomb && isSelf && opts && opts.sparesOwner) continue;
     if (room.mobWaveActive && pl.isBoss) continue; // boss is inert/hidden during a wave
     const d = Math.hypot(pl.x - bomb.x, pl.y - bomb.y);
     if (d < BOMB_RADIUS + PLAYER_RADIUS) {
@@ -1092,7 +1101,7 @@ function fireBossSpecial(room, ws, boss, target, now) {
     case 3: { // squad leader: artillery on the target's position — area denial, not aimed fire
       const spots = [{ dx: 0, dy: 0 }, { dx: -130, dy: -90 }, { dx: 130, dy: 90 }];
       for (const s of spots) {
-        explodeBomb(room, { x: target.x + s.dx, y: target.y + s.dy, ownerId: boss.id }, now);
+        explodeBomb(room, { x: target.x + s.dx, y: target.y + s.dy, ownerId: boss.id }, now, { sparesOwner: true });
       }
       break;
     }
@@ -2235,7 +2244,11 @@ function tick(room) {
       }
       for (const [pws, p] of room.players) {
         if (p.id === b.ownerId || !p.alive) continue;
-        if (room.storyCoop && !!b.ownerIsBoss === !!p.isBoss) continue; // co-op: never friendly fire
+        // isCpuMatch, not storyCoop: "same side never hits itself" is about SIDES, and hard mode
+        // puts two bosses in a 1P room where this guard used to be off entirely — so the pair
+        // shot each other (measured: partner lost 18hp to stray fire in one short fight).
+        // Arena PvP has no sides and is untouched (isCpuMatch is false there).
+        if (room.isCpuMatch && !!b.ownerIsBoss === !!p.isBoss) continue;
         if (room.mobWaveActive && p.isBoss) continue; // boss is inert/hidden during a wave
         const d = Math.hypot(p.x - b.x, p.y - b.y);
         if (d < PLAYER_RADIUS + bRadius) {
