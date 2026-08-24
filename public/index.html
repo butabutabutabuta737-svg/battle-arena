@@ -441,15 +441,22 @@
     </div>
 
     <div class="story-ending-overlay hidden" id="storyEndingOverlay">
+      <!-- Both endings now have their own pre-rendered splash (title and narration baked into
+           the artwork, like the true ending's). The text card below is kept, but hidden whenever
+           art is showing — printing the same words twice would be worse than either alone. It
+           still stands in if an image ever fails to load. -->
+      <img class="story-ending-img hidden" id="storyEndingImg" alt="" />
       <div class="story-ending-card">
         <!-- Tag/title/text are swapped from JS for the hard-mode ending — see updateHud's
              finalStageClear branch. -->
+        <div class="story-ending-copy" id="storyEndingCopy">
         <div class="story-ending-tag" id="storyEndingTag">ALL STAGES CLEAR</div>
         <div class="story-ending-title" id="storyEndingTitle">🏆 戦場に、静寂が訪れた</div>
         <div class="story-ending-text" id="storyEndingText">
           立ちはだかった５人の強敵、そのすべてを打ち破った。<br /><br />
           すべての戦場の敵は、倒した。<br />
           だが、戦いはまだ終わらない――。
+        </div>
         </div>
         <div class="btn-row">
           <button class="btn-secondary" id="challengeExBtn">…戦場の深部へ進む</button>
@@ -518,6 +525,9 @@
     <div class="boss-intro-overlay wave-intro-overlay hidden" id="waveIntroOverlay">
       <div class="boss-intro-card">
         <div class="boss-intro-stage" id="waveIntroStage">ザコモンスター襲来</div>
+        <!-- The wave now gets a real card image like the boss fights do, instead of a lone emoji.
+             Reuses .boss-intro-portrait so the two cards stay visually the same shape. -->
+        <img class="boss-intro-portrait wave-intro-portrait" src="images/wave-intro.jpg" alt="" />
         <div class="wave-intro-title" id="waveIntroTitle">⚔️</div>
         <div class="boss-intro-line" id="waveIntroLine">「……」</div>
       </div>

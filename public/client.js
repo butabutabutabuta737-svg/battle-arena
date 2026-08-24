@@ -90,6 +90,8 @@
   const storyEndingOverlay = $('#storyEndingOverlay');
   const storyEndingTitleBtn = $('#storyEndingTitleBtn');
   const challengeExBtn = $('#challengeExBtn');
+  const storyEndingImg = $('#storyEndingImg');
+  const storyEndingCopy = $('#storyEndingCopy');
   const storyEndingTag = $('#storyEndingTag');
   const storyEndingTitle = $('#storyEndingTitle');
   const storyEndingText = $('#storyEndingText');
@@ -4161,6 +4163,12 @@
           // of the fight the player just won rather than being something still ahead of them.
           const isHard = !!state.hardMode;
           if (isHard) recordHardCleared();
+          // Each ending has its own splash with its wording already in the art, so the text card
+          // is swapped out for it rather than shown alongside.
+          storyEndingImg.src = isHard ? 'images/ending_hard.jpg' : 'images/ending_stage5.jpg';
+          storyEndingImg.classList.remove('hidden');
+          storyEndingCopy.classList.add('hidden');
+          storyEndingOverlay.classList.add('has-art');
           storyEndingTag.textContent = isHard ? 'HARD MODE ALL CLEAR' : 'ALL STAGES CLEAR';
           storyEndingTitle.textContent = isHard ? '🔥 二つの影も、断ち切った' : '🏆 戦場に、静寂が訪れた';
           // The last stage goes straight from the kill to this screen without a defeat card
