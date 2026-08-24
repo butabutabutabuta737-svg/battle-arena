@@ -119,10 +119,8 @@
   const mobWaveLabel = $('#mobWaveLabel');
   const levelLabel = $('#levelLabel');
   const levelUpToast = $('#levelUpToast');
-  const bossSpecialWarn = $('#bossSpecialWarn');
   const lowHpVignette = $('#lowHpVignette');
   const roundStakes = $('#roundStakes');
-  const bossSpecialName = $('#bossSpecialName');
   const levelUpValue = $('#levelUpValue');
   const floatJoystick = $('#floatJoystick');
   const floatJoystickKnob = $('#floatJoystickKnob');
@@ -3039,6 +3037,27 @@
     ctx.restore();
   }
 
+  // How far into a signature move's wind-up a boss is, 0..1. Replaces the old on-screen text
+  // warning: the tell is now the boss itself lighting up.
+  // The server publishes specialUntil against ITS clock, which only arrives ~30x a second — far
+  // too coarse to drive a smooth ramp — so the elapsed time is measured locally from the frame
+  // clock, starting the moment a new special is first seen.
+  const specialCharge = new Map(); // player id -> { startedAt, name }
+  const WINDUP_RAMP_MS = 700; // wind-ups run 600-1000ms (see BOSS_SPECIALS in game.js)
+  function windupCharge(p) {
+    const serverNow = latestState ? latestState.serverNow || 0 : 0;
+    if (!p.specialName || !(p.specialUntil > serverNow)) {
+      if (specialCharge.has(p.id)) specialCharge.delete(p.id);
+      return 0;
+    }
+    let rec = specialCharge.get(p.id);
+    if (!rec || rec.name !== p.specialName) {
+      rec = { startedAt: performance.now(), name: p.specialName };
+      specialCharge.set(p.id, rec);
+    }
+    return Math.min(1, 0.18 + (performance.now() - rec.startedAt) / WINDUP_RAMP_MS);
+  }
+
   function drawShip(p, isMe) {
     // top-down soldier: shadow, boots, torso, helmeted head (offset toward facing), rifle.
     // In story mode, the opponent is always the current stage's boss — escalate its look
@@ -3150,10 +3169,13 @@
     // fresh haze over the parts drawn before it — legs and arms were being erased by the
     // torso's own glow. Laying one soft radial pool down first keeps the "these soldiers are
     // lit" read while leaving every silhouette below it at full contrast.
-    const glowR = 17 + glowBlur * 0.55;
+    // charge > 0 only while a boss is winding up a signature move — the pool swells and
+    // brightens in its own colour as the move builds.
+    const charge = isBoss ? windupCharge(p) : 0;
+    const glowR = (17 + glowBlur * 0.55) * (1 + charge * 0.85);
     const glowGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, glowR);
-    glowGrad.addColorStop(0, withAlpha(uniform, 0.5));
-    glowGrad.addColorStop(0.55, withAlpha(uniform, 0.2));
+    glowGrad.addColorStop(0, withAlpha(uniform, 0.5 + charge * 0.45));
+    glowGrad.addColorStop(0.55, withAlpha(uniform, 0.2 + charge * 0.42));
     glowGrad.addColorStop(1, withAlpha(uniform, 0));
     ctx.fillStyle = glowGrad;
     ctx.beginPath();
@@ -3425,6 +3447,26 @@
     ctx.restore();
 
     ctx.restore(); // upper-body lean/bob transform
+
+    // The body lighting up. Drawn LAST, still inside the body's own transform, and with
+    // 'lighter' so it adds to the pixels already there instead of covering them — the soldier
+    // brightens rather than being replaced by a blob. A fast flicker on top of the ramp reads
+    // as charging; the ramp alone just looked like a slow fade.
+    if (charge > 0) {
+      const flicker = 0.78 + 0.22 * Math.sin(now / 52);
+      const a = charge * flicker;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const bodyGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, 16);
+      bodyGlow.addColorStop(0, withAlpha('#ffffff', 0.5 * a));
+      bodyGlow.addColorStop(0.45, withAlpha(uniform, 0.55 * a));
+      bodyGlow.addColorStop(1, withAlpha(uniform, 0));
+      ctx.fillStyle = bodyGlow;
+      ctx.beginPath();
+      ctx.arc(0, 0, 16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
     ctx.restore();
 
     // Boss aura. EX boss: one ring per RAINBOW_RING_COLORS entry, each its own fixed color —
@@ -4029,14 +4071,9 @@
       lastStakesKey = '';
     }
 
-    // Boss signature-move warning: shown only during the move's wind-up. `specialUntil` is a
-    // server clock reading, so it is compared against the server's own `now` carried on the
-    // state rather than the browser's clock, which would drift.
-    const warning = state.phase === 'playing'
-      ? state.players.find((p) => p.isBoss && p.specialName && p.specialUntil > (state.serverNow || 0))
-      : null;
-    bossSpecialWarn.classList.toggle('hidden', !warning);
-    if (warning) bossSpecialName.textContent = warning.specialName;
+    // A boss's signature move used to announce itself with an on-screen "⚠ move name" banner.
+    // Per explicit request that is gone: the tell is now purely visual — the boss's own body
+    // lights up during the wind-up (see windupCharge/drawShip). Nothing to update here.
     // 1P only: reads MY level off the players array (levels are per player now — there is no
     // room-wide state.storyLevel any more). In co-op this stays hidden and the two per-name
     // badges above carry it instead.
