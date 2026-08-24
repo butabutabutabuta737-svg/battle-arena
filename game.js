@@ -1364,7 +1364,11 @@ function updateCpuAIOne(room, now, cpuToken) {
     // movement, not real pathfinding — see updateCpuAI's other movement decisions below).
     // Takes priority over item-seeking below; stops applying once the CPU is inside the same
     // house, at which point the normal chase/kite logic already works fine unobstructed.
-    if (room.storyStage >= 3) {
+    // Keyed off the boss's OWN index: this is a capability that belongs to bosses 3+, not to
+    // "stage 3". In hard mode a stage number is 1-3 and says nothing about which bosses are in
+    // it, so a stage test made the hard-mode versions of bosses 3 and 4 DUMBER than their
+    // normal-campaign selves — they stopped following the player into a house.
+    if ((cpu.bossIndex || room.storyStage) >= 3) {
       const humanHouse = houseContainingPoint(room.houses, human.x, human.y);
       if (humanHouse && houseContainingPoint(room.houses, cpu.x, cpu.y) !== humanHouse) {
         target = houseEntrancePoint(humanHouse);
@@ -1458,7 +1462,9 @@ function updateCpuAIOne(room, now, cpuToken) {
   // when close enough that it would also catch the human, then — since bombs no longer
   // have an auto-fuse, only the button detonates them — watch its own placed bombs and
   // trigger them once the human actually wanders into blast range.
-  if (room.storyStage >= 2) {
+  // Same per-boss keying as the house-chase above — otherwise hard mode's boss 2 lost the bomb
+  // use it has in the normal campaign, purely because it happens to fight on hard stage 1.
+  if ((cpu.bossIndex || room.storyStage) >= 2) {
     const distToHuman = Math.hypot(human.x - cpu.x, human.y - cpu.y);
     const myPlacedBombs = room.bombs.filter((b) => b.ownerId === cpu.id);
     if (myPlacedBombs.length > 0) {
@@ -1556,7 +1562,11 @@ function updateCpuAICoop(room, now, cpuToken) {
     let target = null;
     const wantsHeal = cpu.hp < (cpu.maxHp || MAX_HP) * 0.45;
 
-    if (room.storyStage >= 3) {
+    // Keyed off the boss's OWN index: this is a capability that belongs to bosses 3+, not to
+    // "stage 3". In hard mode a stage number is 1-3 and says nothing about which bosses are in
+    // it, so a stage test made the hard-mode versions of bosses 3 and 4 DUMBER than their
+    // normal-campaign selves — they stopped following the player into a house.
+    if ((cpu.bossIndex || room.storyStage) >= 3) {
       const humanHouse = houseContainingPoint(room.houses, human.x, human.y);
       if (humanHouse && houseContainingPoint(room.houses, cpu.x, cpu.y) !== humanHouse) {
         target = houseEntrancePoint(humanHouse);
@@ -1643,7 +1653,9 @@ function updateCpuAICoop(room, now, cpuToken) {
   inp.swording = distToHumanNow <= swordReach + PLAYER_RADIUS;
   inp.shooting = st.firing && !inp.swording;
 
-  if (room.storyStage >= 2) {
+  // Same per-boss keying as the house-chase above — otherwise hard mode's boss 2 lost the bomb
+  // use it has in the normal campaign, purely because it happens to fight on hard stage 1.
+  if ((cpu.bossIndex || room.storyStage) >= 2) {
     const distToHuman = Math.hypot(human.x - cpu.x, human.y - cpu.y);
     const myPlacedBombs = room.bombs.filter((b) => b.ownerId === cpu.id);
     if (myPlacedBombs.length > 0) {
@@ -1974,7 +1986,10 @@ function spawnMonster(room) {
   // story mode, per explicit request — arena/PvP mode (not isCpuMatch) is unaffected, and
   // room.storyStage stays frozen at 5 during the EX boss fight too, so "5面以降" naturally
   // covers that as well.
-  const goldAllowed = !room.isCpuMatch || room.storyStage >= 5;
+  // Hard mode is unlocked only after the EX boss falls, i.e. it is strictly later content than
+  // stage 5 — but its stage numbers only run 1-3, so a bare "storyStage >= 5" silently meant
+  // gold monsters never spawned there at all.
+  const goldAllowed = !room.isCpuMatch || room.hardMode || room.storyStage >= 5;
   const gold = !chicken && goldAllowed && Math.random() < GOLD_MONSTER_CHANCE;
   const radius = chicken ? GOLDEN_CHICKEN_RADIUS : gold ? GOLD_MONSTER_RADIUS : MONSTER_RADIUS;
   const hp = gold ? MONSTER_MAX_HP * GOLD_MONSTER_HP_MULT : MONSTER_MAX_HP; // chicken uses the plain MONSTER_MAX_HP too — "HPはモンスターと同じ"
@@ -2004,7 +2019,10 @@ function spawnMonster(room) {
 // rolls, tagged `wave` so tick()'s movement loop applies its rolled color tier's speed/damage
 // multiplier and so the death-cleanup loop can count it toward mobWaveKilled.
 function spawnWaveMob(room) {
-  const tier = pickMobWaveColorTier(room.mobWaveIndex);
+  // Hard mode always draws from the HARDEST weight table. Its stage numbers only run 1-3, so
+  // feeding mobWaveIndex straight in pointed at the "wave 1/2" tables — i.e. the post-EX-boss
+  // victory-lap mode was spawning the weakest grunts in the game (45%% white).
+  const tier = pickMobWaveColorTier(room.hardMode ? MOB_WAVE_COLOR_WEIGHTS.length : room.mobWaveIndex);
   const stats = MOB_WAVE_COLOR_STATS[tier];
   // Must match what monsterRadius() will report for this tier, or a gold grunt gets placed using
   // the smaller base radius and can spawn clipped into a wall it doesn't actually fit beside.

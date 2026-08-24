@@ -1103,8 +1103,12 @@
   function showWaveIntro(index) {
     introShownForWave = index;
     const i = Math.min(Math.max(1, index), MOB_WAVE_NARRATION.length) - 1;
-    waveIntroStage.textContent = `第${index}面 突破イベント`;
-    waveIntroTitle.textContent = '⚔️ ザコモンスター襲来！';
+    // Hard mode counts STAGES, not 面 — saying "第1面" there described a stage the mode does
+    // not have. Its grunts are also drawn from the hardest table (see spawnWaveMob), so the
+    // title says so rather than implying this is an early, easy wave.
+    const hard = !!(latestState && latestState.hardMode);
+    waveIntroStage.textContent = hard ? `🔥ハード 第${index}ステージ 突破イベント` : `第${index}面 突破イベント`;
+    waveIntroTitle.textContent = hard ? '⚔️ ザコモンスター大群襲来！' : '⚔️ ザコモンスター襲来！';
     waveIntroLine.textContent = MOB_WAVE_NARRATION[i];
     waveIntroOverlay.classList.remove('hidden');
     fitBossIntroCardSoon(waveIntroOverlay);
