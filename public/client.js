@@ -2432,7 +2432,48 @@
     }
   }
 
+  // Per-stage battlefield art. Keyed by the BOSS's OWN index rather than room.storyStage, so a
+  // hard-mode stage (whose numbers are 1-3 and mean "boss pair", see the bossIndex note in
+  // updateHud) shows the battlefield those bosses actually belong to. Any stage with no entry
+  // here simply falls through to the painted gradient below — this is additive, not a
+  // replacement, so partial art coverage is a supported state.
+  const STAGE_BG_SRCS = { 1: 'images/stage1-bg.jpg' };
+  const stageBgCache = new Map();
+  function stageBgImage() {
+    const st = latestState;
+    if (!st || !st.players) return null;
+    const lead = st.players.find((p) => p.isBoss);
+    if (!lead) return null; // arena PvP has no campaign stage to theme
+    const src = STAGE_BG_SRCS[lead.bossIndex || st.storyStage];
+    if (!src) return null;
+    let img = stageBgCache.get(src);
+    if (!img) { img = new Image(); img.src = src; stageBgCache.set(src, img); }
+    // Never draw a half-loaded image — the gradient stands in for the one or two frames it takes.
+    return img.complete && img.naturalWidth > 0 ? img : null;
+  }
+  // cover-fit, overdrawn by 40px on every side so the screen-shake translate can never expose an
+  // edge (the same margin the painted background below uses, and for the same reason).
+  function drawStageBg(img) {
+    const bw = arena.w + 80;
+    const bh = arena.h + 80;
+    const scale = Math.max(bw / img.naturalWidth, bh / img.naturalHeight);
+    const w = img.naturalWidth * scale;
+    const h = img.naturalHeight * scale;
+    ctx.drawImage(img, -40 + (bw - w) / 2, -40 + (bh - h) / 2, w, h);
+    // A small guaranteed darkening pass. The art itself measures darker than the painted
+    // background it replaces, but this keeps that true for any future stage art dropped in here
+    // without re-checking bullet contrast by hand every time.
+    ctx.fillStyle = 'rgba(8, 6, 4, 0.18)';
+    ctx.fillRect(-40, -40, bw, bh);
+  }
+
   function drawBackground(t) {
+    const bgArt = stageBgImage();
+    if (bgArt) {
+      drawStageBg(bgArt);
+      drawDebris(); // kept: the drifting motes are what stop a still photo reading as a frozen frame
+      return; // deliberately no grid lines over photographic art — they read as a UI overlay
+    }
     // dusty warzone ground — warm dirt tones instead of the old cool sci-fi blue
     const g = ctx.createLinearGradient(0, 0, 0, arena.h);
     g.addColorStop(0, '#2a2620');

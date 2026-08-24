@@ -2161,12 +2161,14 @@ button:active {
   inset: 0;
   z-index: 24;
   pointer-events: none;
-  /* Two rings: a wide soft bleed plus a tighter hot rim. A single dark-red shadow just reads as
-     "the screen got darker" against this page's near-black background — the brighter inner rim is
-     what actually says "blood". */
-  box-shadow:
-    inset 0 0 160px 40px rgba(210, 0, 26, 0.75),
-    inset 0 0 50px 0 rgba(255, 70, 80, 0.5);
+  /* A real edge vignette, not an inset box-shadow. The shadow version bled 160px+40px inward
+     from a VIEWPORT-sized box, which washed the whole arena red — fine when the page behind it
+     was near-black, but it buried the battlefield art added later. A radial gradient guarantees
+     the middle stays fully transparent while the rim stays just as loud. */
+  background: radial-gradient(ellipse 78% 68% at 50% 50%,
+    rgba(210, 0, 26, 0) 52%,
+    rgba(210, 0, 26, 0.5) 80%,
+    rgba(255, 60, 70, 0.92) 100%);
   animation: lowhp-pulse var(--lowhp-rate, 0.8s) ease-in-out infinite;
 }
 @keyframes lowhp-pulse {
