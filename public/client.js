@@ -117,6 +117,8 @@
   const mobWaveLabel = $('#mobWaveLabel');
   const levelLabel = $('#levelLabel');
   const levelUpToast = $('#levelUpToast');
+  const bossSpecialWarn = $('#bossSpecialWarn');
+  const bossSpecialName = $('#bossSpecialName');
   const levelUpValue = $('#levelUpValue');
   const floatJoystick = $('#floatJoystick');
   const floatJoystickKnob = $('#floatJoystickKnob');
@@ -3659,6 +3661,14 @@
     } else {
       mobWaveLabel.classList.add('hidden');
     }
+    // Boss signature-move warning: shown only during the move's wind-up. `specialUntil` is a
+    // server clock reading, so it is compared against the server's own `now` carried on the
+    // state rather than the browser's clock, which would drift.
+    const warning = state.phase === 'playing'
+      ? state.players.find((p) => p.isBoss && p.specialName && p.specialUntil > (state.serverNow || 0))
+      : null;
+    bossSpecialWarn.classList.toggle('hidden', !warning);
+    if (warning) bossSpecialName.textContent = warning.specialName;
     // 1P only: reads MY level off the players array (levels are per player now — there is no
     // room-wide state.storyLevel any more). In co-op this stays hidden and the two per-name
     // badges above carry it instead.

@@ -1933,3 +1933,29 @@ button:active {
   width: 108px;
   height: 135px;
 }
+
+/* Boss signature-move warning. Sits lower than .level-up-toast so the two can never collide,
+   and pulses hard because its whole job is to be noticed inside a ~0.6-1.0s wind-up. */
+.boss-special-warn {
+  position: absolute;
+  top: 108px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 26;
+  padding: 8px 20px;
+  border-radius: 999px;
+  background: rgba(50, 8, 8, 0.88);
+  border: 1px solid rgba(255, 90, 70, 0.75);
+  box-shadow: 0 0 26px rgba(255, 70, 50, 0.55), 0 6px 20px rgba(0, 0, 0, 0.45);
+  color: #ffd0c0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: boss-special-pulse 0.4s ease-in-out infinite;
+}
+@keyframes boss-special-pulse {
+  0%, 100% { transform: translateX(-50%) scale(1); box-shadow: 0 0 26px rgba(255, 70, 50, 0.5), 0 6px 20px rgba(0, 0, 0, 0.45); }
+  50% { transform: translateX(-50%) scale(1.06); box-shadow: 0 0 40px rgba(255, 90, 70, 0.85), 0 6px 20px rgba(0, 0, 0, 0.45); }
+}

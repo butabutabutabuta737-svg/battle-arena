@@ -748,7 +748,10 @@ function attemptSword(room, ws, p, now) {
   // during the EX fight (see EX boss handling elsewhere), so this naturally excludes EX
   // without needing its own separate guard. Covers both 1P and 2P co-op, since both use the
   // same room.storyStage numbering.
-  const stage4BossMelee = room.isCpuMatch && p.isBoss && room.storyStage === 4;
+  // Keyed off the boss's OWN index, not the stage number: in hard mode the knife specialist is
+  // boss 4 fighting on hard STAGE 2, so a stage-number test silently stripped its signature
+  // extended reach there. Falls back to the stage for any boss without an index.
+  const stage4BossMelee = room.isCpuMatch && p.isBoss && (p.bossIndex ? p.bossIndex === 4 : room.storyStage === 4);
   const range = (rangeActive || stage4BossMelee) ? SWORD_RANGE * SWORD_RANGE_BUFF_MULT : SWORD_RANGE;
 
   for (const origin of attackOrigins(room, ws, p, now)) {
@@ -1033,6 +1036,111 @@ function isBossWs(room, ws) {
 function bossPlayers(room) {
   return [...room.players.values()].filter((p) => p.isBoss);
 }
+
+// ---- Boss signature moves ------------------------------------------------------------------
+// Every boss ran the exact same AI with different numbers, so they were only distinguishable by
+// colour and stats. Each now has ONE move of its own, fired below a health threshold on a
+// cooldown, built entirely out of primitives that already exist (bullets / the laser / the bomb
+// blast / a position change) rather than any new weapon system.
+// Fairness: a move never fires instantly. `windupMs` passes first with the move's name published
+// on the boss (see specialName/specialUntil in the state), so the player gets a readable warning.
+const BOSS_SPECIAL_HP_TRIGGER = 0.6; // only once a boss is under 60% — a desperation move, not an opener
+const BOSS_SPECIALS = {
+  1: { name: 'がむしゃら乱射', windupMs: 700, cooldownMs: 7000 },
+  2: { name: '制圧掃射', windupMs: 750, cooldownMs: 7000 },
+  3: { name: '砲撃要請', windupMs: 1000, cooldownMs: 8500 },
+  4: { name: '瞬影', windupMs: 600, cooldownMs: 7500 },
+  5: { name: '覇王弾幕', windupMs: 850, cooldownMs: 7000 },
+  6: { name: '神威', windupMs: 900, cooldownMs: 6500 },
+};
+
+// One boss bullet, matching attemptFire()'s own bullet shape so every downstream collision,
+// render and XP path treats it identically to an ordinary shot.
+function pushBossBullet(room, boss, angle, opts) {
+  const o = opts || {};
+  const speed = BULLET_SPEED * (o.speedMult || 1);
+  room.bullets.push({
+    id: room.bulletId++,
+    ownerId: boss.id,
+    ownerIsBoss: true,
+    ownerIsEx: boss.bossIndex === STORY_BOSSES.length + 1,
+    x: boss.x + Math.cos(angle) * PLAYER_RADIUS,
+    y: boss.y + Math.sin(angle) * PLAYER_RADIUS,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    damage: BASE_BULLET_DAMAGE * (o.damageMult || 1) * cpuAttackMult(room, boss),
+    radius: BULLET_RADIUS * (o.bigMult || 1),
+    powered: false,
+    big: !!o.big,
+  });
+}
+
+// Runs the actual move. Kept separate from the trigger bookkeeping so each boss's behaviour
+// reads as one short, self-contained script.
+function fireBossSpecial(room, ws, boss, target, now) {
+  const aim = Math.atan2(target.y - boss.y, target.x - boss.x);
+  switch (boss.bossIndex) {
+    case 1: { // rookie: panicked wide spray — lots of bullets, badly aimed
+      for (let i = -4; i <= 4; i++) pushBossBullet(room, boss, aim + i * 0.14, { speedMult: 0.85, damageMult: 0.7 });
+      break;
+    }
+    case 2: { // veteran: a disciplined tight volley
+      for (let i = -1; i <= 1; i++) pushBossBullet(room, boss, aim + i * 0.06, { speedMult: 1.15 });
+      for (let i = -2; i <= 2; i++) pushBossBullet(room, boss, aim + i * 0.13, { speedMult: 1.0 });
+      break;
+    }
+    case 3: { // squad leader: artillery on the target's position — area denial, not aimed fire
+      const spots = [{ dx: 0, dy: 0 }, { dx: -130, dy: -90 }, { dx: 130, dy: 90 }];
+      for (const s of spots) {
+        explodeBomb(room, { x: target.x + s.dx, y: target.y + s.dy, ownerId: boss.id }, now);
+      }
+      break;
+    }
+    case 4: { // assassin: blink to the target's back and cut
+      const behind = aim + Math.PI;
+      boss.x = Math.max(PLAYER_RADIUS, Math.min(ARENA_W - PLAYER_RADIUS, target.x + Math.cos(behind) * 46));
+      boss.y = Math.max(PLAYER_RADIUS, Math.min(ARENA_H - PLAYER_RADIUS, target.y + Math.sin(behind) * 46));
+      resolveWallCollisions(boss, room.walls);
+      resolveWallCollisions(boss, room.blocks);
+      boss.angle = Math.atan2(target.y - boss.y, target.x - boss.x);
+      const inp = room.inputs.get(ws);
+      if (inp) inp.angle = boss.angle;
+      room.lastSword.delete(ws); // the blink is the wind-up; don't let a stale cooldown eat the strike
+      attemptSword(room, ws, boss, now);
+      break;
+    }
+    case 5: { // conqueror: a full ring, nowhere is safe except the gaps
+      for (let i = 0; i < 16; i++) pushBossBullet(room, boss, (i / 16) * Math.PI * 2, { speedMult: 0.9 });
+      break;
+    }
+    default: { // war god: a big rainbow ring plus a lance straight down the aim line
+      for (let i = 0; i < 20; i++) pushBossBullet(room, boss, (i / 20) * Math.PI * 2, { speedMult: 0.95, bigMult: BIG_BULLET_MULT, big: true });
+      fireLaser(room, ws, boss, now, boss.x, boss.y);
+      break;
+    }
+  }
+}
+
+// Trigger bookkeeping: decide whether to start a wind-up, and fire when it elapses.
+function updateBossSpecial(room, ws, boss, target, now, st) {
+  const spec = BOSS_SPECIALS[boss.bossIndex];
+  if (!spec || !boss.alive || !target || !target.alive) return;
+  if (st.specialFiresAt) {
+    if (now >= st.specialFiresAt) {
+      st.specialFiresAt = 0;
+      fireBossSpecial(room, ws, boss, target, now);
+    }
+    return;
+  }
+  if (boss.hp / (boss.maxHp || MAX_HP) > BOSS_SPECIAL_HP_TRIGGER) return;
+  if (now < (st.specialReadyAt || 0)) return;
+  st.specialReadyAt = now + spec.cooldownMs;
+  st.specialFiresAt = now + spec.windupMs;
+  // Published to the client so it can put the move's name on screen for the wind-up — a move
+  // that lands with no warning reads as an unfair spike rather than a boss doing something.
+  boss.specialName = spec.name;
+  boss.specialUntil = now + spec.windupMs;
+}
 // How many connections a fully-populated room of this type holds: humans + however many bosses
 // the current mode fields. Every "is the room full / still intact" test goes through this, since
 // the old hardcoded `storyCoop ? 3 : 2` is simply wrong once a stage can field two bosses.
@@ -1188,7 +1296,10 @@ function updateCpuAIOne(room, now, cpuToken) {
     return;
   }
 
-  const human = [...room.players.values()].find((p) => p !== cpu);
+  // Explicitly the non-boss player. The previous `p !== cpu` happened to work only because
+  // humans join before bosses, so the first non-self entry was the human — with two bosses in
+  // the room that is a latent "boss targets its partner" bug waiting on Map ordering.
+  const human = [...room.players.values()].find((p) => !p.isBoss);
   if (!human || !human.alive) {
     inp.up = inp.down = inp.left = inp.right = false;
     inp.shooting = false;
@@ -1212,6 +1323,9 @@ function updateCpuAIOne(room, now, cpuToken) {
     });
   }
   const st = room.cpuStates.get(cpuToken);
+  // Signature move gets first refusal each tick — it can reposition the boss (the assassin's
+  // blink), so it must resolve before the normal movement/aim logic below runs for this frame.
+  updateBossSpecial(room, cpuToken, cpu, human, now, st);
 
   if (now - st.lastDecisionAt >= cfg.reactionMs) {
     st.lastDecisionAt = now;
@@ -1326,7 +1440,8 @@ function updateCpuAIOne(room, now, cpuToken) {
   // it would never actually attempt a swing from beyond the plain SWORD_RANGE despite being
   // able to land one from further out.
   const distToHumanNow = Math.hypot(human.x - cpu.x, human.y - cpu.y);
-  const swordReach = room.storyStage === 4 ? SWORD_RANGE * SWORD_RANGE_BUFF_MULT : SWORD_RANGE;
+  // Same per-boss keying as attemptSword's stage4BossMelee — see its comment.
+  const swordReach = (cpu.bossIndex ? cpu.bossIndex === 4 : room.storyStage === 4) ? SWORD_RANGE * SWORD_RANGE_BUFF_MULT : SWORD_RANGE;
   inp.swording = distToHumanNow <= swordReach + PLAYER_RADIUS;
   inp.shooting = st.firing && !inp.swording;
 
@@ -1400,6 +1515,9 @@ function updateCpuAICoop(room, now, cpuToken) {
   }
   const st = room.cpuStates.get(cpuToken);
   let human = allies.find((p) => p.id === st.targetAllyId);
+  // Same first-refusal as the 1P path. Falls back to any living ally so a boss whose chosen
+  // target just went down still gets to use its move.
+  updateBossSpecial(room, cpuToken, cpu, human || allies[0], now, st);
 
   if (now - st.lastDecisionAt >= cfg.reactionMs) {
     st.lastDecisionAt = now;
@@ -1511,7 +1629,8 @@ function updateCpuAICoop(room, now, cpuToken) {
   const distToHumanNow = Math.hypot(human.y - cpu.y, human.x - cpu.x);
   // Stage4's boss (always-extended reach — see attemptSword()) needs this threshold extended
   // to match, same reasoning as updateCpuAI's 1P version above.
-  const swordReach = room.storyStage === 4 ? SWORD_RANGE * SWORD_RANGE_BUFF_MULT : SWORD_RANGE;
+  // Same per-boss keying as attemptSword's stage4BossMelee — see its comment.
+  const swordReach = (cpu.bossIndex ? cpu.bossIndex === 4 : room.storyStage === 4) ? SWORD_RANGE * SWORD_RANGE_BUFF_MULT : SWORD_RANGE;
   inp.swording = distToHumanNow <= swordReach + PLAYER_RADIUS;
   inp.shooting = st.firing && !inp.swording;
 
@@ -2370,6 +2489,7 @@ function broadcastState(room) {
     // Level/XP now ride on each player object (see addStoryXp) and reach the client through the
     // `...p` spread in the players array above — there is no room-wide level any more.
     storyLevelCap: STORY_LEVEL_CAP,
+    serverNow: now, // the room's own clock, so the client can time-box things like the boss special warning
   };
   const msg = JSON.stringify(state);
   for (const ws of room.players.keys()) {

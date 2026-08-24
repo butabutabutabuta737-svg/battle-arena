@@ -501,6 +501,10 @@
          own sfx (playLevelUp() in audio.js/client.js). Auto-hides itself. -->
     <div class="level-up-toast hidden" id="levelUpToast">🎉 LEVEL UP! <span id="levelUpValue">Lv.2</span></div>
 
+    <!-- Boss signature-move warning. Shown for the move's wind-up only, so the player has a
+         readable beat to react in before it lands. -->
+    <div class="boss-special-warn hidden" id="bossSpecialWarn">⚠ <span id="bossSpecialName"></span></div>
+
     <!-- floating joystick: appears wherever the player first touches (anywhere except
          another button), rather than a fixed-position pad -->
     <div class="floating-joystick hidden" id="floatJoystick"><div class="floating-joystick-knob" id="floatJoystickKnob"></div></div>
