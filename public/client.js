@@ -1184,7 +1184,10 @@
         + `<span class="cert-achv-desc">${masked ? '隠された実績' : a.desc}</span></div>`;
     }).join('');
   }
-  certPortraitEx.src = 'images/bosses/boss6-face.jpg';
+  // The full-body shot, matching the five .cert-portrait images beside it — the face crop this
+  // used to point at was the odd one out in a row of standing figures. The tight boss6-face.jpg
+  // is still what the pre-battle dialogue card wants (see BOSS_TIER_THEME), so both stay.
+  certPortraitEx.src = 'images/bosses/boss6.jpg';
   function renderCertificate() {
     // Display tier is 0-6: 0-5 mirror bestBossDefeated exactly, 6 only once the hidden EX
     // boss has also fallen (which requires bestBossDefeated===5 already, so this can't be
