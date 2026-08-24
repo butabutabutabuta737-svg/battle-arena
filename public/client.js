@@ -3628,7 +3628,12 @@
       // ending, no ambiguous mid-round state to flag here the way a fallen ally has.
       downedTheirs.classList.toggle('hidden', !(isCoop && !topRight.alive && state.phase === 'playing'));
     } else {
-      nameTheirs.textContent = isCoop ? '仲間を待っています…' : '相手を待っています…';
+      // Two different things reach here. Genuinely waiting for someone to arrive — say so. Or a
+      // two-boss 1P stage, where this slot has no occupant *by design* (both bosses live in the
+      // bottom row) and the block is blanked: that one carries no text at all, rather than
+      // leaving a stale "waiting for an opponent" line sitting in the DOM behind the blanking.
+      const blankedByDesign = multiBoss && !isCoop;
+      nameTheirs.textContent = blankedByDesign ? '' : (isCoop ? '仲間を待っています…' : '相手を待っています…');
       hpTheirs.style.width = '100%';
       hpBonusTheirs.style.width = '0%';
       downedTheirs.classList.add('hidden');
