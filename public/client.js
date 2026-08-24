@@ -319,11 +319,162 @@
     }
   }
 
+  // ---- Records: best times + achievement badges ----------------------------------------------
+  // Both live only in this browser, alongside the certificate flags above. The server publishes
+  // the raw facts (see game.js resetStageStats) and every decision about what they unlock is
+  // made here, so adding a badge never needs a server change.
+  const TIME_STORAGE_KEY = 'battle-arena-best-times';
+  const ACHV_STORAGE_KEY = 'battle-arena-achievements';
+  let bestTimes = {};
+  try { bestTimes = JSON.parse(localStorage.getItem(TIME_STORAGE_KEY) || '{}') || {}; } catch (e) { bestTimes = {}; }
+  let unlockedAchv = new Set();
+  try { unlockedAchv = new Set(JSON.parse(localStorage.getItem(ACHV_STORAGE_KEY) || '[]')); } catch (e) { unlockedAchv = new Set(); }
+  // Tracks "has every stage of THIS run been flawless so far" for the 完全無欠 badge. Not
+  // persisted — it only has meaning within one run.
+  let runFlawless = false;
+
+  // secret: hidden behind ❓ until earned, so the badge list doesn't spoil the hidden boss or
+  // what hard mode actually is before the player has found either.
+  const ACHIEVEMENTS = [
+    { id: 'first-kill', icon: '🩸', name: '初陣', desc: 'ボスを初めて撃破する' },
+    { id: 'flawless', icon: '🛡️', name: '無傷の狼', desc: '一度もダメージを受けずにボスを撃破する' },
+    { id: 'blade-only', icon: '⚔️', name: '抜刀のみ', desc: '銃を一発も撃たずにボスを撃破する' },
+    { id: 'swift', icon: '⚡', name: '電光石火', desc: '90秒以内にボスを撃破する' },
+    { id: 'shutout', icon: '🔥', name: '完封', desc: '1本も落とさずにボスを撃破する' },
+    { id: 'comeback', icon: '💪', name: '不屈', desc: '0勝2敗から逆転してボスを撃破する' },
+    { id: 'wave-flawless', icon: '🌪️', name: '無傷の掃討', desc: 'ザコ戦をノーダメージで突破する' },
+    { id: 'low-level', icon: '🎖️', name: '実力主義', desc: 'Lv3以下で最終面のボスを撃破する' },
+    { id: 'all-clear', icon: '🏆', name: '全面制覇', desc: 'ストーリーモードを最後までクリアする' },
+    { id: 'coop-clear', icon: '🤝', name: '戦友', desc: '2P協力プレイで最後までクリアする' },
+    { id: 'speedrun', icon: '⏱️', name: '疾風の遠征', desc: '通しプレイを10分以内にクリアする' },
+    { id: 'perfect-run', icon: '👑', name: '完全無欠', desc: '全ての面をノーダメージで撃破しきる' },
+    { id: 'ex-slayer', icon: '🌌', name: '戦神殺し', desc: '隠されたボスを討ち取る', secret: true },
+    { id: 'duo-down', icon: '💥', name: '同時撃破', desc: '2体のボスをほぼ同時に沈める', secret: true },
+    { id: 'hard-clear', icon: '🔴', name: '双影を断つ', desc: 'ハードモードを全てクリアする', secret: true },
+  ];
+  const ACHV_BY_ID = new Map(ACHIEVEMENTS.map((a) => [a.id, a]));
+
+  function formatMs(ms) {
+    if (!ms || ms < 0) return '--';
+    const total = ms / 1000;
+    const m = Math.floor(total / 60);
+    const s = total - m * 60;
+    return m > 0 ? `${m}分${s.toFixed(1)}秒` : `${s.toFixed(1)}秒`;
+  }
+  // Returns true when this run beat the stored record (or set the first one).
+  function recordBestTime(key, ms) {
+    if (!ms || ms <= 0) return false;
+    const prev = bestTimes[key];
+    if (prev && prev <= ms) return false;
+    bestTimes[key] = Math.round(ms);
+    try { localStorage.setItem(TIME_STORAGE_KEY, JSON.stringify(bestTimes)); } catch (e) { /* private mode — records just won't persist */ }
+    return true;
+  }
+  // Badges unlocked in one evaluation are announced together — see flushAchvToasts.
+  let pendingAchv = [];
+  function unlockAchv(id) {
+    if (unlockedAchv.has(id)) return;
+    const a = ACHV_BY_ID.get(id);
+    if (!a) return;
+    unlockedAchv.add(id);
+    try { localStorage.setItem(ACHV_STORAGE_KEY, JSON.stringify([...unlockedAchv])); } catch (e) { /* same as above */ }
+    pendingAchv.push(a);
+  }
+  function flushAchvToasts() {
+    if (!pendingAchv.length) return;
+    const list = pendingAchv;
+    pendingAchv = [];
+    queueToast(
+      list.length === 1
+        ? `${list[0].icon} 実績解除「${list[0].name}」`
+        : `🏅 実績${list.length}件解除　${list.map((a) => a.icon + a.name).join('　')}`,
+      'achv'
+    );
+  }
+
+  const recordToastEl = $('#recordToast');
+  const toastQueue = [];
+  let toastTimer = null;
+  // Queued, never stacked: a stage clear can produce a time notice AND several badges at once,
+  // and showing them on top of each other would be unreadable.
+  function queueToast(text, kind) {
+    toastQueue.push({ text, kind });
+    if (!toastTimer) showNextToast();
+  }
+  function showNextToast() {
+    const next = toastQueue.shift();
+    if (!next) { toastTimer = null; recordToastEl.className = 'record-toast'; return; }
+    recordToastEl.textContent = next.text;
+    recordToastEl.className = 'record-toast toast-' + next.kind;
+    void recordToastEl.offsetWidth; // restart the transition when one toast follows another
+    recordToastEl.classList.add('showing');
+    if (next.kind !== 'time' && window.GameAudio) window.GameAudio.playLevelUp();
+    toastTimer = setTimeout(() => {
+      recordToastEl.classList.remove('showing');
+      toastTimer = setTimeout(showNextToast, 260);
+    }, 2200);
+  }
+  function clearToasts() {
+    pendingAchv = [];
+    toastQueue.length = 0;
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+    recordToastEl.className = 'record-toast';
+  }
+
   // Hidden EX boss's own defeat flag — separate key/variable from bestBossDefeated (which stays
   // 0-5, unchanged semantics) since the EX boss isn't part of STORY_BOSSES/storyStageCount at all.
   const EX_STORAGE_KEY = 'battle-arena-ex-boss-defeated';
   let exBossDefeated = false;
   try { exBossDefeated = localStorage.getItem(EX_STORAGE_KEY) === '1'; } catch (e) { exBossDefeated = false; }
+  // Called once per real boss-series win, on the 'finished' phase edge (see its call site).
+  function evaluateRecords(state, stage) {
+    const st = state.stageStats || {};
+    const wins = state.matchWins || {};
+    const mode = state.hardMode ? 'hard' : state.exBossActive ? 'ex' : state.storyCoop ? 'coop' : 'solo';
+    const isFinal = stage >= (state.storyStageCount || 5);
+
+    if (mode === 'ex') {
+      if (recordBestTime('ex', st.playMs)) queueToast(`⏱ ${formatMs(st.playMs)} 🏆 自己ベスト更新！`, 'best');
+      else if (st.playMs > 0) queueToast(`⏱ ${formatMs(st.playMs)}`, 'time');
+      unlockAchv('ex-slayer');
+    } else {
+      const key = `${mode}-${stage}`;
+      if (recordBestTime(key, st.playMs)) queueToast(`⏱ ${formatMs(st.playMs)} 🏆 自己ベスト更新！`, 'best');
+      else if (st.playMs > 0) queueToast(`⏱ ${formatMs(st.playMs)}`, 'time');
+    }
+
+    unlockAchv('first-kill');
+    if (st.damaged === false) unlockAchv('flawless');
+    if (st.firedBullet === false) unlockAchv('blade-only');
+    if (st.playMs > 0 && st.playMs <= 90000) unlockAchv('swift');
+    if ((wins.boss || 0) === 0) unlockAchv('shutout');
+    if ((wins.boss || 0) === MATCH_WIN_TARGET - 1) unlockAchv('comeback');
+    if (st.duoDown) unlockAchv('duo-down');
+
+    // Every stage of this run flawless? Stage 1 starts the chain; anything else extends it.
+    if (stage <= 1) runFlawless = !st.damaged;
+    else runFlawless = runFlawless && !st.damaged;
+
+    if (isFinal && mode !== 'ex') {
+      const me = state.players.find((p) => p.id === myId);
+      if (me && typeof me.storyLevel === 'number' && me.storyLevel <= 3) unlockAchv('low-level');
+      if (mode === 'hard') unlockAchv('hard-clear');
+      else {
+        unlockAchv('all-clear');
+        if (mode === 'coop') unlockAchv('coop-clear');
+      }
+      const runMs = state.runPlayMs || 0;
+      if (recordBestTime(`${mode}-run`, runMs)) queueToast(`🏁 通し ${formatMs(runMs)} 🏆 自己ベスト更新！`, 'best');
+      if (runMs > 0 && runMs <= 600000) unlockAchv('speedrun');
+      if (runFlawless) unlockAchv('perfect-run');
+    }
+    flushAchvToasts();
+  }
+  function evaluateWaveRecords(state) {
+    if (state.waveStats && state.waveStats.damaged === false) unlockAchv('wave-flawless');
+    flushAchvToasts();
+  }
+
   function recordExBossDefeated() {
     if (exBossDefeated) return;
     exBossDefeated = true;
@@ -851,6 +1002,7 @@
     if (roundPauseTimer) { clearTimeout(roundPauseTimer); roundPauseTimer = null; }
     gameOverOverlay.classList.add('hidden');
     gameOverScore.classList.add('hidden');
+    clearToasts();
     lowHpVignette.classList.add('hidden');
     roundStakes.classList.add('hidden');
     lowHpActive = false;
@@ -1004,6 +1156,34 @@
   const certModeBadgeEls = Array.from($('#certSilhouetteRow').querySelectorAll('.cert-mode-badge'));
   const certPortraitEx = $('#certPortraitEx');
   const certPortraitExWrap = $('#certPortraitExWrap');
+  const certTimeList = $('#certTimeList');
+  const certAchvCount = $('#certAchvCount');
+  const certAchvGrid = $('#certAchvGrid');
+  function renderRecords() {
+    const rows = [];
+    const push = (label, key) => { if (bestTimes[key]) rows.push({ label, ms: bestTimes[key] }); };
+    for (let st = 1; st <= 5; st++) push(`1P ${st}面`, `solo-${st}`);
+    push('1P 通し', 'solo-run');
+    for (let st = 1; st <= 5; st++) push(`2P ${st}面`, `coop-${st}`);
+    push('2P 通し', 'coop-run');
+    push('裏ボス', 'ex');
+    for (let st = 1; st <= 3; st++) push(`ハード ${st}`, `hard-${st}`);
+    push('ハード 通し', 'hard-run');
+    certTimeList.innerHTML = rows.length
+      ? rows.map((r) => `<div class="cert-time-row"><span>${r.label}</span><b>${formatMs(r.ms)}</b></div>`).join('')
+      : '<div class="cert-time-empty">まだ記録がありません。ボスを倒すとタイムが残ります。</div>';
+
+    certAchvCount.textContent = `${unlockedAchv.size} / ${ACHIEVEMENTS.length}`;
+    // Secret badges stay masked until earned so the list can't spoil the hidden boss or hard mode.
+    certAchvGrid.innerHTML = ACHIEVEMENTS.map((a) => {
+      const got = unlockedAchv.has(a.id);
+      const masked = a.secret && !got;
+      return `<div class="cert-achv${got ? '' : ' locked'}">`
+        + `<span class="cert-achv-icon">${masked ? '❓' : a.icon}</span>`
+        + `<span class="cert-achv-name">${masked ? '???' : a.name}</span>`
+        + `<span class="cert-achv-desc">${masked ? '隠された実績' : a.desc}</span></div>`;
+    }).join('');
+  }
   certPortraitEx.src = 'images/bosses/boss6-face.jpg';
   function renderCertificate() {
     // Display tier is 0-6: 0-5 mirror bestBossDefeated exactly, 6 only once the hidden EX
@@ -1041,6 +1221,7 @@
     // nudging the five visible portraits off-centre.
     certPortraitEx.classList.toggle('hidden', !exBossDefeated);
     certPortraitExWrap.classList.toggle('hidden', !exBossDefeated);
+    renderRecords();
   }
   // Both entry points — the title screen and the story-intro screen — open the one modal.
   const openCertificate = () => { audioReady(); renderCertificate(); certOverlay.classList.remove('hidden'); };
@@ -1743,6 +1924,10 @@
           // certificate record (hardCleared / tier 7).
           if (!state.mobWaveActive && !state.hardMode) recordBossDefeated(storyStage, !!state.storyCoop);
           if (state.exBossActive) recordExBossDefeated();
+          // Time records and achievement badges. Same edge, same "this is a real boss kill"
+          // test — a wave clear reaches here too and gets its own, much smaller, evaluation.
+          if (state.mobWaveActive) evaluateWaveRecords(state);
+          else evaluateRecords(state, storyStage);
           bossPresentationDone = false; // reset for this kill — flipped true once whichever branch below actually finishes
           // The boss's whole dramatic presentation (fanfare + "勝利！！" flash + defeat-quote
           // card) per explicit request must wait for the roulette to fully finish first — the

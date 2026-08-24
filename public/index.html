@@ -241,6 +241,14 @@
         </div>
       </div>
       <div class="cert-mode-legend">👤 1人プレイ　🤝 2人協力プレイ</div>
+
+      <!-- Best times and achievement badges. They live inside the certificate rather than behind
+           a third title-screen button on purpose: the title card only just fits a 480px-tall
+           screen with two buttons, and .modal-card already scrolls (max-height:84vh). -->
+      <h3 class="cert-section-title">⏱ ベストタイム</h3>
+      <div class="cert-time-list" id="certTimeList"></div>
+      <h3 class="cert-section-title">🏅 実績 <span class="cert-achv-count" id="certAchvCount"></span></h3>
+      <div class="cert-achv-grid" id="certAchvGrid"></div>
     </div>
   </div>
 </div>
@@ -527,6 +535,9 @@
     <!-- Near-death vignette: pulses at the screen edges while the local player is nearly out of
          HP. Purely decorative and never intercepts input. -->
     <div class="lowhp-vignette hidden" id="lowHpVignette"></div>
+    <!-- One-at-a-time notice for a new best time or a freshly earned badge. Deliberately a corner
+         toast, not a modal: it must never interrupt the boss-defeat sequence playing behind it. -->
+    <div id="recordToast" class="record-toast"></div>
 
     <!-- floating joystick: appears wherever the player first touches (anywhere except
          another button), rather than a fixed-position pad -->

@@ -202,7 +202,27 @@ function addStoryXp(player, amount) {
   }
   player.storyLevel = Math.min(STORY_LEVEL_CAP, level);
 }
+// ---- Records ---------------------------------------------------------------------------------
+// Everything the time records and the achievement badges are judged on. All of it is READ OFF
+// the simulation the game already runs — none of it changes any gameplay rule, and the client is
+// the only thing that decides what any of it unlocks.
+//   stageStats : one boss series (a best-of-N against one stage's boss line-up)
+//   waveStats  : one grunt-wave mini-game
+//   runStats   : the whole campaign run, waves included, for the通し (speedrun) record
+function resetStageStats(room) {
+  room.stageStats = { playMs: 0, damaged: false, firedBullet: false, duoDown: false };
+}
+function resetWaveStats(room) {
+  room.waveStats = { damaged: false };
+}
+function resetRunStats(room) {
+  room.runStats = { playMs: 0 };
+}
+
 function resetStoryProgress(room) {
+  // A wiped run starts its clock over — otherwise a "cleared in 8 minutes" record could be set
+  // by a run that actually spent half an hour losing stage 1 first.
+  resetRunStats(room);
   for (const pl of room.players.values()) {
     if (pl.isBoss) continue;
     pl.storyLevel = 1;
@@ -698,14 +718,19 @@ function attemptFire(room, ws, p, now) {
   const atkMult = isBossWs(room, ws) ? cpuAttackMult(room, p) : 1;
 
   const last = room.lastFire.get(ws) || 0;
+  // Set only where a shot is genuinely produced, not on every fire attempt — holding the button
+  // through a cooldown must not count as having fired for the sword-only badge.
+  const noteHumanShot = () => { if (!p.isBoss && room.isCpuMatch && !room.mobWaveActive) room.stageStats.firedBullet = true; };
   if (laserActive) {
     if (now - last >= LASER_COOLDOWN_MS) {
+      noteHumanShot();
       room.lastFire.set(ws, now);
       for (const origin of attackOrigins(room, ws, p, now)) {
         fireLaser(room, ws, p, now, origin.x, origin.y);
       }
     }
   } else if (now - last >= fireCooldown) {
+    noteHumanShot();
     room.lastFire.set(ws, now);
     for (const origin of attackOrigins(room, ws, p, now)) {
       room.bullets.push({
@@ -1719,6 +1744,11 @@ function getRoom(id) {
       mobWaveNextSpawnAt: 0,
       pendingMobWaveIntro: false, // mirrors pendingStoryIntro's extended-countdown-wait trick
       cpuState: null,
+      // See resetStageStats/resetWaveStats/resetRunStats — read-only bookkeeping for the time
+      // records and achievement badges.
+      stageStats: { playMs: 0, damaged: false, firedBullet: false, duoDown: false },
+      waveStats: { damaged: false },
+      runStats: { playMs: 0 },
       phase: 'waiting', // waiting | countdown | playing | finished
       countdownEndsAt: 0,
       winnerId: null,
@@ -1849,6 +1879,13 @@ function broadcastWalls(room) {
 const STORY_INTRO_WAIT_MS = 5000;
 
 function startCountdown(room) {
+  if (room.isCpuMatch) {
+    if (room.mobWaveActive) resetWaveStats(room);
+    // Round 1 of a new best-of-N is the only round that starts a fresh stage record. matchWins is
+    // emptied when the previous series ended, so an empty tally is exactly "this is round 1" —
+    // rounds 2 and 3 must keep accumulating into the same stage record, not restart it.
+    else if (Object.keys(room.matchWins).length === 0) resetStageStats(room);
+  }
   room.phase = 'countdown';
   // Only the round that actually introduces a *new* stage (or a new mob wave) gets the long
   // wait — every other round (round 2/3 of the same boss's best-of-3, or a plain
@@ -2068,6 +2105,14 @@ function tick(room) {
   if (room.phase === 'countdown') {
     if (now >= room.countdownEndsAt) room.phase = 'playing';
   } else if (room.phase === 'playing') {
+    // Only time actually spent playing counts — countdowns, boss dialogue, the roulette and the
+    // result screens are fixed waits that would otherwise dominate the record. The run clock
+    // includes the grunt waves (it is a whole-campaign speedrun); the stage clock does not.
+    if (room.isCpuMatch) {
+      const elapsedMs = dt * 1000;
+      room.runStats.playMs += elapsedMs;
+      if (!room.mobWaveActive) room.stageStats.playMs += elapsedMs;
+    }
     // Bombs have no auto-fuse — they sit until the owner presses detonate (or the round
     // resets), so there's nothing to check here anymore.
     if (room.isCpuMatch) updateCpuAI(room, now);
@@ -2338,6 +2383,21 @@ function tick(room) {
       return true;
     });
 
+    // Records, sampled once per tick from the post-damage state rather than hooked into each of
+    // the (many) individual damage sites: "has any human been hit during this stage/wave", and
+    // "when exactly did each boss fall" (for the both-at-once badge). hp is restored to full at
+    // every round start, so hp < maxHp at any point in the series means a hit was taken.
+    if (room.isCpuMatch) {
+      for (const pl of room.players.values()) {
+        if (!pl.alive) { if (!pl.diedAt) pl.diedAt = now; } else pl.diedAt = 0;
+        if (pl.isBoss) continue;
+        if (pl.hp < (pl.maxHp || MAX_HP)) {
+          if (room.mobWaveActive) room.waveStats.damaged = true;
+          else room.stageStats.damaged = true;
+        }
+      }
+    }
+
     if (room.mobWaveActive) {
       // Mob wave mini-game win/loss: cleared once all MOB_WAVE_COUNT grunts have both been
       // spawned and killed; failed if every human (non-boss) player dies first. Deliberately
@@ -2380,6 +2440,12 @@ function tick(room) {
       // EVERY boss must fall, not just the first one — hard mode fields two at once.
       const bossDead = bosses.length > 0 && bosses.every((pl) => !pl.alive);
       const alliesDead = allies.length > 0 && allies.every((pl) => !pl.alive);
+      // Both halves of a hard-mode pair going down within a second of each other — the badge
+      // rewards actually splitting damage between them instead of killing one and mopping up.
+      if (bossDead && bosses.length > 1) {
+        const downAt = bosses.map((b) => b.diedAt || now);
+        if (Math.max(...downAt) - Math.min(...downAt) <= 1000) room.stageStats.duoDown = true;
+      }
       if (bossDead || alliesDead) {
         room.phase = 'finished';
         // Always allies[0] (stable Map-insertion-order id, i.e. the first ally who joined
@@ -2501,6 +2567,11 @@ function broadcastState(room) {
     explosions: room.explosions,
     winnerId: room.winnerId,
     matchWins: room.matchWins,
+    // Read-only record bookkeeping (see resetStageStats). Rounded to whole ms — these ride every
+    // broadcast and there is no meaningful sub-millisecond precision to keep.
+    stageStats: { ...room.stageStats, playMs: Math.round(room.stageStats.playMs) },
+    waveStats: room.waveStats,
+    runPlayMs: Math.round(room.runStats.playMs),
     matchOver: room.matchOver,
     matchWinnerId: room.matchWinnerId,
     rouletteEnabled: room.rouletteEnabled,

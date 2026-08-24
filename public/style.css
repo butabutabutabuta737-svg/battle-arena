@@ -494,6 +494,122 @@ input[type="text"]:focus {
   opacity: 1;
   filter: none;
 }
+/* ---- Certificate: best times + achievement badges ------------------------------------------ */
+.cert-section-title {
+  margin: 18px 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #8fb0ff;
+  letter-spacing: 0.04em;
+}
+.cert-achv-count {
+  font-weight: 600;
+  color: #6b74a8;
+}
+.cert-time-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cert-time-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: #cdd3f5;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.cert-time-row b {
+  color: #ffd35b;
+  font-variant-numeric: tabular-nums;
+}
+.cert-time-empty {
+  font-size: 12px;
+  color: #6b74a8;
+}
+.cert-achv-grid {
+  display: grid;
+  /* auto-fit rather than a fixed column count: the certificate's width tracks .modal-card, which
+     shrinks on narrow screens, and a fixed count would overflow instead of reflowing. */
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 6px;
+}
+.cert-achv {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 7px 5px;
+  border-radius: 7px;
+  background: rgba(255, 211, 91, 0.1);
+  border: 1px solid rgba(255, 211, 91, 0.35);
+  text-align: center;
+}
+.cert-achv.locked {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+.cert-achv-icon {
+  font-size: 17px;
+  line-height: 1.1;
+}
+.cert-achv-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffe9a8;
+}
+.cert-achv.locked .cert-achv-name {
+  color: #cdd3f5;
+}
+.cert-achv-desc {
+  font-size: 9px;
+  line-height: 1.25;
+  color: #9aa3d0;
+}
+
+/* ---- New-record / badge toast --------------------------------------------------------------- */
+.record-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 84px;
+  z-index: 46; /* above the boss-defeat overlays, which it must be able to appear on top of */
+  transform: translate(-50%, 14px);
+  padding: 9px 20px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  /* A combined "3 badges unlocked" line is far too long for one line on a phone — wrap it
+     rather than letting it run off both edges of the screen. */
+  max-width: min(92vw, 560px);
+  text-align: center;
+  line-height: 1.45;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  background: rgba(12, 15, 32, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #eef1ff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+.record-toast.showing {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.record-toast.toast-best {
+  border-color: rgba(255, 211, 91, 0.8);
+  color: #ffe9a8;
+  box-shadow: 0 0 20px rgba(255, 211, 91, 0.4), 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+.record-toast.toast-achv {
+  border-color: rgba(126, 231, 160, 0.8);
+  color: #d6ffe6;
+  box-shadow: 0 0 20px rgba(126, 231, 160, 0.35), 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+
 .cert-mode-legend {
   margin: 2px 0 0;
   font-size: 10px;
