@@ -926,6 +926,11 @@ button:active {
 #hpBlockTheirs .pname {
   justify-content: flex-end; /* that block is right-aligned; flex needs telling separately */
 }
+/* ...except in co-op, where this slot is a teammate laid out exactly like the player own block.
+   text-align alone cannot do this: .pname is a flex row, so the items need justify-content too. */
+#hpBlockTheirs.ally-slot .pname {
+  justify-content: flex-start;
+}
 /* Names themselves never break mid-word. Japanese still wraps fine under `normal` (it breaks
    between characters by default), so this only protects Latin player names — which are capped
    at 12 characters, so they cannot run away. */
@@ -966,6 +971,30 @@ button:active {
 .lv-badge-left {
   margin-left: 0;
   margin-right: 6px;
+}
+/* In 2v2 the top-right slot holds a TEAMMATE, not an opponent. The mirrored versus layout (name
+   then Lv on the left, Lv then name on the right) made the two players read differently, which is
+   wrong for two people on the same side — so in co-op only, the ally slot is laid out exactly
+   like the player's own. Every other mode keeps the mirrored arrangement for the boss, where the
+   Lv-first order also exists to stop the name sliding under the mute button. */
+/* Was an inline style="text-align:right" on the element itself, which no class rule could
+   override — moved here so the co-op case below can. */
+.hp-block.hp-block-right {
+  text-align: right;
+}
+.hp-block.hp-block-right.ally-slot {
+  text-align: left;
+}
+.hp-block.ally-slot .pname > #lvTheirs {
+  order: 1;
+  margin-left: 6px;
+  margin-right: 0;
+}
+.hp-block.ally-slot .pname > #downedTheirs {
+  order: 2;
+}
+.hp-block.ally-slot .buff-row-right {
+  justify-content: flex-start;
 }
 /* Shown full-screen-width but non-blocking (doesn't cover the arena) to the specific player
    who was downed first, telling them the match isn't over — their ally is still fighting. */

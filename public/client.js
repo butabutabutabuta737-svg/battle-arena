@@ -3884,6 +3884,9 @@
     }
     hpTheirs.classList.toggle('color-boss', !isCoop);
     hpTheirs.classList.toggle('color-ally', isCoop);
+    // Co-op puts a teammate in this slot, so it is laid out identically to the player's own
+    // block rather than mirrored — see .hp-block.ally-slot.
+    hpBlockTheirs.classList.toggle('ally-slot', isCoop);
     if (topRight) {
       // The boss stays present-but-inert (untargetable, full hp) during a mob wave — see
       // game.js's mobWaveActive damage exclusion — so its hp bar never actually moves here;
