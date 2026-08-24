@@ -2437,40 +2437,53 @@
   // updateHud) shows the battlefield those bosses actually belong to. Any stage with no entry
   // here simply falls through to the painted gradient below — this is additive, not a
   // replacement, so partial art coverage is a supported state.
-  const STAGE_BG_SRCS = { 1: 'images/stage1-bg.jpg' };
+  // `dim` is a per-stage darkening pass, chosen from each image's MEASURED luminance rather than
+  // by eye (medians, on 0-255: s1 35, s2 36, s3 39, s4 20, s5 21, s6 19 — against the ~40-60 of
+  // the painted background these replace). The first three sit near that level and take a real
+  // scrim; the last three are already much darker, and dimming them further would only turn the
+  // art to mud without helping the sprites, which already stand well clear of a 20-median field.
+  const STAGE_BG = {
+    1: { src: 'images/stage1-bg.jpg', dim: 0.18 }, // 荒野 — has a bright sky band (p99 106)
+    2: { src: 'images/stage2-bg.jpg', dim: 0.14 }, // 焦土
+    3: { src: 'images/stage3-bg.jpg', dim: 0.20 }, // 廃墟の市街 — the brightest of the six
+    4: { src: 'images/stage4-bg.jpg', dim: 0 },    // 夜の塹壕
+    5: { src: 'images/stage5-bg.jpg', dim: 0 },    // 血の戦場
+    6: { src: 'images/stage6-bg.jpg', dim: 0 },    // 異界 (EX boss)
+  };
   const stageBgCache = new Map();
-  function stageBgImage() {
+  function stageBgEntry() {
     const st = latestState;
     if (!st || !st.players) return null;
     const lead = st.players.find((p) => p.isBoss);
     if (!lead) return null; // arena PvP has no campaign stage to theme
-    const src = STAGE_BG_SRCS[lead.bossIndex || st.storyStage];
-    if (!src) return null;
-    let img = stageBgCache.get(src);
-    if (!img) { img = new Image(); img.src = src; stageBgCache.set(src, img); }
+    return STAGE_BG[lead.bossIndex || st.storyStage] || null;
+  }
+  function stageBgImage(entry) {
+    let img = stageBgCache.get(entry.src);
+    if (!img) { img = new Image(); img.src = entry.src; stageBgCache.set(entry.src, img); }
     // Never draw a half-loaded image — the gradient stands in for the one or two frames it takes.
     return img.complete && img.naturalWidth > 0 ? img : null;
   }
   // cover-fit, overdrawn by 40px on every side so the screen-shake translate can never expose an
   // edge (the same margin the painted background below uses, and for the same reason).
-  function drawStageBg(img) {
+  function drawStageBg(img, dim) {
     const bw = arena.w + 80;
     const bh = arena.h + 80;
     const scale = Math.max(bw / img.naturalWidth, bh / img.naturalHeight);
     const w = img.naturalWidth * scale;
     const h = img.naturalHeight * scale;
     ctx.drawImage(img, -40 + (bw - w) / 2, -40 + (bh - h) / 2, w, h);
-    // A small guaranteed darkening pass. The art itself measures darker than the painted
-    // background it replaces, but this keeps that true for any future stage art dropped in here
-    // without re-checking bullet contrast by hand every time.
-    ctx.fillStyle = 'rgba(8, 6, 4, 0.18)';
-    ctx.fillRect(-40, -40, bw, bh);
+    if (dim > 0) {
+      ctx.fillStyle = `rgba(8, 6, 4, ${dim})`;
+      ctx.fillRect(-40, -40, bw, bh);
+    }
   }
 
   function drawBackground(t) {
-    const bgArt = stageBgImage();
+    const bgEntry = stageBgEntry();
+    const bgArt = bgEntry && stageBgImage(bgEntry);
     if (bgArt) {
-      drawStageBg(bgArt);
+      drawStageBg(bgArt, bgEntry.dim);
       drawDebris(); // kept: the drifting motes are what stop a still photo reading as a frozen frame
       return; // deliberately no grid lines over photographic art — they read as a UI overlay
     }
