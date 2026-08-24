@@ -884,6 +884,7 @@
     storyIntro.classList.add('hidden');
     story2pLobby.classList.add('hidden');
     modeSelect.classList.remove('hidden');
+    renderStorySilhouettes();
     if (window.GameAudio) window.GameAudio.startTitleBgm();
   }
 
@@ -904,6 +905,7 @@
     cancelPendingConnect();
     lobby.classList.add('hidden');
     modeSelect.classList.remove('hidden');
+    renderStorySilhouettes();
   });
 
   // Undefeated bosses on the story-intro screen are dimmed to grayscale — same treatment as
@@ -911,10 +913,17 @@
   // the player has actually beaten that stage at least once; re-run every time this screen
   // becomes visible (not just once) so a boss defeated mid-session immediately shows its real
   // face in color the next time the player returns here.
-  const storySilhouetteEls = Array.from($('.boss-silhouette-row').querySelectorAll('.boss-portrait'));
+  // There are two of these rows now — the title screen and the story-intro screen — so this
+  // collects EVERY row and locks each one by its own 0-based index. A querySelector for a single
+  // row would silently only ever update the first one on the page.
+  const storySilhouetteRows = Array.from(document.querySelectorAll('.boss-silhouette-row'))
+    .map((row) => Array.from(row.querySelectorAll('.boss-portrait')));
   function renderStorySilhouettes() {
-    storySilhouetteEls.forEach((el, i) => el.classList.toggle('locked', i + 1 > bestBossDefeated));
+    storySilhouetteRows.forEach((els) => {
+      els.forEach((el, i) => el.classList.toggle('locked', i + 1 > bestBossDefeated));
+    });
   }
+  renderStorySilhouettes(); // the title screen is visible from load, so paint it right away
 
   modeStoryBtn.addEventListener('click', () => {
     audioReady();
@@ -930,6 +939,7 @@
     cancelPendingConnect();
     storyIntro.classList.add('hidden');
     modeSelect.classList.remove('hidden');
+    renderStorySilhouettes();
   });
 
   createBtn.addEventListener('click', () => {
@@ -1027,7 +1037,10 @@
     // simply absent until earned, preserving the "hidden boss" surprise.
     certPortraitEx.classList.toggle('hidden', !exBossDefeated);
   }
-  certOpenBtn.addEventListener('click', () => { audioReady(); renderCertificate(); certOverlay.classList.remove('hidden'); });
+  // Both entry points — the title screen and the story-intro screen — open the one modal.
+  const openCertificate = () => { audioReady(); renderCertificate(); certOverlay.classList.remove('hidden'); };
+  certOpenBtn.addEventListener('click', openCertificate);
+  $('#certOpenBtnTitle').addEventListener('click', openCertificate);
   certCloseBtn.addEventListener('click', () => { audioReady(); certOverlay.classList.add('hidden'); });
   certOverlay.addEventListener('click', (e) => { if (e.target === certOverlay) certOverlay.classList.add('hidden'); });
 
@@ -3557,7 +3570,10 @@
     // arena) only ever changes at these few event boundaries, not every tick — re-measure
     // fitArena() just on those, rather than every ~33ms broadcast (which would mean constant
     // layout thrashing for no visual benefit).
-    const arenaFitSignature = `${isCpuMatch}|${isCoop}|${!!state.mobWaveActive}`;
+    // bossCount is in the signature because a two-boss stage moves a bar out of the top row and
+    // into the bottom one, which changes the HUD's height and so the arena's available space.
+    const bossCount = state.players.reduce((n, p) => n + (p.isBoss ? 1 : 0), 0);
+    const arenaFitSignature = `${isCpuMatch}|${isCoop}|${!!state.mobWaveActive}|${bossCount}`;
     if (arenaFitSignature !== lastArenaFitSignature) {
       lastArenaFitSignature = arenaFitSignature;
       fitArenaSoon();
@@ -3573,11 +3589,15 @@
     // Layout by mode:
     //   normal 1P  : me | boss              (bottom row hidden)
     //   normal 2P  : me | ally              | boss
-    //   hard   1P  : me | boss1             | boss2
+    //   hard   1P  : me | (empty)           | boss1 + boss2
     //   hard   2P  : me | ally              | boss1 + boss2
-    // i.e. the bottom row absorbs whichever bosses the top row has no space for.
-    const topRight = isCoop ? ally : (bossList.length > 1 ? bossList[0] : boss);
-    const bottomBosses = isCoop ? bossList : bossList.slice(1);
+    // A two-boss stage always puts BOTH bosses in the bottom row, whether or not there is an
+    // ally — so hard 1P shows the pair in exactly the same place hard 2P does (explicit
+    // request). In hard 1P that leaves the top-right slot with nothing to show, so it is
+    // hidden outright rather than left displaying a stale "waiting for opponent" placeholder.
+    const multiBoss = bossList.length > 1;
+    const topRight = isCoop ? ally : (multiBoss ? null : boss);
+    const bottomBosses = (isCoop || multiBoss) ? bossList : [];
 
     if (me) {
       nameMine.textContent = me.name;
@@ -3614,11 +3634,20 @@
     // relabeling it, per explicit request. Only applies where this slot actually shows the
     // boss: in 2P co-op, hpTheirs shows the ally (a human teammate), who stays relevant.
     hpBlockTheirs.classList.toggle('hidden', !isCoop && !!state.mobWaveActive);
+    // A two-boss 1P stage leaves this slot with no occupant (both bosses moved to the bottom
+    // row, see the layout table above). Blank its CONTENTS rather than removing the block:
+    // .hud is justify-content:space-between, so display:none-ing it would drag the centre
+    // column (room code, stage, score) over to the right edge.
+    hpBlockTheirs.classList.toggle('hp-block-empty', !isCoop && multiBoss);
     // Per-player level badges beside each human's name. Only in co-op: with two allies levelling
     // independently there is no single "the level" to show, and a lone centre number would be
     // ambiguous about whose it is. In 1P the centre ⭐Lv label below stays the one place to read
     // it, exactly as before.
-    const showLvBadges = isCpuMatch && isCoop;
+    // Also used for a two-boss 1P stage: the centre ⭐Lv line is an extra row in the middle
+    // column, which would push the bosses' bottom row 16px lower than the identical 2P layout
+    // puts it. Moving it to a badge beside my own name (the co-op treatment) makes the two
+    // layouts line up exactly, which is the whole point of the two-boss row placement.
+    const showLvBadges = isCpuMatch && (isCoop || multiBoss);
     setLvBadge(lvMine, showLvBadges && me ? me.storyLevel : null);
     setLvBadge(lvTheirs, showLvBadges && topRight && !topRight.isBoss ? topRight.storyLevel : null);
     renderBuffBadges(buffMine, me);
@@ -3730,7 +3759,7 @@
     // 1P only: reads MY level off the players array (levels are per player now — there is no
     // room-wide state.storyLevel any more). In co-op this stays hidden and the two per-name
     // badges above carry it instead.
-    if (isCpuMatch && !isCoop && me && typeof me.storyLevel === 'number') {
+    if (isCpuMatch && !isCoop && !multiBoss && me && typeof me.storyLevel === 'number') {
       levelLabel.textContent = `⭐ Lv.${me.storyLevel}`;
       levelLabel.classList.remove('hidden');
     } else {

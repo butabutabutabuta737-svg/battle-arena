@@ -50,8 +50,20 @@
       </button>
     </div>
 
-    <div class="btn-row">
+    <div class="btn-row title-btn-row">
       <button class="btn-secondary" id="helpBtn">📖 遊び方・アイテム説明を見る</button>
+      <button class="btn-secondary" id="certOpenBtnTitle">🏅 証明書を見る</button>
+    </div>
+
+    <!-- The same 5-boss silhouette row #storyIntro carries, on the title screen too. Undefeated
+         bosses stay dimmed: client.js renderStorySilhouettes() drives EVERY .boss-silhouette-row
+         on the page, not just the story-intro one, so both stay in sync. -->
+    <div class="boss-silhouette-row">
+      <img class="boss-portrait" src="images/bosses/boss1.jpg" alt="1面ボス" />
+      <img class="boss-portrait" src="images/bosses/boss2.jpg" style="object-position: center 22%;" alt="2面ボス" />
+      <img class="boss-portrait" src="images/bosses/boss3.jpg" alt="3面ボス" />
+      <img class="boss-portrait" src="images/bosses/boss4.jpg" alt="4面ボス" />
+      <img class="boss-portrait" src="images/bosses/boss5.jpg" alt="5面ボス" />
     </div>
   </div>
 </div>

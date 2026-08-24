@@ -63,6 +63,49 @@ html, body {
 .title-screen-card {
   margin-top: 20vh;
 }
+/* The title screen now also carries the certificate button and the 5-boss silhouette row, so a
+   fixed 20vh nudge can push the bottom of the card off a short screen. Give the drop back as the
+   viewport gets shorter — the art's baked-in logo still clears the card at every step. */
+@media (max-height: 900px) { .title-screen-card { margin-top: 12vh; } }
+@media (max-height: 780px) { .title-screen-card { margin-top: 4vh; } }
+@media (max-height: 680px) { .title-screen-card { margin-top: 0; } }
+/* Giving the top nudge back is not enough on a short/landscape screen — the silhouette row is
+   128px of fixed height on its own. Shrink the TITLE screen copy of it as the viewport gets
+   shorter (the story-intro screen keeps the full-size row, it has the height to spare)... */
+@media (max-height: 780px) {
+  #modeSelect .boss-silhouette-row { height: 92px; margin: 10px 0 4px; }
+  #modeSelect .boss-portrait { height: 86px; }
+}
+/* ...and below ~620px there is no size that still fits, so the title screen drops the row
+   altogether rather than making the whole card scroll. Measured: without these rules the card
+   went from fitting down to 480px tall to overflowing at 560px. The silhouettes are decoration
+   here — the story-intro screen and the certificate (still one tap away, the button stays)
+   both keep showing them. */
+@media (max-height: 620px) {
+  #modeSelect .boss-silhouette-row { display: none; }
+}
+/* Two secondary buttons share this row (遊び方 + 証明書). .btn-secondary is flex:1, which would
+   squeeze both labels; let them sit side by side only when there is genuinely room. */
+.title-btn-row {
+  flex-wrap: wrap;
+}
+.title-btn-row > .btn-secondary {
+  flex: 1 1 200px;
+}
+/* On a short screen the two buttons go side by side instead of stacking: a second full-height
+   button costs more vertical room than letting the longer label wrap to a second line does.
+   This block MUST stay after the rule above — a media query adds no specificity, so an
+   earlier-placed override would simply lose to it on source order. */
+@media (max-height: 620px) {
+  .title-btn-row > .btn-secondary {
+    flex: 1 1 0;
+    /* 12px + tighter side padding is what actually keeps 「遊び方・アイテム説明を見る」 on ONE
+       line at half the card width; at 13px it wrapped and cost the row an extra ~17px. */
+    font-size: 12px;
+    padding: 10px 8px;
+  }
+  #modeSelect .btn-row { margin-top: 14px; }
+}
 /* Card stays as a visible "glass" panel (not fully transparent) so the title/button text has
    enough contrast to read against the busy artwork — a frosted dark panel plus blur, rather
    than the plain opaque .card default, so the art is still clearly visible through it. */
@@ -705,6 +748,12 @@ button:active {
 .hp-block {
   flex: 1;
   min-width: 0;
+}
+/* Top-right slot with nothing to show (a two-boss 1P stage — both bosses sit in the bottom row
+   there, exactly as they do in 2P). The block keeps its flex:1 box and its intrinsic height so
+   the HUD stays symmetric and doesn't change height; only what's inside it goes invisible. */
+.hp-block.hp-block-empty > * {
+  visibility: hidden;
 }
 .hp-block .pname {
   font-size: 13px;
