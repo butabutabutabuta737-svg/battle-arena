@@ -383,8 +383,12 @@ input[type="text"]:focus {
    on disk but unused now — reverted in favor of this simpler, consistent-with-the-certificate
    look.) */
 .boss-portrait.locked {
-  filter: grayscale(1) brightness(0.35);
-  opacity: 0.4;
+  /* brightness(0.35) x opacity(0.4) left these at a mean luminance of ~15/255 — technically not
+     a flat fill, but perceptually five black rectangles, which is what a brand-new player sees
+     on the very first screen. Brightened so the figure actually reads as a silhouette, with a
+     touch of contrast to keep the shape from going muddy as it lightens. */
+  filter: grayscale(1) brightness(0.85) contrast(1.15);
+  opacity: 0.7;
 }
 
 /* ---- story-mode "撃破証明書" (kill certificate) — same pattern as this session's other
@@ -461,8 +465,11 @@ input[type="text"]:focus {
 /* .locked (not yet defeated, toggled in client.js from bestBossDefeated) dims a portrait to
    grayscale so it reads clearly as "you haven't beaten this one yet" at a glance. */
 .cert-portrait.locked {
-  filter: grayscale(1) brightness(0.35);
-  opacity: 0.4;
+  /* Kept identical to .boss-portrait.locked on purpose — the story/title row was originally
+     matched to this one by explicit request, so both had the same too-dark problem and both
+     get the same fix. See that rule for the measurements. */
+  filter: grayscale(1) brightness(0.85) contrast(1.15);
+  opacity: 0.7;
 }
 .cert-portrait-wrap {
   display: flex;
