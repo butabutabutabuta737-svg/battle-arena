@@ -351,7 +351,9 @@
       <div class="pname"><span id="nameMine">あなた</span><span class="lv-badge hidden" id="lvMine"></span><span class="downed-badge hidden" id="downedMine">💀戦闘不能</span></div>
       <div class="hp-bar-bg"><div class="hp-bar-fill color-me" id="hpMine" style="width:100%"></div><div class="hp-bar-bonus" id="hpBonusMine"></div></div>
       <div class="buff-row" id="buffMine"></div>
-      <div class="bomb-status hidden" id="bombStatus">💣 所持数 <span id="bombStatusCount">0</span></div>
+      <!-- "所持数 3" alone did not say WHAT was held — the bomb emoji was carrying that on its own
+           at 12px, where it barely rendered. Spelled out, with the number as the loud part. -->
+      <div class="bomb-status hidden" id="bombStatus"><span class="bomb-status-icon">💣</span>爆弾 <span class="bomb-status-count" id="bombStatusCount">0</span></div>
     </div>
     <div class="room-tag">
       部屋 <b id="roomLabel">----</b>

@@ -2164,17 +2164,36 @@ button:active {
 /* status readout, not a control — intentionally not button-shaped (a plain rounded pill,
    inline in the HUD next to your own hp bar) so it doesn't read as another button */
 .bomb-status {
-  margin-top: 4px;
+  margin-top: 5px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 10px;
+  gap: 5px;
+  padding: 3px 12px;
   border-radius: 999px;
-  background: rgba(255, 166, 77, 0.14);
-  border: 1px solid rgba(255, 166, 77, 0.35);
-  color: #ffd9ad;
-  font-size: 12px;
+  /* Was a very faint 0.14 fill on a 0.35 border at 12px, which read as a stray pill floating
+     under the HP bar rather than a readable counter. Brighter fill, firmer border and a soft
+     glow so it reads as "you are carrying something" at a glance. */
+  background: rgba(255, 150, 60, 0.22);
+  border: 1px solid rgba(255, 166, 77, 0.6);
+  box-shadow: 0 0 12px rgba(255, 150, 60, 0.22);
+  color: #ffe2c2;
+  font-size: 13px;
   font-weight: 700;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.bomb-status-icon {
+  /* The emoji was the only thing naming this counter and was too small to be one. */
+  font-size: 15px;
+  line-height: 1;
+}
+.bomb-status-count {
+  font-size: 16px;
+  font-weight: 800;
+  color: #ffb15e;
+  font-variant-numeric: tabular-nums; /* the pill must not resize as the count changes */
+  min-width: 0.9em;
+  text-align: center;
 }
 
 /* ---- Hard mode entry block on the story-intro screen. Only revealed once the hidden EX boss

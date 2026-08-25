@@ -1082,7 +1082,10 @@ const BOSS_SPECIAL_HP_TRIGGER = 0.6; // only once a boss is under 60% — a desp
 const BOSS_SPECIALS = {
   1: { name: 'がむしゃら乱射', windupMs: 700, cooldownMs: 7000 },
   2: { name: '制圧掃射', windupMs: 750, cooldownMs: 7000 },
-  3: { name: '砲撃要請', windupMs: 1000, cooldownMs: 8500 },
+  // followUpMs: this move fires TWICE, the second volley this long after the first. The boss
+  // stays lit for the whole span (see specialUntil below) so the gap reads as "there is more
+  // coming", not as the move having finished.
+  3: { name: '二連乱射', windupMs: 800, cooldownMs: 8500, followUpMs: 380 },
   4: { name: '瞬影', windupMs: 600, cooldownMs: 7500 },
   5: { name: '覇王弾幕', windupMs: 850, cooldownMs: 7000 },
   6: { name: '神威', windupMs: 900, cooldownMs: 6500 },
@@ -1111,11 +1114,18 @@ function pushBossBullet(room, boss, angle, opts) {
 
 // Runs the actual move. Kept separate from the trigger bookkeeping so each boss's behaviour
 // reads as one short, self-contained script.
-function fireBossSpecial(room, ws, boss, target, now) {
+// The stage-1 rookie's wide panicked spray. Extracted because stage 3 fires this exact volley
+// twice — same pattern, same numbers. It still hits harder from stage 3 without any change here,
+// because pushBossBullet already scales damage by cpuAttackMult (stage 1 is 0.5x, stage 3 1.0x).
+function fireSprayVolley(room, boss, aim) {
+  for (let i = -4; i <= 4; i++) pushBossBullet(room, boss, aim + i * 0.14, { speedMult: 0.85, damageMult: 0.7 });
+}
+
+function fireBossSpecial(room, ws, boss, target, now, st) {
   const aim = Math.atan2(target.y - boss.y, target.x - boss.x);
   switch (boss.bossIndex) {
     case 1: { // rookie: panicked wide spray — lots of bullets, badly aimed
-      for (let i = -4; i <= 4; i++) pushBossBullet(room, boss, aim + i * 0.14, { speedMult: 0.85, damageMult: 0.7 });
+      fireSprayVolley(room, boss, aim);
       break;
     }
     case 2: { // veteran: a disciplined tight volley
@@ -1123,11 +1133,10 @@ function fireBossSpecial(room, ws, boss, target, now) {
       for (let i = -2; i <= 2; i++) pushBossBullet(room, boss, aim + i * 0.13, { speedMult: 1.0 });
       break;
     }
-    case 3: { // squad leader: artillery on the target's position — area denial, not aimed fire
-      const spots = [{ dx: 0, dy: 0 }, { dx: -130, dy: -90 }, { dx: 130, dy: 90 }];
-      for (const s of spots) {
-        explodeBomb(room, { x: target.x + s.dx, y: target.y + s.dy, ownerId: boss.id }, now, { sparesOwner: true });
-      }
+    case 3: { // squad leader: the rookie's spray, twice — the second volley re-aims, so simply
+      // running in one direction through the first one walks into the second.
+      fireSprayVolley(room, boss, aim);
+      if (st) st.specialFollowUpAt = now + (BOSS_SPECIALS[3].followUpMs || 0);
       break;
     }
     case 4: { // assassin: blink to the target's back and cut
@@ -1159,10 +1168,20 @@ function fireBossSpecial(room, ws, boss, target, now) {
 function updateBossSpecial(room, ws, boss, target, now, st) {
   const spec = BOSS_SPECIALS[boss.bossIndex];
   if (!spec || !boss.alive || !target || !target.alive) return;
+  // A second beat of a multi-part move. Re-aimed at where the target is NOW, not where they were
+  // when the move started. Checked before everything else so it always lands even if the boss has
+  // since dropped below another threshold.
+  if (st.specialFollowUpAt) {
+    if (now >= st.specialFollowUpAt) {
+      st.specialFollowUpAt = 0;
+      fireSprayVolley(room, boss, Math.atan2(target.y - boss.y, target.x - boss.x));
+    }
+    return;
+  }
   if (st.specialFiresAt) {
     if (now >= st.specialFiresAt) {
       st.specialFiresAt = 0;
-      fireBossSpecial(room, ws, boss, target, now);
+      fireBossSpecial(room, ws, boss, target, now, st);
     }
     return;
   }
@@ -1173,7 +1192,9 @@ function updateBossSpecial(room, ws, boss, target, now, st) {
   // Published to the client so it can put the move's name on screen for the wind-up — a move
   // that lands with no warning reads as an unfair spike rather than a boss doing something.
   boss.specialName = spec.name;
-  boss.specialUntil = now + spec.windupMs;
+  // Covers the follow-up too, so a two-part move stays lit between its volleys instead of going
+  // dark the instant the first one leaves the barrel.
+  boss.specialUntil = now + spec.windupMs + (spec.followUpMs || 0);
 }
 // How many connections a fully-populated room of this type holds: humans + however many bosses
 // the current mode fields. Every "is the room full / still intact" test goes through this, since

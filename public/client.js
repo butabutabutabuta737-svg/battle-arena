@@ -3920,7 +3920,12 @@
     // bossCount is in the signature because a two-boss stage moves a bar out of the top row and
     // into the bottom one, which changes the HUD's height and so the arena's available space.
     const bossCount = state.players.reduce((n, p) => n + (p.isBoss ? 1 : 0), 0);
-    const arenaFitSignature = `${isCpuMatch}|${isCoop}|${!!state.mobWaveActive}|${bossCount}`;
+    // The bomb counter is a whole extra HUD row that appears the moment a bomb is picked up and
+    // vanishes when the last one is spent — measured at +8px here, more on a narrow phone where
+    // the row wraps. Without it in the signature the arena kept its old size and simply slid
+    // down, which on a short screen walks its bottom edge off the viewport.
+    const holdingBomb = !!(state.players.find((p) => p.id === myId) || {}).bombs;
+    const arenaFitSignature = `${isCpuMatch}|${isCoop}|${!!state.mobWaveActive}|${bossCount}|${holdingBomb}`;
     if (arenaFitSignature !== lastArenaFitSignature) {
       lastArenaFitSignature = arenaFitSignature;
       fitArenaSoon();
