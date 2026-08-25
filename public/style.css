@@ -2181,11 +2181,38 @@ button:active {
   font-weight: 700;
   line-height: 1.35;
   white-space: nowrap;
+  /* Hard stop: this pill lives inside the left HUD column, which is only ~53-88px wide on a
+     phone (three columns plus the corner-button insets). Without this it simply ran out past
+     the column and over the centre one. */
+  max-width: 100%;
+  overflow: hidden;
 }
 .bomb-status-icon {
   /* The emoji was the only thing naming this counter and was too small to be one. */
   font-size: 15px;
   line-height: 1;
+}
+/* Below this width the column cannot hold the word as well as the count, so the label drops and
+   the pill becomes 💣 + number — which still fits, and still reads, because the number is the
+   loud part. Verified against the measured column width at 430 / 390 / 360px. */
+@media (max-width: 700px) {
+  .bomb-status {
+    font-size: 11px;
+    padding: 2px 7px;
+    gap: 3px;
+  }
+  .bomb-status-label {
+    display: none;
+  }
+  .bomb-status-icon {
+    font-size: 13px;
+  }
+  .bomb-status .bomb-status-count {
+    font-size: 13px;
+  }
+}
+.bomb-status-label {
+  margin-right: 1px;
 }
 .bomb-status-count {
   font-size: 16px;
