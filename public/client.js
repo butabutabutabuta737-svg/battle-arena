@@ -637,6 +637,35 @@
   }
   function preloadLaterArt() { warmArt('images/wave-intro.jpg'); }
 
+  // Title screen: show the artwork alone for a beat, then fade the menu in. The countdown starts
+  // when the background image is actually decoded rather than at script time, so a slow first load
+  // (Render's free tier can take a while to wake) still yields a real two seconds of artwork
+  // instead of two seconds of empty page — with a cap so a failed image never blocks the menu.
+  const TITLE_HOLD_MS = 2000;
+  const TITLE_HOLD_ART_WAIT_MAX_MS = 1500;
+  let titleHoldTimer = null;
+  function releaseTitleHold() {
+    if (titleHoldTimer) { clearTimeout(titleHoldTimer); titleHoldTimer = null; }
+    document.body.classList.remove('title-hold');
+  }
+  function holdTitle() {
+    releaseTitleHold();
+    document.body.classList.add('title-hold');
+    let started = false;
+    const begin = () => {
+      if (started) return;
+      started = true;
+      titleHoldTimer = setTimeout(releaseTitleHold, TITLE_HOLD_MS);
+    };
+    const art = new Image();
+    art.onload = begin;
+    art.onerror = begin;
+    art.src = 'images/title-bg-logo.jpg';
+    if (art.complete) begin();
+    setTimeout(begin, TITLE_HOLD_ART_WAIT_MAX_MS);
+  }
+  holdTitle();
+
   function audioReady() {
     if (!window.GameAudio) return;
     window.GameAudio.resume();
@@ -1056,6 +1085,7 @@
     story2pLobby.classList.add('hidden');
     modeSelect.classList.remove('hidden');
     renderStorySilhouettes();
+    holdTitle();
     if (window.GameAudio) window.GameAudio.startTitleBgm();
   }
 
@@ -1077,6 +1107,7 @@
     lobby.classList.add('hidden');
     modeSelect.classList.remove('hidden');
     renderStorySilhouettes();
+    holdTitle();
   });
 
   // Undefeated bosses on the story-intro screen are dimmed to grayscale — same treatment as
@@ -1111,6 +1142,7 @@
     storyIntro.classList.add('hidden');
     modeSelect.classList.remove('hidden');
     renderStorySilhouettes();
+    holdTitle();
   });
 
   createBtn.addEventListener('click', () => {

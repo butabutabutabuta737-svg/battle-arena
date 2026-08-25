@@ -63,6 +63,26 @@ html, body {
 .title-screen-card {
   margin-top: 20vh;
 }
+/* ---- Title-screen reveal ---------------------------------------------------------------------
+   The artwork gets a moment on its own before the menu fades in. Only two things are ever painted
+   over the title background (measured): this card and the corner mute button.
+   pointer-events is killed on the card AND on every descendant: a child that sets
+   pointer-events:auto of its own would otherwise stay clickable through an invisible parent —
+   that exact bug shipped once in a sibling project and let a tap start the game during the
+   intro. The mute button is guarded with :has() so it only disappears while the title screen is
+   genuinely the visible screen, never during a game that was joined straight from a URL. */
+.title-screen-card,
+#muteBtn {
+  transition: opacity 0.5s ease;
+}
+body.title-hold .title-screen-card,
+body.title-hold:has(#modeSelect:not(.hidden)) #muteBtn {
+  opacity: 0;
+  pointer-events: none;
+}
+body.title-hold .title-screen-card * {
+  pointer-events: none !important;
+}
 /* The title screen now also carries the certificate button and the 5-boss silhouette row, so a
    fixed 20vh nudge can push the bottom of the card off a short screen. Give the drop back as the
    viewport gets shorter — the art's baked-in logo still clears the card at every step. */

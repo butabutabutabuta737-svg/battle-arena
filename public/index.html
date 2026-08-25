@@ -13,7 +13,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="戦場の狼達" />
 </head>
-<body>
+<!-- title-hold is set HERE, not by script: added from JS the menu paints once at full opacity
+     before the class lands, which reads as a flash. client.js takes over the timing from load. -->
+<body class="title-hold">
 
 <button class="mute-btn" id="muteBtn" title="サウンドのON/OFF">🔊</button>
 <button class="home-btn hidden" id="homeBtn" title="タイトルに戻る">🏠</button>
