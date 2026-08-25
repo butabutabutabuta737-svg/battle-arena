@@ -3090,6 +3090,19 @@
     return Math.min(1, 0.18 + (performance.now() - rec.startedAt) / WINDUP_RAMP_MS);
   }
 
+  // Boss names arrive as "1面ボス「見習い兵士」". At 360px the HUD splits into three columns and
+  // this slot is ~52px wide, where that string breaks across THREE lines. The stage number is
+  // already on screen in the centre column, so on a narrow viewport the slot drops the prefix and
+  // shows only the name itself, which fits in two. Wider screens are unchanged.
+  // 500, not 420: measured at 430px the column is 89px while the full name needs 116px on one
+  // line, so it broke in two there as well. The short form needs 63px and fits.
+  const HUD_SHORT_NAME_MAX_W = 500;
+  function hudName(name) {
+    if (!name || window.innerWidth > HUD_SHORT_NAME_MAX_W) return name;
+    const m = /「(.+)」\s*$/.exec(name);
+    return m ? m[1] : name;
+  }
+
   function drawShip(p, isMe) {
     // top-down soldier: shadow, boots, torso, helmeted head (offset toward facing), rifle.
     // In story mode, the opponent is always the current stage's boss — escalate its look
@@ -3971,7 +3984,7 @@
       // game.js's mobWaveActive damage exclusion — so its hp bar never actually moves here;
       // swapping just the label to "討伐中" reads as "on hold" instead of a stray full-hp
       // boss bar that looks like nothing's happening.
-      nameTheirs.textContent = state.mobWaveActive && !isCoop ? 'ザコモンスター討伐中…' : topRight.name;
+      nameTheirs.textContent = state.mobWaveActive && !isCoop ? 'ザコモンスター討伐中…' : hudName(topRight.name);
       renderHpBar(hpTheirs, hpBonusTheirs, topRight);
       hpTheirs.classList.toggle('house-healing', topRight.hp < (topRight.maxHp || 100) && isInsideAnyHouse(topRight.x, topRight.y));
       // Only ever relevant for the ally slot (co-op) — the boss "downed" is just the round

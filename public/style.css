@@ -976,6 +976,10 @@ button:active {
    addStoryXp). Deliberately compact: it shares a cramped HUD row with the name and the
    downed badge. */
 .lv-badge {
+  /* In hard 1P at 360px this badge sat 3px wider than the .pname row it lives in. It already
+     wraps onto its own line when space runs out; it just had nothing stopping it being wider
+     than the line it wrapped to. */
+  max-width: 100%;
   margin-left: 6px;
   padding: 1px 6px;
   border-radius: 999px;
@@ -991,6 +995,25 @@ button:active {
 .lv-badge-left {
   margin-left: 0;
   margin-right: 6px;
+}
+/* At 360px the column is 55px and the shortened boss name still needs 63px at 13px — eight pixels
+   short of fitting, so it broke in two for no good reason. 11px brings it to ~53px. */
+@media (max-width: 380px) {
+  .hp-block .pname {
+    font-size: 11px;
+  }
+}
+/* Three HUD columns plus the corner-button insets leave very little per column at this width. */
+@media (max-width: 420px) {
+  .lv-badge {
+    padding: 1px 4px;
+    margin-left: 4px;
+    font-size: 10px;
+  }
+  .lv-badge-left {
+    margin-left: 0;
+    margin-right: 4px;
+  }
 }
 /* In 2v2 the top-right slot holds a TEAMMATE, not an opponent. The mirrored versus layout (name
    then Lv on the left, Lv then name on the right) made the two players read differently, which is
