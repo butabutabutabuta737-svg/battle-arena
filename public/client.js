@@ -1068,6 +1068,7 @@
     // connection) kept firing its tick sound in the background with nothing left on screen
     // still showing the spin, reading as "the sound effect won't stop".
     if (rouletteSpinTimer) { clearTimeout(rouletteSpinTimer); rouletteSpinTimer = null; }
+    rouletteHoldUntil = 0;
     rouletteReel.classList.remove('spinning');
     rouletteBlock.classList.add('hidden');
   }
@@ -2063,6 +2064,7 @@
       }
       if (lastPhase === 'finished' && state.phase !== 'finished') {
         rouletteBlock.classList.add('hidden');
+        rouletteHoldUntil = 0;
       }
       if (state.phase === 'waiting') {
         seenBulletIds = new Set();
@@ -3826,6 +3828,12 @@
   // this only plays a slot-machine-style reveal of that predetermined result, it never
   // rolls anything client-side.
   let rouletteSpinTimer = null;
+  // The reel takes ~2.9s to settle and the round-end pause that gates 「次のラウンドへ」 is a flat
+  // 3s, so the item you just won was on screen for about a tenth of a second before the button
+  // became clickable. This holds the button back until the settled result has been readable for
+  // a full second. A timestamp rather than a timer because updateHud already runs every frame.
+  const ROULETTE_RESULT_HOLD_MS = 1000;
+  let rouletteHoldUntil = 0;
   // onDone fires once the reel has actually settled on its result (not before) — callers use
   // this to hold off anything that would visually compete with the roulette (the boss-victory
   // flash/defeat-quote card are a much higher z-index than `.roulette-block` and used to fire in
@@ -3869,6 +3877,7 @@
           rouletteLabel.textContent = `${who}はハズレ…`;
           if (window.GameAudio) window.GameAudio.playRouletteMiss();
         }
+        rouletteHoldUntil = performance.now() + ROULETTE_RESULT_HOLD_MS;
         rouletteSpinTimer = null;
         if (onDone) onDone();
         return;
@@ -4314,7 +4323,9 @@
         // flashed past with no beat to register who won. Per explicit request it now gets the
         // same 3s pause the GAME OVER screen has (roundPauseReady, started once on the
         // 'finished' edge in handleState).
-        const waitingOnDefeatLine = stageAdvance ? !bossPresentationDone : !roundPauseReady;
+        // ...and never before the roulette result has had its second on screen.
+        const waitingOnRoulette = performance.now() < rouletteHoldUntil;
+        const waitingOnDefeatLine = (stageAdvance ? !bossPresentationDone : !roundPauseReady) || waitingOnRoulette;
         if (!waitingOnDefeatLine) rematchBtn.classList.remove('hidden');
         rematchBtn.textContent = stageAdvance ? '次の面へ' : (isCpuMatch ? '次のラウンドへ' : 'もう一度対戦する');
       }
