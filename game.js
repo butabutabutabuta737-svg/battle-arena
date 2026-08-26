@@ -953,7 +953,7 @@ const STORY_BOSSES = [
   // whenever inp.swording is true (see updateCpuAI's `inp.shooting = st.firing && !inp.swording`),
   // so gunfire naturally only happens while still closing the distance or briefly repositioned
   // by a dodge — "必要な時は銃撃も" — with zero extra logic needed beyond this one number.
-  { name: '血刃の暗殺者', line: '無駄な足掻きだ。闇に潜むこの一振りが、貴様の命を刈り取る。', defeatLine: 'くっ……この闇より深い一撃とはな。だが、あの御方の前ではまだ児戯に等しい。', reactionMs: 200, aimJitter: 0.16, fireChance: 0.90, dodgeChance: 0.68, itemSeekChance: 0.78, preferredRange: 60, moveJitter: 0.16, atkMult: 1.0, swordMult: 1.5 },
+  { name: '血刃の暗殺者', line: '無駄な足掻きだ。闇に潜むこの一振りが、貴様の命を刈り取る。', defeatLine: 'くっ……この闇より深い一撃とはな。だが、あの御方の前ではまだ児戯に等しい。', reactionMs: 200, aimJitter: 0.16, fireChance: 0.90, dodgeChance: 0.68, itemSeekChance: 0.78, preferredRange: 60, moveJitter: 0.16, atkMult: 1.0, swordMult: 1.2 },
   { name: '戦場の覇者', line: 'よくぞここまで生き延びた…だがこの戦場に立つ資格があるのは、俺だけだ!', defeatLine: 'ば……馬鹿な……この俺が……戦場の狼に……敗れると……は……。', reactionMs: 100, aimJitter: 0.05, fireChance: 1.00, dodgeChance: 0.92, itemSeekChance: 0.95, preferredRange: 208, moveJitter: 0.06, atkMult: 1.0, swordMult: 1.0 },
 ];
 
