@@ -372,6 +372,136 @@
   }
   // Badges unlocked in one evaluation are announced together — see flushAchvToasts.
   let pendingAchv = [];
+  // ---- Daily challenge -------------------------------------------------------------------------
+  // One objective per day, the same one all day, drawn from the date itself so it needs no server.
+  // Every condition here is checkable from facts the round already publishes (see game.js's
+  // stageStats/waveStats) — no new tracking, and the same evaluation point as the badges.
+  const DAILY_KEY = 'battle-arena-daily';
+  const DAILY_CHALLENGES = [
+    { id: 'no-damage', text: 'ボスを無傷で撃破する', boss: (st) => st.damaged === false },
+    { id: 'blade', text: '銃を一発も撃たずにボスを撃破する', boss: (st) => st.firedBullet === false },
+    { id: 'fast', text: '90秒以内にボスを撃破する', boss: (st) => st.playMs > 0 && st.playMs <= 90000 },
+    { id: 'shutout', text: '1本も落とさずにボスを撃破する', boss: (st, wins) => (wins.boss || 0) === 0 },
+    { id: 'comeback', text: '0勝2敗から逆転してボスを撃破する', boss: (st, wins) => (wins.boss || 0) === MATCH_WIN_TARGET - 1 },
+    { id: 'wave-clean', text: 'ザコ戦をノーダメージで突破する', wave: (ws) => ws.damaged === false },
+    { id: 'any-boss', text: 'ボスを1体撃破する', boss: () => true },
+  ];
+  function todayKey(d) {
+    const t = d || new Date();
+    return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+  }
+  function dailyChallenge(dateKey) {
+    // Cheap string hash — the point is only that the choice is stable for a date and not an
+    // obvious weekday cycle the player can plan around.
+    let n = 0;
+    const k = dateKey || todayKey();
+    for (let i = 0; i < k.length; i++) n = (n * 31 + k.charCodeAt(i)) >>> 0;
+    return DAILY_CHALLENGES[n % DAILY_CHALLENGES.length];
+  }
+  function loadDaily() {
+    try {
+      const d = JSON.parse(localStorage.getItem(DAILY_KEY) || '{}');
+      return { done: d.done || '', streak: d.streak || 0, best: d.best || 0 };
+    } catch (e) { return { done: '', streak: 0, best: 0 }; }
+  }
+  let daily = loadDaily();
+  function saveDaily() {
+    try { localStorage.setItem(DAILY_KEY, JSON.stringify(daily)); } catch (e) { /* private mode */ }
+  }
+  function yesterdayKey() {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return todayKey(d);
+  }
+  function completeDaily() {
+    const today = todayKey();
+    if (daily.done === today) return; // once a day
+    // A gap of more than one day restarts the streak rather than continuing it.
+    daily.streak = daily.done === yesterdayKey() ? daily.streak + 1 : 1;
+    daily.best = Math.max(daily.best || 0, daily.streak);
+    daily.done = today;
+    saveDaily();
+    const ch = dailyChallenge(today);
+    queueToast('🔥 今日の挑戦達成！「' + ch.text + '」 ' + daily.streak + '日連続', 'achv');
+    renderDaily();
+  }
+
+  // ---- Backup code ---------------------------------------------------------------------------
+  // Everything above lives only in this browser. This packs it into one short copyable string.
+  // Deliberately NOT base64-of-JSON: that ran ~800 characters, which is miserable to move between
+  // devices by hand. Bitmasks for the flags/badges and base36 for the times bring it to ~70.
+  // The trailing checksum is what turns a mistyped code into "コードが正しくありません" instead of
+  // silently restoring garbage.
+  const BACKUP_PREFIX = 'BA1';
+  // Fixed order — the position IS the key, so this array must never be reordered, only appended to.
+  const BACKUP_TIME_KEYS = [
+    'solo-1', 'solo-2', 'solo-3', 'solo-4', 'solo-5', 'solo-run',
+    'coop-1', 'coop-2', 'coop-3', 'coop-4', 'coop-5', 'coop-run',
+    'ex', 'hard-1', 'hard-2', 'hard-3', 'hard-run',
+  ];
+  function backupChecksum(body) {
+    let n = 0;
+    for (let i = 0; i < body.length; i++) n = (n + body.charCodeAt(i) * (i + 1)) % 1296;
+    return n.toString(36).toUpperCase().padStart(2, '0');
+  }
+  function makeBackupCode() {
+    let flags = 0;
+    for (let s = 1; s <= 5; s++) {
+      if (clearedSolo.has(s)) flags |= 1 << (s - 1);
+      if (clearedCoop.has(s)) flags |= 1 << (s + 4);
+    }
+    if (exBossDefeated) flags |= 1 << 10;
+    if (hardCleared) flags |= 1 << 11;
+    let achv = 0;
+    ACHIEVEMENTS.forEach((a, i) => { if (unlockedAchv.has(a.id)) achv |= 1 << i; });
+    const times = BACKUP_TIME_KEYS.map((k) => Math.max(0, Math.round(bestTimes[k] || 0)).toString(36)).join('.');
+    const body = [BACKUP_PREFIX, flags.toString(36), achv.toString(36), times].join('-').toUpperCase();
+    return body + '-' + backupChecksum(body);
+  }
+  // Returns a parsed payload, or null when the code is not one of ours / has been mistyped.
+  function parseBackupCode(raw) {
+    const code = String(raw || '').trim().toUpperCase().replace(/\s+/g, '');
+    const parts = code.split('-');
+    if (parts.length !== 5 || parts[0] !== BACKUP_PREFIX) return null;
+    const body = parts.slice(0, 4).join('-');
+    if (backupChecksum(body) !== parts[4]) return null;
+    const flags = parseInt(parts[1], 36);
+    const achv = parseInt(parts[2], 36);
+    if (!Number.isFinite(flags) || !Number.isFinite(achv)) return null;
+    const rawTimes = parts[3].split('.');
+    if (rawTimes.length !== BACKUP_TIME_KEYS.length) return null;
+    const times = {};
+    for (let i = 0; i < rawTimes.length; i++) {
+      const v = parseInt(rawTimes[i], 36);
+      if (!Number.isFinite(v)) return null;
+      if (v > 0) times[BACKUP_TIME_KEYS[i]] = v;
+    }
+    const solo = [], coop = [];
+    for (let s = 1; s <= 5; s++) {
+      if (flags & (1 << (s - 1))) solo.push(s);
+      if (flags & (1 << (s + 4))) coop.push(s);
+    }
+    const badges = ACHIEVEMENTS.filter((a, i) => achv & (1 << i)).map((a) => a.id);
+    return { solo, coop, ex: !!(flags & (1 << 10)), hard: !!(flags & (1 << 11)), times, badges };
+  }
+  function applyBackup(p) {
+    clearedSolo = new Set(p.solo);
+    clearedCoop = new Set(p.coop);
+    saveClearedSet(CERT_SOLO_KEY, clearedSolo);
+    saveClearedSet(CERT_COOP_KEY, clearedCoop);
+    recomputeBestBossDefeated();
+    exBossDefeated = p.ex;
+    hardCleared = p.hard;
+    bestTimes = p.times;
+    unlockedAchv = new Set(p.badges);
+    try {
+      if (p.ex) localStorage.setItem(EX_STORAGE_KEY, '1'); else localStorage.removeItem(EX_STORAGE_KEY);
+      if (p.hard) localStorage.setItem(HARD_STORAGE_KEY, '1'); else localStorage.removeItem(HARD_STORAGE_KEY);
+      localStorage.setItem(TIME_STORAGE_KEY, JSON.stringify(bestTimes));
+      localStorage.setItem(ACHV_STORAGE_KEY, JSON.stringify([...unlockedAchv]));
+    } catch (e) { /* private mode — the in-memory state above still updates for this session */ }
+  }
+
   function unlockAchv(id) {
     if (unlockedAchv.has(id)) return;
     const a = ACHV_BY_ID.get(id);
@@ -468,10 +598,14 @@
       if (runMs > 0 && runMs <= 600000) unlockAchv('speedrun');
       if (runFlawless) unlockAchv('perfect-run');
     }
+    const chB = dailyChallenge();
+    if (chB.boss && chB.boss(st, wins)) completeDaily();
     flushAchvToasts();
   }
   function evaluateWaveRecords(state) {
     if (state.waveStats && state.waveStats.damaged === false) unlockAchv('wave-flawless');
+    const chW = dailyChallenge();
+    if (chW.wave && state.waveStats && chW.wave(state.waveStats)) completeDaily();
     flushAchvToasts();
   }
 
@@ -1086,6 +1220,7 @@
     story2pLobby.classList.add('hidden');
     modeSelect.classList.remove('hidden');
     renderStorySilhouettes();
+    renderDaily();
     holdTitle();
     if (window.GameAudio) window.GameAudio.startTitleBgm();
   }
@@ -1108,6 +1243,7 @@
     lobby.classList.add('hidden');
     modeSelect.classList.remove('hidden');
     renderStorySilhouettes();
+    renderDaily();
     holdTitle();
   });
 
@@ -1143,6 +1279,7 @@
     storyIntro.classList.add('hidden');
     modeSelect.classList.remove('hidden');
     renderStorySilhouettes();
+    renderDaily();
     holdTitle();
   });
 
@@ -1195,7 +1332,6 @@
   helpCloseBtn.addEventListener('click', () => helpOverlay.classList.add('hidden'));
   helpOverlay.addEventListener('click', (e) => { if (e.target === helpOverlay) helpOverlay.classList.add('hidden'); });
 
-  const certOpenBtn = $('#certOpenBtn');
   const certOverlay = $('#certOverlay');
   const certCloseBtn = $('#certCloseBtn');
   const certCard = $('#certCard');
@@ -1211,6 +1347,22 @@
   const certTimeList = $('#certTimeList');
   const certAchvCount = $('#certAchvCount');
   const certAchvGrid = $('#certAchvGrid');
+  const certDaily = $('#certDaily');
+  const titleDaily = $('#titleDaily');
+  function renderDaily() {
+    const today = todayKey();
+    const ch = dailyChallenge(today);
+    const done = daily.done === today;
+    certDaily.classList.toggle('done', done);
+    certDaily.innerHTML = '<div class="cert-daily-goal">' + (done ? '✅ ' : '▶ ') + ch.text + '</div>'
+      + '<div class="cert-daily-streak">' + (done ? '達成済み' : '未達成')
+      + '　連続 ' + (daily.streak || 0) + '日（最高 ' + (daily.best || 0) + '日）</div>';
+    // Only worth a line on the title screen while it is still undone.
+    titleDaily.classList.toggle('hidden', done);
+    titleDaily.textContent = '🔥 今日の挑戦: ' + ch.text;
+  }
+  renderDaily();
+
   function renderRecords() {
     const rows = [];
     const push = (label, key) => { if (bestTimes[key]) rows.push({ label, ms: bestTimes[key] }); };
@@ -1277,11 +1429,50 @@
     certPortraitEx.classList.toggle('hidden', !exBossDefeated);
     certPortraitExWrap.classList.toggle('hidden', !exBossDefeated);
     renderRecords();
+    renderDaily();
+    backupCodeOut.value = makeBackupCode();
+    setBackupMsg('', false);
   }
   // Both entry points — the title screen and the story-intro screen — open the one modal.
   const openCertificate = () => { audioReady(); renderCertificate(); certOverlay.classList.remove('hidden'); };
-  certOpenBtn.addEventListener('click', openCertificate);
+  // Only the title screen opens it now — see the note where the story screen's copy was removed.
   $('#certOpenBtnTitle').addEventListener('click', openCertificate);
+
+  const backupCodeOut = $('#backupCodeOut');
+  const backupCodeIn = $('#backupCodeIn');
+  const backupMsg = $('#backupMsg');
+  function setBackupMsg(text, bad) {
+    backupMsg.textContent = text;
+    backupMsg.classList.toggle('bad', !!bad);
+  }
+  $('#backupCopyBtn').addEventListener('click', async () => {
+    audioReady();
+    const code = backupCodeOut.value;
+    try {
+      await navigator.clipboard.writeText(code);
+      setBackupMsg('コードをコピーしました', false);
+    } catch (e) {
+      // Clipboard access can be refused (insecure origin, permissions) — selecting the text still
+      // lets the player copy it by hand, which is better than a dead button.
+      backupCodeOut.focus();
+      backupCodeOut.select();
+      setBackupMsg('選択しました。手動でコピーしてください', false);
+    }
+  });
+  $('#backupRestoreBtn').addEventListener('click', () => {
+    audioReady();
+    const parsed = parseBackupCode(backupCodeIn.value);
+    if (!parsed) { setBackupMsg('コードが正しくありません', true); return; }
+    // Restoring REPLACES everything, so it has to be deliberate — someone pasting a friend's code
+    // to look at it should not silently lose their own run.
+    if (!window.confirm('この端末の記録をコードの内容で置き換えます。今の記録は失われます。よろしいですか?')) return;
+    applyBackup(parsed);
+    renderCertificate();
+    renderStorySilhouettes();
+    refreshHardModeUnlock();
+    backupCodeIn.value = '';
+    setBackupMsg('復元しました', false);
+  });
   certCloseBtn.addEventListener('click', () => { audioReady(); certOverlay.classList.add('hidden'); });
   certOverlay.addEventListener('click', (e) => { if (e.target === certOverlay) certOverlay.classList.add('hidden'); });
 

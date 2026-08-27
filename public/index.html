@@ -57,6 +57,11 @@
       <button class="btn-secondary" id="certOpenBtnTitle">🏅 証明書を見る</button>
     </div>
 
+    <!-- Today's challenge, shown only while it is still undone — a completed one is not a reason
+         to keep looking at it. Hidden on short screens (see style.css) where the card is already
+         at its height budget. -->
+    <div class="title-daily hidden" id="titleDaily"></div>
+
     <!-- The same 5-boss silhouette row #storyIntro carries, on the title screen too. Undefeated
          bosses stay dimmed: client.js renderStorySilhouettes() drives EVERY .boss-silhouette-row
          on the page, not just the story-intro one, so both stay in sync. -->
@@ -106,7 +111,6 @@
   <div class="card">
     <button class="btn-secondary lobby-back-btn" id="storyIntroBackBtn">← タイトルへ戻る</button>
     <h1>🐺 ストーリーモード</h1>
-    <p class="subtitle">戦場に立ちはだかる5人のボスに、1面から順に挑む一本道のキャンペーン。面を追うごとに敵は強くなる。</p>
 
     <label for="storyNameInput">プレイヤー名</label>
     <input type="text" id="storyNameInput" maxlength="12" placeholder="なまえ" />
@@ -134,8 +138,7 @@
     <div class="hard-mode-block hidden" id="hardModeBlock">
       <div class="hard-mode-title">🔥 ハードモード <span class="hard-mode-tag">解放済み</span></div>
       <div class="hard-mode-desc">
-        全3ステージ。各ステージで<b>ボスが2体同時</b>に襲いかかる（1面＋2面 → 3面＋4面 → 5面＋戦神）。
-        HPは据え置きのまま2体なので、火力も体力も実質2倍。間のザコ戦は<b>20体</b>。
+        全3ステージ、<b>ボスが2体同時</b>（1面＋2面 → 3面＋4面 → 5面＋戦神）。間のザコ戦は<b>20体</b>。
       </div>
       <div class="mode-select-row">
         <button class="mode-card hard-mode-card" id="hard1pBtn">
@@ -151,17 +154,10 @@
       </div>
     </div>
 
-    <div class="btn-row">
-      <button class="btn-secondary" id="certOpenBtn">🏅 証明書を見る</button>
-    </div>
-
-    <div class="boss-silhouette-row">
-      <img class="boss-portrait" src="images/bosses/boss1.jpg" alt="1面ボス" />
-      <img class="boss-portrait" src="images/bosses/boss2.jpg" style="object-position: center 22%;" alt="2面ボス" />
-      <img class="boss-portrait" src="images/bosses/boss3.jpg" alt="3面ボス" />
-      <img class="boss-portrait" src="images/bosses/boss4.jpg" alt="4面ボス" />
-      <img class="boss-portrait" src="images/bosses/boss5.jpg" alt="5面ボス" />
-    </div>
+    <!-- The certificate button and the 5-boss silhouette row used to sit here as well. Both are on
+         the title screen now, and this card had grown to 1222px tall — on every screen size those
+         two were entirely below the fold, so they were duplicated AND unreachable without
+         scrolling. Removed here; the title screen is the one place that shows them. -->
   </div>
 </div>
 
@@ -247,10 +243,30 @@
       <!-- Best times and achievement badges. They live inside the certificate rather than behind
            a third title-screen button on purpose: the title card only just fits a 480px-tall
            screen with two buttons, and .modal-card already scrolls (max-height:84vh). -->
+      <h3 class="cert-section-title">🔥 今日の挑戦</h3>
+      <div class="cert-daily" id="certDaily"></div>
+
       <h3 class="cert-section-title">⏱ ベストタイム</h3>
       <div class="cert-time-list" id="certTimeList"></div>
       <h3 class="cert-section-title">🏅 実績 <span class="cert-achv-count" id="certAchvCount"></span></h3>
       <div class="cert-achv-grid" id="certAchvGrid"></div>
+
+      <!-- All progress lives in this browser's localStorage and nowhere else, so a reinstall, a
+           new phone or a "clear site data" wipes the lot. A copyable code is the smallest thing
+           that fixes that without needing accounts or a server. -->
+      <h3 class="cert-section-title">💾 データの引き継ぎ</h3>
+      <div class="cert-backup">
+        <p class="cert-backup-note">記録はこの端末にしか保存されていません。コードを控えておけば、機種変更やデータ削除のあとでも復元できます。</p>
+        <div class="cert-backup-row">
+          <input type="text" id="backupCodeOut" readonly />
+          <button class="btn-secondary cert-backup-btn" id="backupCopyBtn">コピー</button>
+        </div>
+        <div class="cert-backup-row">
+          <input type="text" id="backupCodeIn" placeholder="コードを貼り付けて復元" autocomplete="off" spellcheck="false" />
+          <button class="btn-secondary cert-backup-btn" id="backupRestoreBtn">復元</button>
+        </div>
+        <div class="cert-backup-msg" id="backupMsg"></div>
+      </div>
     </div>
   </div>
 </div>

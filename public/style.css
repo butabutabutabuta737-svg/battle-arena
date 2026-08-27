@@ -317,6 +317,50 @@ input[type="text"]:focus {
   margin-top: 20px;
 }
 
+/* The story screen stacks four of these cards (1P / 2P / ハード1P / ハード2P) plus a rules block,
+   which pushed the hard-mode選択 below the fold on every screen size. Tightened here only — the
+   title screen's two cards have room to breathe and are left alone. */
+#storyIntro .mode-card {
+  padding: 12px 14px;
+}
+#storyIntro .mode-card-icon {
+  font-size: 22px;
+  margin-bottom: 2px;
+}
+#storyIntro .mode-card-desc {
+  font-size: 11.5px;
+  line-height: 1.45;
+  margin-top: 3px;
+}
+#storyIntro .mode-select-row {
+  margin-top: 12px;
+}
+#storyIntro .hard-mode-block {
+  margin-top: 12px;
+}
+/* One more tier for the shortest phones, where four cards plus the rules block still ran ~50px
+   past the bottom. Measured at 390x844: 897 -> fits. */
+@media (max-height: 880px) {
+  #storyIntro h1 {
+    font-size: 20px;
+  }
+  #storyIntro label {
+    margin-top: 8px;
+    margin-bottom: 3px;
+  }
+  #storyIntro .mode-card {
+    padding: 9px 12px;
+  }
+  #storyIntro .mode-select-row,
+  #storyIntro .hard-mode-block {
+    margin-top: 9px;
+  }
+  #storyIntro .hard-mode-desc {
+    font-size: 11px;
+    line-height: 1.45;
+  }
+}
+
 /* ---- title-screen mode selection: リアルタイム対戦アリーナ vs ストーリーモード ---- */
 .mode-select-row {
   display: flex;
@@ -596,6 +640,92 @@ input[type="text"]:focus {
   font-size: 9px;
   line-height: 1.25;
   color: #9aa3d0;
+}
+
+.cert-daily {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: rgba(255, 138, 91, 0.12);
+  border: 1px solid rgba(255, 138, 91, 0.4);
+}
+.cert-daily.done {
+  background: rgba(126, 231, 160, 0.12);
+  border-color: rgba(126, 231, 160, 0.45);
+}
+.cert-daily-goal {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #ffd9c2;
+}
+.cert-daily.done .cert-daily-goal {
+  color: #d6ffe6;
+}
+.cert-daily-streak {
+  font-size: 11px;
+  color: #9aa3d0;
+}
+
+/* Title-screen nudge for an undone daily. Deliberately one compact line — the title card only
+   just fits a 480px-tall screen, so anything taller than this would push it off again. */
+.title-daily {
+  margin-top: 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #ffd9c2;
+  background: rgba(255, 138, 91, 0.14);
+  border: 1px solid rgba(255, 138, 91, 0.4);
+}
+/* 700, not 620: measured at 660px tall the card ran 22px past the bottom with this line still
+   in. The challenge is also readable in the certificate, so dropping the nudge is the cheap side
+   of the trade. */
+@media (max-height: 700px) {
+  .title-daily {
+    display: none;
+  }
+}
+
+.cert-backup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cert-backup-note {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: #9aa3d0;
+}
+.cert-backup-row {
+  display: flex;
+  gap: 6px;
+}
+.cert-backup-row input {
+  flex: 1;
+  min-width: 0; /* a flex item will not shrink below its content width without this */
+  padding: 6px 9px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.02em;
+}
+.cert-backup-btn {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  font-size: 11.5px;
+}
+.cert-backup-msg {
+  min-height: 15px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #7ee7a0;
+}
+.cert-backup-msg.bad {
+  color: #ff8a8a;
 }
 
 /* ---- New-record / badge toast --------------------------------------------------------------- */
