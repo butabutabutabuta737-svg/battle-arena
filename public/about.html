@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>戦場の狼達 — トップダウン・ボスラッシュシューター</title>
+<meta name="description" content="5人のボスを撃ち抜く、無料のトップダウン・ボスラッシュシューター。2人協力プレイ、ハードモード、隠しEXボス、実績と撃破タイム記録つき。">
+<style>
+  :root {
+    --bg-0: #080c18;
+    --bg-1: #121a2e;
+    --ink: #eef3ff;
+    --ink-dim: #a8b6d6;
+    --accent: #ff6b81;
+    --gold: #f5c451;
+    --line: rgba(238, 243, 255, 0.14);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(ellipse 120% 80% at 50% -10%, #2a1220 0%, var(--bg-0) 55%);
+    color: var(--ink);
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", "Noto Sans JP", sans-serif;
+    line-height: 1.8;
+    padding: 0 20px 80px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  .hero { padding: 40px 0 8px; text-align: center; }
+  .hero img {
+    width: 100%; max-width: 420px; height: auto; border-radius: 14px;
+    border: 1px solid var(--line); display: block; margin: 0 auto 22px;
+  }
+  h1 { font-size: clamp(24px, 6vw, 34px); margin: 0 0 6px; letter-spacing: 0.04em; }
+  .tagline { color: var(--gold); font-size: 15px; margin: 0 0 6px; }
+  .price { color: var(--ink-dim); font-size: 13px; margin: 0 0 30px; }
+  h2 {
+    font-size: 17px; margin: 34px 0 10px; padding-top: 24px;
+    border-top: 1px solid var(--line); color: var(--accent);
+  }
+  p { margin: 0 0 12px; font-size: 15px; }
+  ul { margin: 0 0 12px; padding-left: 1.25em; font-size: 15px; color: var(--ink-dim); }
+  li { margin-bottom: 7px; }
+  li b { color: var(--ink); }
+  .cta {
+    display: inline-block; margin: 6px 0 0; padding: 13px 30px;
+    background: linear-gradient(180deg, #ff8296, #d8455c);
+    color: #fff; font-weight: 700; font-size: 16px;
+    border-radius: 10px; text-decoration: none;
+    box-shadow: 0 3px 0 #8f2b3f, 0 8px 22px rgba(0,0,0,0.45);
+  }
+  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 8px 0 4px; }
+  .shots img { width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); display: block; }
+  .note {
+    background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 18px; font-size: 14px; color: var(--ink-dim); margin: 0 0 12px;
+  }
+  a { color: var(--accent); }
+  .links { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 40px; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <img src="images/title-bg-logo.jpg" alt="戦場の狼達 タイトル画面">
+    <h1>戦場の狼達</h1>
+    <p class="tagline">5人のボスを撃ち抜く、トップダウン・ボスラッシュシューター</p>
+    <p class="price">完全無料 / アプリ内課金なし</p>
+    <a class="cta" href="/">ブラウザでいますぐ遊ぶ</a>
+  </div>
+
+  <h2>どんなゲームか</h2>
+  <p>見下ろし視点の戦場で、銃・斬撃・爆弾を使い分けてボスと撃ち合う対戦アクションです。1体のボスにつき<b>3本先取</b>の連戦。ラウンドを取るたびにルーレットが回り、レーザー砲や分身といった強化アイテムが手に入ります。</p>
+  <p>ボスとボスのあいだには<b>ザコ襲来</b>のミニゲームが挟まります。押し寄せる群れを10体倒しきれば次の面へ、倒しきれなければそこで物語は終わりです。</p>
+
+  <h2>5人のボス、それぞれの必殺技</h2>
+  <ul>
+    <li><b>1面 見習い兵士 ／ がむしゃら乱射</b> — 扇状に9発をばらまく。狙いは粗く、ここで基本の立ち回りを覚える。</li>
+    <li><b>2面 歴戦の傭兵 ／ 制圧掃射</b> — 速い一団と広い一団を重ねた、統制のとれた8発。真正面は通れない。</li>
+    <li><b>3面 精鋭部隊長 ／ 二連乱射</b> — 1面のばらまきを<b>2連続</b>。<b>2発目は撃ち直しで狙い直してくる</b>ので、まっすぐ逃げると2発目に刈られる。</li>
+    <li><b>4面 血刃の暗殺者 ／ 瞬影</b> — <b>背後へ瞬間移動して斬る</b>。斬撃力1.2倍の接近型で、間合いに入られる前に削りきりたい。</li>
+    <li><b>5面 戦場の覇者 ／ 覇王弾幕</b> — 全方位16発のリング。安全なのは弾と弾の隙間だけ。</li>
+  </ul>
+  <p>そして5面を制した者の前にだけ現れる隠しボス<b>「戦神」／ 神威</b>。全方位20発の大型弾リングと、狙い澄ましたレーザーを同時に撃ってきます。</p>
+  <p>技を出す直前、ボスの体が<b>光ります</b>。その瞬間に横へ回り込めば、ほとんどの必殺技はかわせます。</p>
+
+  <h2>クリアしたあとも遊べる</h2>
+  <ul>
+    <li><b>2人協力プレイ</b> — 部屋コードで合流し、2人でボスに挑めます。</li>
+    <li><b>ハードモード</b> — 全3ステージ、<b>ボスが2体同時</b>(1面＋2面 → 3面＋4面 → 5面＋戦神)。あいだのザコ戦も20体に増えます。</li>
+    <li><b>隠しEXボス「戦神」</b> — 5面クリア後のエンディング画面から挑めます。</li>
+    <li><b>実績バッジ15種</b> — うち3つは条件を伏せた隠し実績です。</li>
+    <li><b>撃破タイム記録</b> — 各面と通しのベストタイムが残ります。</li>
+    <li><b>今日の挑戦</b> — 日替わりのお題と、連続達成日数。</li>
+  </ul>
+
+  <h2>広告について</h2>
+  <div class="note">
+    表示されるのは<b>リワード動画広告のみ</b>です。ユーザーが自分でボタンを押したときにだけ再生され、プレイを妨げるバナー広告や全面広告はありません。<br><br>
+    <b>広告を一度も見なくても、すべてのステージ・モード・記録機能を最後まで無料で遊べます。</b>動画は「負けた場面からやり直す」「ハズレのルーレットを引き直す」という任意の救済としてだけ用意しています。
+  </div>
+
+  <h2>遊ぶのに必要なもの</h2>
+  <p>本作は1人プレイを含むすべてのモードをサーバー上で処理しているため、プレイ中は<b>インターネット接続が必要</b>です。その日の1回目の起動だけ、サーバーの起動待ちで最大1分ほどかかることがあります。</p>
+
+  <h2>操作</h2>
+  <ul>
+    <li><b>スマートフォン:</b> 画面に触れたところにスティックが現れて移動、右下のボタンで射撃・斬撃・爆弾。</li>
+    <li><b>パソコン:</b> WASD / 矢印キーで移動、クリックまたはスペースで連射、Qで斬撃、Eで爆弾設置、Fで起爆。</li>
+  </ul>
+
+  <div class="links">
+    <a href="/">ブラウザで遊ぶ</a>
+    <a href="support.html">サポート</a>
+    <a href="privacy.html">プライバシーポリシー</a>
+    <a href="https://tsukutta-mono.vercel.app/">つくったもの(制作者のほかの作品)</a>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>サポート — 戦場の狼達</title>
+<style>
+  :root {
+    --bg-0: #080c18;
+    --bg-1: #121a2e;
+    --ink: #eef3ff;
+    --ink-dim: #a8b6d6;
+    --accent: #ff6b81;
+    --line: rgba(238, 243, 255, 0.14);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(ellipse 120% 80% at 50% -10%, #2a1220 0%, var(--bg-0) 55%);
+    color: var(--ink);
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", "Noto Sans JP", sans-serif;
+    line-height: 1.8;
+    padding: 32px 20px 80px;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: clamp(22px, 5vw, 28px); margin: 0 0 4px; }
+  .sub { color: var(--ink-dim); font-size: 13px; margin: 0 0 32px; }
+  h2 {
+    font-size: 16px; margin: 30px 0 10px; padding-top: 22px;
+    border-top: 1px solid var(--line); color: var(--accent);
+  }
+  h2:first-of-type { border-top: none; padding-top: 0; }
+  p { margin: 0 0 12px; font-size: 14.5px; }
+  .contact {
+    background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; margin: 0 0 12px;
+  }
+  .addr { font-size: 16px; margin: 0 0 8px; word-break: break-all; }
+  .note { color: var(--ink-dim); font-size: 13.5px; margin: 0; }
+  table.spec { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.spec th {
+    text-align: left; white-space: nowrap; vertical-align: top;
+    padding: 8px 14px 8px 0; color: var(--accent); font-weight: 600;
+    border-bottom: 1px solid var(--line);
+  }
+  table.spec td { padding: 8px 0; color: var(--ink-dim); border-bottom: 1px solid var(--line); }
+  details {
+    background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 16px; margin: 0 0 10px;
+  }
+  summary { cursor: pointer; font-size: 14.5px; font-weight: 600; }
+  details p { font-size: 14px; color: var(--ink-dim); margin: 10px 0 4px; }
+  a { color: var(--accent); }
+  .links { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 34px; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>サポート</h1>
+  <p class="sub">戦場の狼達</p>
+
+  <h2>お問い合わせ</h2>
+  <div class="contact">
+    <p class="addr"><a href="mailto:butabutabutabuta737@gmail.com">butabutabutabuta737@gmail.com</a></p>
+    <p class="note">
+      不具合のご報告・ご要望・その他のお問い合わせは、こちらまでお気軽にどうぞ。<br>
+      個人で開発・運営しているため、お返事に数日いただくことがあります。
+    </p>
+  </div>
+
+  <h2>不具合を報告するとき</h2>
+  <p>次の3つを添えていただけると、原因の特定がとても早くなります。</p>
+  <table class="spec">
+    <tr><th>お使いの機種</th><td>例: iPhone 15、iPhone SE(第3世代)</td></tr>
+    <tr><th>iOSのバージョン</th><td>「設定」→「一般」→「情報」→「システムバージョン」</td></tr>
+    <tr><th>いつ起きたか</th><td>例: 3面のボス戦の必殺技のあと、ザコ襲来の途中、2人協力プレイの接続中</td></tr>
+  </table>
+  <p style="margin-top:12px;">画面の写真や録画を添えていただけると、さらに助かります。</p>
+
+  <h2>よくあるトラブル</h2>
+
+  <details>
+    <summary>起動が遅い / 最初の画面から進まない</summary>
+    <p>ゲームサーバーは普段お休みしているため、<b>その日の1回目の起動だけ、最大1分ほどかかることがあります。</b>そのままお待ちください。2回目からはすぐ始まります。</p>
+    <p>1分以上たっても始まらない場合は、「再試行」をお試しください。</p>
+  </details>
+
+  <details>
+    <summary>オフラインで遊べない</summary>
+    <p>本作は、1人プレイを含む<b>すべてのモードでインターネット接続が必要</b>です。敵の動きや弾の判定をサーバー側で計算しているためで、機内モードでは遊べません。</p>
+    <p>電波の弱い場所では動きが途切れることがあります。Wi-Fiの届く場所でお試しください。</p>
+  </details>
+
+  <details>
+    <summary>広告の動画が出てこない</summary>
+    <p>「動画を見て…」のボタンは、<b>再生できる広告が用意できているときだけ</b>表示されます。出ていないときは、広告の在庫がない状態です。しばらくしてからお試しください。</p>
+    <p>ボタンを押したあと「読み込み中…」のまま戻ってきた場合も、広告が取得できなかっただけです。<b>そのときの権利は消費されません</b>ので、もう一度お試しいただけます。</p>
+    <p>動画を最後まで見ずに閉じると、報酬は受け取れません。これは広告の仕組み上の制約です。</p>
+  </details>
+
+  <details>
+    <summary>広告を見ないと遊べない場面がありますか</summary>
+    <p>ありません。<b>広告を一度も見なくても、5面すべて・ハードモード・EXボス・2人協力プレイ・すべての実績と記録を最後まで無料で遊べます。</b></p>
+    <p>動画広告は「負けた場面からやり直す」「ハズレのルーレットを引き直す」という、あくまで任意の救済としてだけ用意しています。</p>
+  </details>
+
+  <details>
+    <summary>記録や実績が消えた</summary>
+    <p>記録はお使いの<b>端末の中だけ</b>に保存されています。外部のサーバーには送られていないため、こちらから復元することはできません。</p>
+    <p>アプリを削除すると、記録も一緒に消えます。<b>証明書画面の「データの引き継ぎ」</b>でコードを控えておくと、削除後や別の端末でも復元できます。</p>
+    <p>なお、アプリの記録とブラウザで遊んだときの記録は<b>別々</b>です。引き継ぎコードを使えば相互に移せます。</p>
+  </details>
+
+  <details>
+    <summary>2人協力プレイがつながらない</summary>
+    <p>2台とも<b>インターネットに接続</b>している必要があります。</p>
+    <p>部屋コードは<b>4文字</b>です。うまくいかない場合は一度戻り、部屋を作りなおしてみてください。</p>
+    <p>その日の1回目はサーバーの起動待ちで、接続まで最大1分ほどかかることがあります。</p>
+  </details>
+
+  <details>
+    <summary>音が出ない</summary>
+    <p>画面右上の 🔊 ボタンがミュートになっていないかご確認ください。</p>
+    <p>iPhoneの<b>消音スイッチ</b>(本体左側面)がオンだと、ゲームの音も鳴りません。</p>
+    <p>電話・Siri・他のアプリが音を使った直後は、iOS側の都合で音が止まることがあります。その場合は画面を一度タップすると戻ります。</p>
+  </details>
+
+  <details>
+    <summary>難しくて先に進めない</summary>
+    <p>やられた場面では、動画広告を見ると<b>1面まで戻らずにその場面からやり直せます</b>(同じ場面につき1回)。</p>
+    <p>ラウンドに勝つとルーレットが回り、当たると強化アイテムが手に入ります。ハズレたときは動画広告で1回だけ引き直せます。</p>
+    <p>ボスの体が光ったら必殺技の予備動作です。光りはじめた瞬間に横へ回り込むと、ほとんどの技はかわせます。</p>
+  </details>
+
+  <div class="links">
+    <a href="about.html">← ゲームの紹介</a>
+    <a href="privacy.html">プライバシーポリシー</a>
+    <a href="/">ブラウザで遊ぶ</a>
+  </div>
+
+</div>
+</body>
+</html>
