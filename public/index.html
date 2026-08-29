@@ -440,6 +440,10 @@
       <div class="roulette-block hidden" id="rouletteBlock">
         <div class="roulette-label" id="rouletteLabel">🎰 ルーレット中…</div>
         <div class="roulette-reel" id="rouletteReel">🎰</div>
+        <!-- Rewarded-video re-roll. Only ever rendered inside the native app build, where
+             window.BattleArenaAds exists (see client.js's adsAvailable) — in a plain browser
+             this stays hidden forever and the round-end is unchanged. -->
+        <button class="btn-ad hidden" id="adRerollBtn">▶ 動画を見てもう一度回す</button>
       </div>
       <div class="result-banner" id="resultBanner">あなたの勝ち!</div>
       <button class="btn-primary hidden" id="rematchBtn">もう一度対戦する</button>
@@ -456,6 +460,11 @@
           ここが、あなたの物語の終着点となった。
         </div>
         <div class="game-over-score hidden" id="gameOverScore"></div>
+        <!-- Continue. Sits ABOVE the plain retry because it is the better outcome for the
+             player: the retry restarts the campaign at stage 1, this resumes where they fell.
+             Native app build only, same as the re-roll above. -->
+        <button class="btn-ad hidden" id="adContinueBtn">▶ 動画を見て続きから</button>
+        <div class="ad-note hidden" id="adContinueNote">※この場面につき1回だけ</div>
         <button class="btn-primary hidden" id="storyRetryBtn">もう一度挑戦する</button>
       </div>
     </div>

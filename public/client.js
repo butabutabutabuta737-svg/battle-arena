@@ -67,6 +67,9 @@
   const pauseOverlay = $('#pauseOverlay');
   const resumeBtn = $('#resumeBtn');
   const storyRetryBtn = $('#storyRetryBtn');
+  const adContinueBtn = $('#adContinueBtn');
+  const adContinueNote = $('#adContinueNote');
+  const adRerollBtn = $('#adRerollBtn');
   const gameOverText = $('#gameOverText');
   const gameOverScore = $('#gameOverScore');
   const modeStoryBtn = $('#modeStoryBtn');
@@ -1742,6 +1745,64 @@
     }, 3000);
   }
 
+  // ---- rewarded video bridge -------------------------------------------------------------
+  // The native iOS wrapper injects window.BattleArenaAds into the WebView; a plain browser has
+  // nothing, so adsAvailable() is false there and every ad-gated button stays hidden — the web
+  // build behaves exactly as it always has, with no ad code path reachable at all.
+  //
+  //   window.BattleArenaAds = {
+  //     available: true,                     // false while no rewarded ad is loaded
+  //     show(placement) -> Promise<string>   // 'rewarded' | 'dismissed' | 'failed'
+  //   }
+  //
+  // Only 'rewarded' pays out. 'dismissed' (closed early) and 'failed' (no fill, offline) both
+  // leave the player exactly where they were, which is why every reward is also re-validated
+  // server-side rather than trusted from here.
+  const AD_TIMEOUT_MS = 90000; // a wrapper that never settles its promise must not wedge the button
+  let adInFlight = false;
+  function adsAvailable() {
+    const a = window.BattleArenaAds;
+    return !!(a && a.available && typeof a.show === 'function');
+  }
+  function showRewarded(placement) {
+    if (adInFlight || !adsAvailable()) return Promise.resolve(false);
+    adInFlight = true;
+    let settled = false;
+    const finish = (ok) => { if (settled) return ok; settled = true; adInFlight = false; return ok; };
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(finish(false)), AD_TIMEOUT_MS);
+      Promise.resolve()
+        .then(() => window.BattleArenaAds.show(placement))
+        .then((r) => { clearTimeout(timer); resolve(finish(r === 'rewarded')); })
+        .catch(() => { clearTimeout(timer); resolve(finish(false)); });
+    });
+  }
+  // Shared button behaviour: disable + relabel for the duration, restore on any outcome. The
+  // label is captured per-call because adContinueBtn's text depends on which fight was lost.
+  function runAdButton(btn, placement, onReward) {
+    if (btn.disabled) return;
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '読み込み中…';
+    showRewarded(placement).then((rewarded) => {
+      btn.disabled = false;
+      btn.textContent = label;
+      if (rewarded) onReward();
+    });
+  }
+  adContinueBtn.addEventListener('click', () => {
+    audioReady();
+    runAdButton(adContinueBtn, 'continue', () => {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'adContinue' }));
+    });
+  });
+  adRerollBtn.addEventListener('click', () => {
+    audioReady();
+    runAdButton(adRerollBtn, 'roulette-reroll', () => {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'adRerollRoulette' }));
+    });
+  });
+
   // ---- story mode: a single button starts a fresh 5-stage boss-rush campaign; the same
   // helper is reused by the game-over "retry" button so losing just restarts cleanly with
   // a brand new room rather than needing any server-side "reset to stage 1" round-trip ----
@@ -2266,6 +2327,15 @@
         bulletPos.clear();
       }
       lastPhase = state.phase;
+    }
+
+    // A re-rolled roulette result arrives mid-'finished', with no phase edge for the block above
+    // to fire on. The server's monotonic rerollSeq replays the reel exactly once per re-roll —
+    // and never re-plays the original spin, which is seq 0 and already handled above.
+    const rerollSeq = (state.rouletteResult && state.rouletteResult.rerollSeq) || 0;
+    if (rerollSeq !== lastRerollSeq) {
+      lastRerollSeq = rerollSeq;
+      if (rerollSeq > 0) runRoulette(state.rouletteResult, state);
     }
 
     // new bullets -> shoot sfx + muzzle flash
@@ -4025,6 +4095,8 @@
   // a full second. A timestamp rather than a timer because updateHud already runs every frame.
   const ROULETTE_RESULT_HOLD_MS = 1000;
   let rouletteHoldUntil = 0;
+  // Last rerollSeq this client has already animated (see handleState). 0 = the original spin.
+  let lastRerollSeq = 0;
   // onDone fires once the reel has actually settled on its result (not before) — callers use
   // this to hold off anything that would visually compete with the roulette (the boss-victory
   // flash/defeat-quote card are a much higher z-index than `.roulette-block` and used to fire in
@@ -4386,6 +4458,34 @@
       waveIntroOverlay.classList.add('hidden');
     }
 
+    // The re-roll offer lives and dies with the settled roulette result: visible only once the
+    // reel has stopped on a miss (rouletteHoldUntil is set at that exact moment) and only while
+    // the server still says a re-roll is unspent. Driven from here rather than the round-end
+    // branch below because the roulette block outlives that branch's own conditions.
+    // ...and only to the player whose miss it actually was. The server already refuses to offer
+    // a re-roll of the BOSS's prize, but one broadcast state is shared by everyone in the room,
+    // so "is this spin mine" has to be answered per-client here — same test runRoulette uses to
+    // decide whether to write 「あなた」 or a name: a co-op ally win belongs to both allies, any
+    // other win belongs only to its single winner.
+    const rr = state.rouletteResult;
+    const rrWinner = rr ? state.players.find((pl) => pl.id === rr.winnerId) : null;
+    const rrIsMine = !!rr && (rr.winnerId === myId || !!(state.storyCoop && rrWinner && !rrWinner.isBoss));
+    const rerollOfferable = adsAvailable() && !!state.rouletteRerollAvailable && rrIsMine
+      && rouletteHoldUntil > 0 && !rouletteBlock.classList.contains('hidden')
+      && !rouletteReel.classList.contains('spinning');
+    adRerollBtn.classList.toggle('hidden', !rerollOfferable);
+
+    // Losing normally tears the whole connection down (see storyRetryBtn), so nothing ever had
+    // to hide the GAME OVER card on a phase change. An ad continue keeps the room and drops
+    // straight back into 'countdown', so the card has to be cleared explicitly here — otherwise
+    // it would sit on top of the fight it just paid to resume.
+    if (state.phase !== 'finished') {
+      gameOverOverlay.classList.add('hidden');
+      storyRetryBtn.classList.add('hidden');
+      adContinueBtn.classList.add('hidden');
+      adContinueNote.classList.add('hidden');
+    }
+
     if (state.phase === 'waiting') {
       statusLabel.textContent = '相手を待っています…';
       waitOverlay.classList.remove('hidden');
@@ -4428,6 +4528,8 @@
       storyEndingOverlay.classList.add('hidden');
       trueEndingOverlay.classList.add('hidden');
       storyRetryBtn.classList.add('hidden');
+      adContinueBtn.classList.add('hidden');
+      adContinueNote.classList.add('hidden');
       gameOverOverlay.classList.add('hidden');
       if (bossWon) {
         // A boss series loss and a failed ザコ戦 both end the run here, and used to show the
@@ -4450,7 +4552,20 @@
         // 'finished' phase-transition edge above) has actually elapsed — this branch itself
         // re-runs on every ~33ms broadcast while sitting in 'finished', so it must keep
         // deferring to that flag rather than unhiding the button unconditionally every tick.
-        if (gameOverRetryReady) storyRetryBtn.classList.remove('hidden');
+        if (gameOverRetryReady) {
+          storyRetryBtn.classList.remove('hidden');
+          // Offered on the same beat as the plain retry, never earlier — the defeat still gets
+          // its full 3s to land before any button appears. state.adContinueOffered is the
+          // server's own verdict (right stage, right mode, not already spent this occasion);
+          // the client only adds "is there actually an ad to show".
+          if (adsAvailable() && state.adContinueOffered) {
+            adContinueBtn.textContent = state.mobWaveActive
+              ? '▶ 動画を見てザコ戦をやり直す'
+              : `▶ 動画を見て第${storyStage}面から再開`;
+            adContinueBtn.classList.remove('hidden');
+            adContinueNote.classList.remove('hidden');
+          }
+        }
       } else if (trueEndingClear) {
         // Waits on both the victory flash AND the EX boss's own defeat-quote-then-crumble beat
         // (showExBossDefeat, chained from showBossVictory's onDone above) — the true ending

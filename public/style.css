@@ -1856,6 +1856,35 @@ button:active {
 }
 /* Mini-game result line on the GAME OVER card — only shown when the run ended by failing the
    ザコ戦, where "how far did we get" is the one number the player actually wants. */
+/* Rewarded-video buttons. Deliberately gold rather than the usual accent blue so a "watch a
+   video" action can never be mistaken for the ordinary primary action next to it. */
+.btn-ad {
+  display: block;
+  width: 100%;
+  max-width: 340px;
+  margin: 0 auto 8px;
+  padding: 12px 18px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f5c451, #d99b22);
+  color: #2a1c02;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 3px 0 #a8760f, 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+.btn-ad:active { transform: translateY(2px); box-shadow: 0 1px 0 #a8760f; }
+.btn-ad:disabled { opacity: 0.6; cursor: default; box-shadow: 0 3px 0 #a8760f; }
+.ad-note {
+  margin: -2px auto 10px;
+  color: #9fb0c4;
+  font-size: 11px;
+  text-align: center;
+}
+.roulette-block .btn-ad { margin-top: 10px; max-width: 280px; font-size: 14px; }
+
 .game-over-score {
   margin-top: 14px;
   padding: 8px 18px;

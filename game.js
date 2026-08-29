@@ -219,7 +219,40 @@ function resetRunStats(room) {
   room.runStats = { playMs: 0 };
 }
 
+// Identifies the specific defeat a continue would undo. One continue per occasion: losing the
+// stage-3 wave and then losing the stage-3 boss series are two separate occasions, and a stage
+// reached again after a genuine restart is a fresh one too (adContinueUsedKey is cleared by
+// resetStoryProgress). The mode is in the key so a normal-stage-3 continue cannot silently
+// consume hard-stage-3's.
+function continueKey(room) {
+  const mode = room.exBossActive ? 'x' : (room.hardMode ? 'h' : 'n');
+  return `${room.mobWaveActive ? 'w' : 'b'}:${mode}:${room.storyStage}`;
+}
+// The boss side won the decided series — i.e. this really is a defeat to continue from, not a
+// victory. matchWinnerId is an id, so resolve it rather than trusting a separate flag.
+function bossWonMatch(room) {
+  if (!room.matchOver || !room.matchWinnerId) return false;
+  const w = [...room.players.values()].find((pl) => pl.id === room.matchWinnerId);
+  return !!(w && w.isBoss);
+}
+// A re-roll is only ever offered on an ALLY's own miss. The roulette also spins for the boss
+// after a round the players lost, and offering to re-roll the enemy's prize would be worse than
+// useless — it would be selling the player an ad that helps the boss.
+function rerollAvailable(room) {
+  if (!room.rouletteEnabled || !room.rouletteResult || room.rouletteResult.hit) return false;
+  if (room.rouletteRerollUsed) return false;
+  const w = [...room.players.values()].find((pl) => pl.id === room.rouletteResult.winnerId);
+  return !!(w && !w.isBoss);
+}
+function continueOffered(room) {
+  return !!(room.isCpuMatch && room.phase === 'finished' && bossWonMatch(room)
+    && room.adContinueUsedKey !== continueKey(room));
+}
+
 function resetStoryProgress(room) {
+  // A run wiped back to stage 1 starts over in every sense, the ad concessions included.
+  room.adContinueUsedKey = null;
+  room.rouletteRerollUsed = false;
   // A wiped run starts its clock over — otherwise a "cleared in 8 minutes" record could be set
   // by a run that actually spent half an hour losing stage 1 first.
   resetRunStats(room);
@@ -1764,6 +1797,10 @@ function getRoom(id) {
       mobWaveKilled: 0,
       mobWaveNextSpawnAt: 0,
       pendingMobWaveIntro: false, // mirrors pendingStoryIntro's extended-countdown-wait trick
+      // Rewarded-ad concessions. Both are gated HERE rather than on the client, because they are
+      // real gameplay grants — a replayed message must not be able to buy a second one.
+      adContinueUsedKey: null, // which occasion (see continueKey) already spent its continue
+      rouletteRerollUsed: false,
       cpuState: null,
       // See resetStageStats/resetWaveStats/resetRunStats — read-only bookkeeping for the time
       // records and achievement badges.
@@ -2491,6 +2528,7 @@ function tick(room) {
           if (room.rouletteEnabled) {
             const hit = Math.random() < 0.5; // 50% miss, per spec
             room.rouletteResult = { winnerId, hit, itemType: hit ? pickRouletteItemType() : null };
+            room.rouletteRerollUsed = false;
           }
         }
       }
@@ -2517,6 +2555,7 @@ function tick(room) {
               hit,
               itemType: hit ? pickRouletteItemType() : null,
             };
+            room.rouletteRerollUsed = false;
           }
         }
       }
@@ -2596,6 +2635,9 @@ function broadcastState(room) {
     matchOver: room.matchOver,
     matchWinnerId: room.matchWinnerId,
     rouletteEnabled: room.rouletteEnabled,
+    // Rewarded-ad availability, decided server-side so the client never has to guess.
+    adContinueOffered: continueOffered(room),
+    rouletteRerollAvailable: rerollAvailable(room),
     rouletteResult: room.rouletteResult,
     isCpuMatch: room.isCpuMatch,
     storyStage: room.storyStage,
@@ -2843,6 +2885,44 @@ function joinRoom(roomId, ws, name, wantsStoryCpu, roulette, wantsCoop, wantsHar
         }
         room.winnerId = null;
         startCountdown(room);
+      }
+    } else if (data.type === 'adContinue') {
+      // Granted after a rewarded video finished on the client. Undoes the defeat currently on
+      // screen and replays the SAME stage (or the same grunt wave) with the series score wiped to
+      // 0-0, instead of the normal retry's drop all the way back to stage 1. continueOffered()
+      // re-derives eligibility from room state, so this is safe to receive at any time — an
+      // out-of-context or replayed message is simply ignored.
+      if (continueOffered(room)) {
+        room.adContinueUsedKey = continueKey(room);
+        room.matchWins = {};
+        room.matchOver = false;
+        room.matchWinnerId = null;
+        room.winnerId = null;
+        if (room.mobWaveActive) {
+          // Restart the wave from zero rather than resuming mid-swarm — resuming would revive the
+          // player inside the pack that just killed them.
+          room.mobWaveSpawned = 0;
+          room.mobWaveKilled = 0;
+          room.mobWaveNextSpawnAt = 0;
+          room.monsters = [];
+        }
+        startCountdown(room); // resetPositions() in here revives, re-heals and re-places everyone
+      }
+    } else if (data.type === 'adRerollRoulette') {
+      // One re-roll per result, and only ever on a miss — re-rolling a hit would be a free
+      // upgrade rather than a second chance.
+      if (rerollAvailable(room)) {
+        room.rouletteRerollUsed = true;
+        const hit = Math.random() < 0.5; // the same odds as the first spin: the ad buys a retry, not better luck
+        room.rouletteResult = {
+          winnerId: room.rouletteResult.winnerId,
+          hit,
+          itemType: hit ? pickRouletteItemType() : null,
+          // The item itself is still granted lazily by resetPositions() at the start of the next
+          // round, straight off room.rouletteResult — replacing the object here IS the grant.
+          rerollSeq: (room.rouletteResult.rerollSeq || 0) + 1, // lets the client spot a re-roll mid-'finished' and replay the reel
+        };
+        broadcastState(room);
       }
     } else if (data.type === 'startExStage') {
       // Sent only from the normal-ending screen's "戦場の深部へ進む" button, i.e. right after

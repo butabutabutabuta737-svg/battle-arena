@@ -44,6 +44,15 @@ function imageEtag(stat) {
 
 const server = http.createServer((req, res) => {
   const reqPath = decodeURIComponent(req.url.split('?')[0]);
+  // Render's free tier sleeps an idle instance, and waking it takes tens of seconds. The native
+  // app pings this the moment it launches — before the WebView has even started loading — so the
+  // wake-up happens behind the native splash instead of in front of a blank game screen. Answered
+  // before any file lookup so it stays the cheapest possible route.
+  if (reqPath === '/healthz') {
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end('ok');
+    return;
+  }
   const relPath = reqPath === '/' ? '/index.html' : reqPath;
   const filePath = path.join(PUBLIC_DIR, relPath);
   if (!filePath.startsWith(PUBLIC_DIR)) {
