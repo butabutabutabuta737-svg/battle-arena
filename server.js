@@ -30,6 +30,9 @@ const MIME = {
   '.webp': 'image/webp',
   '.svg': 'image/svg+xml',
   '.json': 'application/json; charset=utf-8',
+  // app-ads.txt must come back as text/plain or Google’s crawler will not read it — without an
+  // entry here it fell through to application/octet-stream, which browsers download instead.
+  '.txt': 'text/plain; charset=utf-8',
 };
 
 // Images only. Deliberately NOT max-age caching: 'no-cache' means the browser must revalidate
