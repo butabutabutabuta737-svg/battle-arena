@@ -72,6 +72,8 @@
       <img class="boss-portrait" src="images/bosses/boss4.jpg" alt="4面ボス" />
       <img class="boss-portrait" src="images/bosses/boss5.jpg" alt="5面ボス" />
     </div>
+    <!-- 一覧サイトへの戻り道。iOSアプリ(?app=1 / BattleArenaAds)では出さない -->
+    <a id="galleryLink" class="galleryLink" href="https://tsukutta-mono.vercel.app/?src=battlearena">🎮 他のゲームも遊ぶ ▸ つくったもの</a>
   </div>
 </div>
 
@@ -621,5 +623,6 @@
 
 <script src="audio.js"></script>
 <script src="client.js"></script>
+<script>if (/[?&]app=1/.test(location.search) || window.BattleArenaAds) { var gl = document.getElementById('galleryLink'); if (gl) gl.remove(); }</script>
 </body>
 </html>
