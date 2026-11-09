@@ -1807,6 +1807,7 @@
   // helper is reused by the game-over "retry" button so losing just restarts cleanly with
   // a brand new room rather than needing any server-side "reset to stage 1" round-trip ----
   function startStoryMode() {
+    if (window.NkShop) NkShop.hit('battle-arena', 'story'); // 遊んだ回数
     hardModeRequested = false; // the normal-mode entry point, and the game-over retry, are never hard
     const name = storyNameInput.value.trim() || 'プレイヤー';
     const room = 'CPU' + randomRoomCode();
