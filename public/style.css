@@ -160,6 +160,7 @@ body.title-hold .title-screen-card * {
 
 .title-screen-card .galleryLink { display: block; margin-top: 12px; font-size: 12px; color: #9aa3d1; opacity: .7; text-decoration: none; letter-spacing: .03em; }
 .title-screen-card .galleryLink:hover, .title-screen-card .galleryLink:active { opacity: 1; }
+.title-screen-card .koboLink { margin-top: 6px; }
 .card .subtitle {
   margin: 0 0 22px;
   color: #9aa3d1;
